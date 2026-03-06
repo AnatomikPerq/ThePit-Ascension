@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://ctrampoline01"]
+
+[ext_resource type="Script" uid="uid://bfe5by86mtmkp" path="res://scripts/trampoline.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://daltt52tghplt" path="res://assets/sprites/slime_active.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(64, 32)
+
+[node name="Trampoline" type="Area2D" unique_id=543650877]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1721107807]
+scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=626921991]
+shape = SubResource("RectangleShape2D_1")

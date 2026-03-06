@@ -1,0 +1,292 @@
+import sys
+
+content = """[gd_scene format=3 uid="uid://cworld01"]
+
+[ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dgiqdrgpiwhob" path="res://assets/sprites/floor_map.png" id="tex_floor"]
+[ext_resource type="Texture2D" uid="uid://cms0xiuwxuw3j" path="res://assets/sprites/wall_map.png" id="tex_wall"]
+[ext_resource type="Texture2D" uid="uid://dmf6ayjhdxyp0" path="res://assets/sprites/level_floor.png" id="tex_divider"]
+[ext_resource type="Texture2D" uid="uid://ull3by6dnr0i" path="res://assets/sprites/platform_part.png" id="tex_platform"]
+
+[sub_resource type="RectangleShape2D" id="Shape_Floor"]
+size = Vector2(2000, 64)
+
+[sub_resource type="RectangleShape2D" id="Shape_Wall"]
+size = Vector2(128, 512)
+
+[sub_resource type="RectangleShape2D" id="Shape_Divider"]
+size = Vector2(600, 32)
+"""
+
+content += """
+[node name="World" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+drag_horizontal_enabled = true
+drag_vertical_enabled = true
+drag_left_margin = 0.3
+drag_top_margin = 0.25
+drag_right_margin = 0.3
+drag_bottom_margin = 0.25
+limit_left = -128
+limit_right = 2128
+limit_top = -384
+limit_bottom = 8000
+
+[node name="Platforms" type="Node2D" parent="."]
+
+[node name="Floor" type="StaticBody2D" parent="Platforms"]
+position = Vector2(1000, 7968)
+collision_layer = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="Platforms/Floor"]
+scale = Vector2(2, 2)
+texture = ExtResource("tex_floor")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Floor"]
+shape = SubResource("Shape_Floor")
+
+[node name="WallLeft" type="StaticBody2D" parent="Platforms"]
+position = Vector2(-64, 7744)
+collision_layer = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="Platforms/WallLeft"]
+texture_repeat = 2
+scale = Vector2(2, 2)
+texture = ExtResource("tex_wall")
+region_enabled = true
+region_rect = Rect2(0, 0, 64, 256)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/WallLeft"]
+shape = SubResource("Shape_Wall")
+
+[node name="WallRight" type="StaticBody2D" parent="Platforms"]
+position = Vector2(2064, 7744)
+collision_layer = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="Platforms/WallRight"]
+texture_repeat = 2
+scale = Vector2(2, 2)
+texture = ExtResource("tex_wall")
+region_enabled = true
+region_rect = Rect2(0, 0, 64, 256)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/WallRight"]
+shape = SubResource("Shape_Wall")
+"""
+
+# Dividers at y=2000, 4000, 6000
+for y in [2000, 4000, 6000]:
+    for i, x in enumerate([300, 1700]):
+        side = "Left" if i == 0 else "Right"
+        content += f"""
+[node name="Divider_{y}_{side}" type="StaticBody2D" parent="Platforms"]
+position = Vector2({x}, {y})
+collision_layer = 1
+
+[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_{y}_{side}"]
+texture_repeat = 2
+scale = Vector2(2, 2)
+texture = ExtResource("tex_divider")
+region_enabled = true
+region_rect = Rect2(0, 0, 300, 16)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_{y}_{side}"]
+shape = SubResource("Shape_Divider")
+"""
+
+content += """
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="Trampolines" type="Node2D" parent="."]
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Control" parent="CanvasLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="HPBar" type="HBoxContainer" parent="CanvasLayer/HUD"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 220.0
+offset_bottom = 44.0
+
+[node name="DepthLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -250.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 50.0
+text = "DEPTH: 0"
+
+[node name="SkillsLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 50.0
+offset_right = 400.0
+offset_bottom = 80.0
+text = "Skills: "
+
+[node name="FlightLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 80.0
+offset_right = 120.0
+offset_bottom = 110.0
+horizontal_alignment = 1
+
+[node name="NotificationLabel" type="Label" parent="CanvasLayer/HUD"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 120.0
+offset_right = 200.0
+offset_bottom = 150.0
+horizontal_alignment = 1
+
+[node name="UpgradeMenu" type="Panel" parent="CanvasLayer"]
+visible = false
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -400.0
+offset_top = -200.0
+offset_right = 400.0
+offset_bottom = 200.0
+
+[node name="Title" type="Label" parent="CanvasLayer/UpgradeMenu"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -150.0
+offset_top = 20.0
+offset_right = 150.0
+offset_bottom = 60.0
+grow_horizontal = 2
+text = "CHOOSE UPGRADE"
+horizontal_alignment = 1
+
+[node name="DoubleJumpBtn" type="Button" parent="CanvasLayer/UpgradeMenu"]
+layout_mode = 1
+offset_left = 50.0
+offset_top = 100.0
+offset_right = 350.0
+offset_bottom = 300.0
+text = "DOUBLE JUMP"
+
+[node name="StrikeBtn" type="Button" parent="CanvasLayer/UpgradeMenu"]
+layout_mode = 1
+offset_left = 450.0
+offset_top = 100.0
+offset_right = 750.0
+offset_bottom = 300.0
+text = "SIDEWAYS STRIKE"
+
+[node name="HelpLabel" type="Label" parent="CanvasLayer/UpgradeMenu"]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -40.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "Click to select"
+horizontal_alignment = 1
+
+[node name="GameOverScreen" type="ColorRect" parent="CanvasLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.2, 0, 0, 0.8)
+
+[node name="Title" type="Label" parent="CanvasLayer/GameOverScreen"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -50.0
+offset_right = 200.0
+text = "YOU DIED"
+horizontal_alignment = 1
+
+[node name="SubTitle" type="Label" parent="CanvasLayer/GameOverScreen"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 50.0
+text = "Press SPACE to Restart"
+horizontal_alignment = 1
+
+[node name="VictoryScreen" type="ColorRect" parent="CanvasLayer"]
+visible = false
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 1)
+
+[node name="GG" type="Label" parent="CanvasLayer/VictoryScreen"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -100.0
+offset_top = -80.0
+offset_right = 100.0
+offset_bottom = -20.0
+text = "GG"
+horizontal_alignment = 1
+
+[node name="SubTitle" type="Label" parent="CanvasLayer/VictoryScreen"]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = 10.0
+offset_right = 150.0
+offset_bottom = 50.0
+text = "It's solver time"
+horizontal_alignment = 1
+
+[node name="EnemySpawnTimer" type="Timer" parent="."]
+wait_time = 2.0
+autostart = true
+"""
+
+with open(r"c:\Users\BADAB\Рабочий стол\ThePitAscention_GD\ThePitAscentionGD\scenes\World.tscn", "w", encoding="utf-8") as f:
+    f.write(content)
+print("done")

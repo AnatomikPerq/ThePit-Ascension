@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://cslime01"]
+
+[ext_resource type="Script" uid="uid://cyafnn114fsq6" path="res://scripts/slime.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dbxdigit1inet" path="res://assets/sprites/slime_falling.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(68, 48)
+
+[node name="Slime" type="Node2D" unique_id=554079565 groups=["enemy"]]
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1707115825]
+scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
+
+[node name="HitArea" type="Area2D" parent="." unique_id=1439034212]
+collision_layer = 16
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitArea" unique_id=916320202]
+shape = SubResource("RectangleShape2D_1")
