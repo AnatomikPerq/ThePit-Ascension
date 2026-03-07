@@ -4,7 +4,7 @@ A vertical platformer with improved physics, adaptive artificial intelligence an
 
 Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) and must climb your way to the surface. Beware of falling golems, bouncing slimes, and relentless pursuers. Unlock new abilities as you ascend higher and higher!
 
-![Gameplay Preview](assets/sprites/player_running.png) *(Preview placeholder)*
+![Gameplay Preview](preview.png)
 
 ## 🌟 Features
 
