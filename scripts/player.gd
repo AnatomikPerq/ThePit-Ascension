@@ -99,6 +99,10 @@ func _physics_process(delta: float) -> void:
 			dashing_down = false
 		jump_count = 0
 
+	# Cancel dash if moving upwards (e.g. trampolines, bounces)
+	if velocity.y < 0:
+		dashing_down = false
+
 	_update_animation(delta)
 
 	if current_strike:
@@ -143,7 +147,7 @@ func _handle_input() -> void:
 		facing_right = false
 
 	# Dash down
-	if Input.is_action_pressed("dash_down") and not is_on_floor():
+	if Input.is_action_just_pressed("dash_down") and not is_on_floor():
 		dashing_down = true
 		velocity.y = DASH_SPEED
 

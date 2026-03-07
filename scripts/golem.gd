@@ -37,16 +37,29 @@ func _transform_to_platform() -> void:
 
 
 func _deferred_transform() -> void:
-	var plat := PLATFORM_SCENE.instantiate()
-	plat.global_position = global_position
-	plat.get_node("Sprite2D").texture = _active_texture
-	get_parent().add_child(plat)
-	queue_free()
+	set_physics_process(false)
+	var sprite: Sprite2D = get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.texture = _active_texture
+	
+	if has_node("DamageArea"):
+		$DamageArea.queue_free()
+	if has_node("TransformArea"):
+		$TransformArea.queue_free()
+		
+	var body := StaticBody2D.new()
+	body.collision_layer = 1
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(64, 64)
+	shape.shape = rect
+	body.add_child(shape)
+	add_child(body)
 
 
 func _on_damage_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
-		if body.velocity.y > 0 and body.global_position.y + 32 < global_position.y:
+		if body.velocity.y > 0 and body.global_position.y < global_position.y:
 			body.velocity.y = -1440.0
 			_transform_to_platform()
 		elif body.dashing_down:

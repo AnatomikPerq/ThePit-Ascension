@@ -124,11 +124,8 @@ func _update_animation(delta: float) -> void:
 
 func _on_hurt_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
-		# If player is stomping
-		if body.velocity.y > 0 and body.global_position.y + 40 < global_position.y:
-			body.velocity.y = -1440.0 # -12 * 60 * 2
-			queue_free()
-		elif body.dashing_down:
+		# In order to kill pursuer by jumping on it, player MUST be dashing
+		if body.dashing_down and body.velocity.y > 0 and body.global_position.y < global_position.y:
 			body.velocity.y = -960.0
 			queue_free()
 		else:

@@ -45,7 +45,7 @@ func _deferred_spawn_trampoline() -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
-		if body.velocity.y > 0 and body.global_position.y + 32 < global_position.y:
+		if body.velocity.y > 0 and body.global_position.y < global_position.y:
 			body.velocity.y = -1440.0
 			_spawn_trampoline()
 		elif body.dashing_down:

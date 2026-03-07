@@ -15,7 +15,7 @@ size = Vector2(2000, 64)
 size = Vector2(128, 512)
 
 [sub_resource type="RectangleShape2D" id="Shape_Divider"]
-size = Vector2(600, 32)
+size = Vector2(600, 64)
 """
 
 content += """
@@ -92,7 +92,7 @@ texture_repeat = 2
 scale = Vector2(2, 2)
 texture = ExtResource("tex_divider")
 region_enabled = true
-region_rect = Rect2(0, 0, 300, 16)
+region_rect = Rect2(0, 0, 300, 32)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_{y}_{side}"]
 shape = SubResource("Shape_Divider")
