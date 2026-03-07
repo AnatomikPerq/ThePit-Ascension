@@ -15,7 +15,7 @@ texture = ExtResource("2_tex")
 
 [node name="HitArea" type="Area2D" parent="." unique_id=1439034212]
 collision_layer = 16
-collision_mask = 2
+collision_mask = 10
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HitArea" unique_id=916320202]
 shape = SubResource("RectangleShape2D_1")
