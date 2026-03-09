@@ -1,23 +1,18 @@
 extends Node2D
 ## Golem — falls down, converts to Platform when stomped/struck.
 ## DamageArea (bottom): hurts the player.
-## TransformArea (top+sides): player contact → spawn Platform.
+## StompArea (top): player contact → spawn Platform.
 
 const FALL_SPEED: float = 360.0 # term_vel 3 * 60 * 2
 const WORLD_BOTTOM: float = 8400.0
 
-const PLATFORM_SCENE: PackedScene = preload("res://scenes/Platform.tscn")
-
 var _active_texture: Texture2D
 var _player: CharacterBody2D
+var _is_dead: bool = false
 
 
 func _ready() -> void:
 	_active_texture = preload("res://assets/sprites/golem_active.png")
-
-	$DamageArea.body_entered.connect(_on_damage_body_entered)
-	$TransformArea.body_entered.connect(_on_transform_body_entered)
-	$TransformArea.area_entered.connect(_on_transform_area_entered)
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -25,14 +20,42 @@ func set_player_ref(player: CharacterBody2D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _is_dead:
+		return
+
 	position.y += FALL_SPEED * delta
 
 	if position.y > WORLD_BOTTOM:
 		queue_free()
+		return
+
+	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
+	if has_node("DamageArea"):
+		areas.append_array($DamageArea.get_overlapping_areas())
+
+	# Priority 1: Strike
+	for area in areas:
+		if area.is_in_group("strike"):
+			_die_and_transform()
+			return
+
+	# Priority 2: Stomp
+	for body in $StompArea.get_overlapping_bodies():
+		if body.is_in_group("player") and body.velocity.y >= 0.0:
+			body.velocity.y = 0.0
+			body.dashing_down = false
+			_die_and_transform()
+			return
+
+	# Priority 3: Damage
+	if has_node("DamageArea"):
+		for body in $DamageArea.get_overlapping_bodies():
+			if body.is_in_group("player"):
+				body.take_damage()
 
 
-func _transform_to_platform() -> void:
-	# Use call_deferred to avoid physics state errors
+func _die_and_transform() -> void:
+	_is_dead = true
 	call_deferred("_deferred_transform")
 
 
@@ -44,8 +67,8 @@ func _deferred_transform() -> void:
 	
 	if has_node("DamageArea"):
 		$DamageArea.queue_free()
-	if has_node("TransformArea"):
-		$TransformArea.queue_free()
+	if has_node("StompArea"):
+		$StompArea.queue_free()
 		
 	var body := StaticBody2D.new()
 	body.collision_layer = 1
@@ -55,26 +78,3 @@ func _deferred_transform() -> void:
 	shape.shape = rect
 	body.add_child(shape)
 	add_child(body)
-
-
-func _on_damage_body_entered(body: Node2D) -> void:
-	if body.is_in_group("player"):
-		if body.velocity.y > 0 and body.global_position.y < global_position.y:
-			body.velocity.y = -1440.0
-			_transform_to_platform()
-		elif body.dashing_down:
-			body.velocity.y = -960.0
-			_transform_to_platform()
-		else:
-			body.take_damage()
-
-
-func _on_transform_body_entered(body: Node2D) -> void:
-	if body.is_in_group("player"):
-		body.velocity.y = -960.0
-		_transform_to_platform()
-
-
-func _on_transform_area_entered(area: Area2D) -> void:
-	if area.is_in_group("strike"):
-		_transform_to_platform()

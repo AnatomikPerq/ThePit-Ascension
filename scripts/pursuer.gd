@@ -13,6 +13,7 @@ var _player: CharacterBody2D
 var _jump_timer: float = 0.0
 var _stuck_timer: float = 0.0
 var _facing_right: bool = true
+var _is_dead: bool = false
 
 # Animation
 var _frames: Array[Texture2D] = []
@@ -22,7 +23,6 @@ var _anim_idx: int = 0
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var edge_ray: RayCast2D = $EdgeDetector
 @onready var wall_ray: RayCast2D = $WallDetector
-@onready var hurt_area: Area2D = $HurtArea
 
 
 func _ready() -> void:
@@ -30,8 +30,6 @@ func _ready() -> void:
 		preload("res://assets/sprites/pursuer_1.png"),
 		preload("res://assets/sprites/pursuer_2.png"),
 	]
-	hurt_area.body_entered.connect(_on_hurt_body_entered)
-	hurt_area.area_entered.connect(_on_hurt_area_entered)
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -46,8 +44,12 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 		return
 
+	if _is_dead:
+		return
+
 	_update_ai(delta)
 	_update_animation(delta)
+	_check_collisions()
 
 
 func _update_ai(delta: float) -> void:
@@ -122,16 +124,33 @@ func _update_animation(delta: float) -> void:
 	sprite.flip_h = not _facing_right
 
 
-func _on_hurt_body_entered(body: Node2D) -> void:
-	if body.is_in_group("player"):
-		# In order to kill pursuer by jumping on it, player MUST be dashing
-		if body.dashing_down and body.velocity.y > 0 and body.global_position.y < global_position.y:
-			body.velocity.y = -960.0
+func _check_collisions() -> void:
+	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
+	if has_node("DamageArea"):
+		areas.append_array($DamageArea.get_overlapping_areas())
+
+	# Priority 1: Strike
+	for area in areas:
+		if area.is_in_group("strike"):
+			_is_dead = true
 			queue_free()
-		else:
-			body.take_damage()
+			return
 
+	# Priority 2: Stomp (Only if dashing down!)
+	for body in $StompArea.get_overlapping_bodies():
+		if body.is_in_group("player") and body.velocity.y >= 0.0:
+			if body.dashing_down:
+				body.velocity.y = 0.0
+				body.dashing_down = false
+				_is_dead = true
+				queue_free()
+				return
+			else:
+				# Hitting top area without dash => takes damage
+				body.take_damage()
 
-func _on_hurt_area_entered(area: Area2D) -> void:
-	if area.is_in_group("strike"):
-		queue_free()
+	# Priority 3: Damage
+	if has_node("DamageArea"):
+		for body in $DamageArea.get_overlapping_bodies():
+			if body.is_in_group("player"):
+				body.take_damage()

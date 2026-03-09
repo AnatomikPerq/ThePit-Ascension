@@ -13,6 +13,7 @@ config_version=5
 config/name="ThePitAscention"
 run/main_scene="res://scenes/World.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+boot_splash/image="uid://dr0kw0r1grtjn"
 config/icon="res://icon.svg"
 
 [display]

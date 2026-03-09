@@ -3,31 +3,33 @@
 [ext_resource type="Script" uid="uid://3fiq5vux6ie4" path="res://scripts/golem.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://cwtsaeeltqr84" path="res://assets/sprites/golem_falling.png" id="2_tex"]
 
-[sub_resource type="RectangleShape2D" id="DamageShape"]
-size = Vector2(64, 32)
+[sub_resource type="RectangleShape2D" id="Shape_Damage"]
+size = Vector2(56, 20)
 
-[sub_resource type="RectangleShape2D" id="TransformShape"]
-size = Vector2(64, 32)
+[sub_resource type="RectangleShape2D" id="Shape_Stomp"]
+size = Vector2(58, 44)
 
-[node name="Golem" type="Node2D" unique_id=527155838 groups=["enemy"]]
+[node name="Golem" type="Node2D" unique_id=2072041543 groups=["enemy"]]
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1700623983]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1706269271]
 scale = Vector2(2, 2)
 texture = ExtResource("2_tex")
 
-[node name="DamageArea" type="Area2D" parent="." unique_id=884743201]
-position = Vector2(0, 16)
+[node name="DamageArea" type="Area2D" parent="." unique_id=885821599]
+position = Vector2(0, 8)
 collision_layer = 16
 collision_mask = 2
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="DamageArea" unique_id=2097626691]
-shape = SubResource("DamageShape")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DamageArea" unique_id=624954773]
+position = Vector2(0, 14)
+shape = SubResource("Shape_Damage")
 
-[node name="TransformArea" type="Area2D" parent="." unique_id=1753906805]
-position = Vector2(0, -16)
+[node name="StompArea" type="Area2D" parent="." unique_id=1097597711]
+position = Vector2(0, -24)
 collision_layer = 16
 collision_mask = 10
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="TransformArea" unique_id=1018270015]
-shape = SubResource("TransformShape")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea" unique_id=998982542]
+position = Vector2(0, 14)
+shape = SubResource("Shape_Stomp")

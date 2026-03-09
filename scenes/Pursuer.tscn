@@ -3,34 +3,49 @@
 [ext_resource type="Script" uid="uid://j5v5rxnfclk7" path="res://scripts/pursuer.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://bbtu1vlwcv5l0" path="res://assets/sprites/pursuer_1.png" id="2_tex"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(56, 80)
+[sub_resource type="RectangleShape2D" id="Shape_Body"]
+size = Vector2(56, 77)
 
-[sub_resource type="RectangleShape2D" id="HurtShape"]
-size = Vector2(56, 80)
+[sub_resource type="RectangleShape2D" id="Shape_Damage"]
+size = Vector2(52, 76)
 
-[node name="Pursuer" type="CharacterBody2D" unique_id=1016547470 groups=["enemy"]]
+[sub_resource type="RectangleShape2D" id="Shape_Stomp"]
+size = Vector2(58, 4)
+
+[node name="Pursuer" type="CharacterBody2D" unique_id=2069912242 groups=["enemy"]]
 collision_layer = 16
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=103389148]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=245950240]
 scale = Vector2(2, 2)
 texture = ExtResource("2_tex")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1837557063]
-shape = SubResource("RectangleShape2D_1")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1497124397]
+position = Vector2(0, 1.5)
+shape = SubResource("Shape_Body")
 
-[node name="HurtArea" type="Area2D" parent="." unique_id=65478176]
+[node name="DamageArea" type="Area2D" parent="." unique_id=351361249]
+position = Vector2(0, 8)
+collision_layer = 16
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DamageArea" unique_id=397332487]
+position = Vector2(0, -6)
+shape = SubResource("Shape_Damage")
+
+[node name="StompArea" type="Area2D" parent="." unique_id=921240674]
+position = Vector2(0, -32)
 collision_layer = 16
 collision_mask = 10
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtArea" unique_id=398918113]
-shape = SubResource("HurtShape")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea" unique_id=2090497319]
+position = Vector2(0, -6)
+shape = SubResource("Shape_Stomp")
 
-[node name="EdgeDetector" type="RayCast2D" parent="." unique_id=1354567945]
+[node name="EdgeDetector" type="RayCast2D" parent="." unique_id=1318902970]
 position = Vector2(30, 40)
 target_position = Vector2(0, 20)
 
-[node name="WallDetector" type="RayCast2D" parent="." unique_id=1632785249]
+[node name="WallDetector" type="RayCast2D" parent="." unique_id=267115102]
 position = Vector2(30, 0)
 target_position = Vector2(20, 0)

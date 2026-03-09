@@ -11,12 +11,11 @@ const TRAMPOLINE_SCENE: PackedScene = preload("res://scenes/Trampoline.tscn")
 
 var _direction: float = 1.0
 var _player: CharacterBody2D
+var _is_dead: bool = false
 
 
 func _ready() -> void:
 	_direction = 1.0 if randf() < 0.5 else -1.0
-	$HitArea.body_entered.connect(_on_body_entered)
-	$HitArea.area_entered.connect(_on_area_entered)
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -24,15 +23,46 @@ func set_player_ref(player: CharacterBody2D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _is_dead:
+		return
+
 	position.y += FALL_SPEED * delta
 	position.x += DRIFT_SPEED * _direction * delta
 
 	if position.y > WORLD_BOTTOM:
 		queue_free()
+		return
+
+	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
+	if has_node("DamageArea"):
+		areas.append_array($DamageArea.get_overlapping_areas())
+	
+	# Priority 1: Strike
+	for area in areas:
+		if area.is_in_group("strike"):
+			_die_and_spawn()
+			return
+
+	# Priority 2: Stomp
+	for body in $StompArea.get_overlapping_bodies():
+		if body.is_in_group("player") and body.velocity.y >= 0.0:
+			body.velocity.y = 0.0
+			body.dashing_down = false
+			_die_and_spawn()
+			return
+
+	# Priority 3: Damage
+	if has_node("DamageArea"):
+		for body in $DamageArea.get_overlapping_bodies():
+			if body.is_in_group("player"):
+				body.take_damage()
 
 
-func _spawn_trampoline() -> void:
-	# Use call_deferred to avoid physics state errors
+func _die_and_spawn() -> void:
+	_is_dead = true
+	var sprite: Sprite2D = get_node_or_null("Sprite2D")
+	if sprite:
+		sprite.visible = false
 	call_deferred("_deferred_spawn_trampoline")
 
 
@@ -41,20 +71,3 @@ func _deferred_spawn_trampoline() -> void:
 	t.global_position = global_position
 	get_parent().add_child(t)
 	queue_free()
-
-
-func _on_body_entered(body: Node2D) -> void:
-	if body.is_in_group("player"):
-		if body.velocity.y > 0 and body.global_position.y < global_position.y:
-			body.velocity.y = -1440.0
-			_spawn_trampoline()
-		elif body.dashing_down:
-			body.velocity.y = -960.0
-			_spawn_trampoline()
-		else:
-			body.take_damage()
-
-
-func _on_area_entered(area: Area2D) -> void:
-	if area.is_in_group("strike"):
-		_spawn_trampoline()
