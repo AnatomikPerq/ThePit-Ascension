@@ -25,7 +25,7 @@ func _physics_process(delta: float) -> void:
 
 	position.y += FALL_SPEED * delta
 
-	if position.y > WORLD_BOTTOM:
+	if is_instance_valid(_player) and position.y > _player.global_position.y + 1500.0:
 		queue_free()
 		return
 
@@ -69,6 +69,9 @@ func _deferred_transform() -> void:
 		$DamageArea.queue_free()
 	if has_node("StompArea"):
 		$StompArea.queue_free()
+		
+	if has_node("CrushBody"):
+		$CrushBody.queue_free()
 		
 	var body := StaticBody2D.new()
 	body.collision_layer = 1

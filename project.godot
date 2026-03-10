@@ -13,6 +13,7 @@ config_version=5
 config/name="ThePitAscention"
 run/main_scene="res://scenes/World.tscn"
 config/features=PackedStringArray("4.6", "Forward Plus")
+run/max_fps=144
 boot_splash/image="uid://dr0kw0r1grtjn"
 config/icon="res://icon.svg"
 
@@ -75,6 +76,7 @@ toggle_flight={
 
 [physics]
 
+common/physics_ticks_per_second=120
 3d/physics_engine="Jolt Physics"
 
 [rendering]

@@ -9,6 +9,9 @@ size = Vector2(56, 20)
 [sub_resource type="RectangleShape2D" id="Shape_Stomp"]
 size = Vector2(58, 44)
 
+[sub_resource type="RectangleShape2D" id="Shape_Crush"]
+size = Vector2(54, 38)
+
 [node name="Golem" type="Node2D" unique_id=2072041543 groups=["enemy"]]
 script = ExtResource("1_script")
 
@@ -16,10 +19,18 @@ script = ExtResource("1_script")
 scale = Vector2(2, 2)
 texture = ExtResource("2_tex")
 
+[node name="CrushBody" type="AnimatableBody2D" parent="." unique_id=883112233]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CrushBody" unique_id=992811776]
+position = Vector2(0, 10)
+shape = SubResource("Shape_Crush")
+
 [node name="DamageArea" type="Area2D" parent="." unique_id=885821599]
 position = Vector2(0, 8)
 collision_layer = 16
-collision_mask = 2
+collision_mask = 10
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="DamageArea" unique_id=624954773]
 position = Vector2(0, 14)

@@ -29,7 +29,7 @@ func _physics_process(delta: float) -> void:
 	position.y += FALL_SPEED * delta
 	position.x += DRIFT_SPEED * _direction * delta
 
-	if position.y > WORLD_BOTTOM:
+	if is_instance_valid(_player) and position.y > _player.global_position.y + 1500.0:
 		queue_free()
 		return
 

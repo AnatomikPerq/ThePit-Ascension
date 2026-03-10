@@ -5,8 +5,11 @@ extends Node2D
 
 # ── Constants (×2) ──────────────────────────────────────────────────────────
 const WORLD_WIDTH: int = 2000 # 1000 * 2
-const WORLD_HEIGHT: int = 8000 # 4000 * 2
 const WALL_THICK: int = 128 # 64 * 2
+
+@export var level_count: int = 4
+@export var level_height: int = 2000
+var max_depth: float = 8000.0
 
 # ── Scenes ──────────────────────────────────────────────────────────────────
 const PLATFORM_SCENE: PackedScene = preload("res://scenes/Platform.tscn")
@@ -22,8 +25,9 @@ enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY}
 var state: int = GameState.PLAYING
 
 var player: CharacterBody2D
-var spawn_rate: float = 2.0
-var upgrade_milestones: Array[int] = [6000, 2000] # 3000*2, 1000*2
+var spawn_timer: float = 0.0
+var current_spawn_interval: float = 2.0
+var upgrade_milestones: Array[float] = []
 var notification_timer: float = 0.0
 
 # Background color cycling
@@ -51,24 +55,32 @@ var bg_time: float = 0.0
 @onready var upgrade_menu: Panel = $CanvasLayer/UpgradeMenu
 @onready var game_over_screen: ColorRect = $CanvasLayer/GameOverScreen
 @onready var victory_screen: ColorRect = $CanvasLayer/VictoryScreen
-@onready var enemy_timer: Timer = $EnemySpawnTimer
 @onready var dim_overlay: ColorRect = $CanvasLayer/DimOverlay
 
 
 func _ready() -> void:
+	max_depth = float(level_count * level_height)
+	upgrade_milestones = [max_depth * 0.75, max_depth * 0.25]
+	
 	_generate_map()
 	_spawn_player()
 	_build_hp_bar()
+
+	# Create FPS Label dynamically
+	var fps_label := Label.new()
+	fps_label.name = "FPSLabel"
+	fps_label.position = Vector2(1780, 20) # Top right corner roughly
+	fps_label.add_theme_font_size_override("font_size", 32)
+	hud.add_child(fps_label)
 
 	# Camera limits — keep within world bounds
 	camera.limit_left = - WALL_THICK
 	camera.limit_right = WORLD_WIDTH + WALL_THICK
 	camera.limit_top = -384
-	camera.limit_bottom = WORLD_HEIGHT + 120
+	camera.limit_bottom = int(max_depth) + 120
 	# Offset player slightly below center so we see more above
 	camera.offset = Vector2(0, -120)
 
-	enemy_timer.timeout.connect(_on_enemy_timer)
 	$CanvasLayer/UpgradeMenu/DoubleJumpBtn.pressed.connect(_on_double_jump_chosen)
 	$CanvasLayer/UpgradeMenu/StrikeBtn.pressed.connect(_on_strike_chosen)
 
@@ -93,8 +105,23 @@ func _process(delta: float) -> void:
 		var c: Color = bg_colors[idx1].lerp(bg_colors[idx2], local_p)
 		RenderingServer.set_default_clear_color(c)
 
+	if state == GameState.GAME_OVER:
+		if Input.is_action_just_pressed("jump"):
+			_restart()
+		return
+
 	if not is_instance_valid(player):
 		return
+
+	# Time-based enemy spawner
+	if state == GameState.PLAYING:
+		spawn_timer += delta
+		if spawn_timer >= current_spawn_interval:
+			spawn_timer = 0.0
+			_spawn_enemy()
+			# Increase difficulty gradually
+			if current_spawn_interval > 0.6:
+				current_spawn_interval -= 0.05
 
 	# Update camera to follow player
 	camera.global_position = player.global_position
@@ -117,14 +144,15 @@ func _process(delta: float) -> void:
 		if notification_timer <= 0.0:
 			notif_label.text = ""
 
+	# Update FPS
+	var fps_node: Label = hud.get_node_or_null("FPSLabel")
+	if fps_node:
+		fps_node.text = "FPS: %d" % Engine.get_frames_per_second()
+
 	# Game logic
 	if state == GameState.PLAYING:
 		_check_milestones()
 		_check_victory()
-
-	if state == GameState.GAME_OVER:
-		if Input.is_action_just_pressed("jump"):
-			_restart()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -187,7 +215,7 @@ func _show_notification(text: String) -> void:
 # ── Player ──────────────────────────────────────────────────────────────────
 func _spawn_player() -> void:
 	player = PLAYER_SCENE.instantiate()
-	player.global_position = Vector2(WORLD_WIDTH / 2.0, WORLD_HEIGHT - 300.0)
+	player.global_position = Vector2(WORLD_WIDTH / 2.0, max_depth - 300.0)
 	add_child(player)
 	player.player_died.connect(_on_player_died)
 	player.player_damaged.connect(_on_player_damaged)
@@ -227,44 +255,45 @@ func _restart() -> void:
 
 
 # ── Enemy Spawning ──────────────────────────────────────────────────────────
-func _on_enemy_timer() -> void:
-	if state != GameState.PLAYING or not is_instance_valid(player):
-		return
-	_spawn_enemy()
-
-	# Gradually decrease spawn interval
-	if spawn_rate > 0.6:
-		spawn_rate -= 0.05
-		enemy_timer.wait_time = spawn_rate
-
 
 func _spawn_enemy() -> void:
-	var pursuer_count := 0
-	for e in enemies_node.get_children():
-		if e.is_in_group("pursuer_group"):
-			pursuer_count += 1
-	if pursuer_count >= 20:
-		return
+	# Calculate depth progress (0.0 at top, 1.0 at bottom)
+	var current_depth := maxf(0.0, minf(max_depth, player.global_position.y))
+	# We want t=0 at the start (highest depth number) and t=1 at the end (lowest depth number)
+	var progress := 1.0 - (current_depth / max_depth)
+
+	# Calculate probabilities based on progress
+	# Start (progress 0.0): Golem 100, Slime 90, Pursuer 1
+	# End (progress 1.0): Golem 40, Slime 10, Pursuer 80
+	var w_golem: float = lerp(100.0, 40.0, progress)
+	var w_slime: float = lerp(90.0, 10.0, progress)
+	var w_pursuer: float = lerp(1.0, 80.0, progress)
+	
+	var total_weight: float = w_golem + w_slime + w_pursuer
+	var roll: float = randf() * total_weight
+
+	var type_name := ""
+	if roll < w_golem:
+		type_name = "golem"
+	elif roll < w_golem + w_slime:
+		type_name = "slime"
+	else:
+		type_name = "pursuer"
+
+	# Limit Pursuers
+	if type_name == "pursuer":
+		var pursuer_count := 0
+		for e in enemies_node.get_children():
+			if e.is_in_group("pursuer_group"):
+				pursuer_count += 1
+		if pursuer_count >= 20:
+			return # Re-roll essentially negated, wait for next timer tick
 
 	var spawn_y: float = player.global_position.y - 1200.0
 	if spawn_y < 400.0:
 		spawn_y = 400.0
 
-	var depth: float = player.global_position.y
-	var choices: Array[String] = []
-
-	if depth > 6000.0:
-		choices = ["golem", "slime"]
-	elif depth > 4000.0:
-		choices = ["golem", "slime", "slime", "pursuer"]
-	elif depth > 2000.0:
-		choices = ["slime", "pursuer", "pursuer"]
-	else:
-		choices = ["pursuer", "pursuer", "slime"]
-
-	var type_name: String = choices[randi() % choices.size()]
 	var x: float
-
 	if type_name == "pursuer":
 		x = 128.0 if randf() < 0.5 else WORLD_WIDTH - 192.0
 		spawn_y = player.global_position.y - 800.0
@@ -288,25 +317,20 @@ func _spawn_enemy() -> void:
 
 # ── Map Generation ──────────────────────────────────────────────────────────
 func _generate_map() -> void:
-	# Multiply walls vertically upwards from the placed base segment
-	# Base walls are placed at y=7744, which goes up to y=7488 (height 512)
-	# So we continue adding up from 7232 up to 0 and beyond.
-	var y_pos := 7232.0
+	# Base walls scale from bottom to top
+	var y_pos := max_depth - 512.0
 	while y_pos > -3000.0:
 		_create_wall(Vector2(-128, y_pos), Vector2(128, 512))
 		_create_wall(Vector2(WORLD_WIDTH, y_pos), Vector2(128, 512))
 		y_pos -= 512.0
 
-	# Procedural platforms
 	_generate_platforms()
-	# Moving platforms
-	_add_moving_platforms()
+
 
 func _create_wall(pos: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
-	# Size is 128 wide, 512 tall. Center it relative to pos.
 	body.position = pos + size / 2.0
-	body.collision_layer = 1
+	body.collision_layer = 33
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = size
@@ -323,6 +347,7 @@ func _create_wall(pos: Vector2, size: Vector2) -> void:
 	body.add_child(spr)
 
 	platforms_node.add_child(body)
+
 
 func _create_static_platform(pos: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
@@ -347,155 +372,68 @@ func _create_static_platform(pos: Vector2, size: Vector2) -> void:
 
 
 func _generate_platforms() -> void:
-	# All values ×2 from legacy
-	var PLAT_MIN_W: int = 160 # 80 * 2
-	var PLAT_MAX_W: int = 512 # 256 * 2
-	var PLAT_H: int = 32 # 16 * 2
+	# Keep user's preset layout for dividers conceptually,
+	# but we must calculate the positions dynamically so it works with ANY level_count / max_depth.
+	var dividers_y: Array[float] = []
+	for i in range(1, level_count):
+		dividers_y.append(max_depth - i * float(level_height))
+	
+	# Start generating platforms from the bottom up (leaving 500px gap at the very bottom floor to prevent clutter)
+	var current_y := max_depth - 800.0
+	var plat_h := 32.0
 
-	var forbidden_zones: Array[Rect2] = []
-	for level_y in [2000, 4000, 6000]:
-		forbidden_zones.append(Rect2(600, level_y - 200, 800, 400))
-
-	var levels: Array[Dictionary] = [
-		{"start_y": 7000, "end_y": 2000, "density": 0.7, "min_sp": 160, "max_sp": 300},
-		{"start_y": 5800, "end_y": 4000, "density": 0.6, "min_sp": 180, "max_sp": 360},
-		{"start_y": 3800, "end_y": 6000, "density": 0.5, "min_sp": 200, "max_sp": 400},
-		{"start_y": 1800, "end_y": 800, "density": 0.4, "min_sp": 240, "max_sp": 500},
-	]
-
-	for level in levels:
-		_gen_level_platforms(level, forbidden_zones, PLAT_MIN_W, PLAT_MAX_W, PLAT_H)
-
-	# Special platforms
-	var special: Array[Array] = [
-		[4400, 2], [6400, 2], [3000, 3], [5000, 2], [7000, 2]
-	]
-	for sp in special:
-		var y_pos: int = sp[0]
-		var count: int = sp[1]
-		for i in range(count):
-			var x_range: Vector2 = Vector2(200, 800) if i % 2 == 0 else Vector2(1200, 1800)
-			var x: int = randi_range(int(x_range.x), int(x_range.y))
-			var w: int = randi_range(PLAT_MIN_W, PLAT_MAX_W)
-			if not _too_close_to_divider(Rect2(x, y_pos, w, PLAT_H)):
-				_create_static_platform(Vector2(x, y_pos), Vector2(w, PLAT_H))
-
-
-func _gen_level_platforms(params: Dictionary, forbidden: Array[Rect2], min_w: int, max_w: int, h: int) -> void:
-	var y: float = params["start_y"]
-	var density: float = params["density"]
-	var min_sp: int = params["min_sp"]
-	var max_sp: int = params["max_sp"]
-
-	while y > params["end_y"]:
-		if randf() < density:
-			var gen_count: int = 2 if randf() < 0.3 else 1
-			var generated: Array[Rect2] = []
-
-			for _i in range(gen_count):
-				var zone_r: float = randf()
-				var x_range: Vector2
-				if zone_r < 0.1:
-					x_range = Vector2(700, 1300) # center
-				elif zone_r < 0.55:
-					x_range = Vector2(100, 500) # left
-				else:
-					x_range = Vector2(1500, 1900) # right
-
-				var x: int = randi_range(int(x_range.x), int(x_range.y))
-				var w: int = randi_range(min_w, max_w)
-				w = (w / 64) * 64 # Snap to 64px grid
-
-				var r := Rect2(x, y, w, h)
-				var valid := true
-
-				for fz in forbidden:
-					if r.intersects(fz):
-						valid = false
-						break
-
-				if valid and _too_close_to_divider(r):
-					valid = false
-
-				if valid:
-					for existing in generated:
-						if abs(r.get_center().x - existing.get_center().x) < min_sp or r.intersects(existing):
-							valid = false
-							break
-
-				if valid:
-					_create_static_platform(Vector2(x, y), Vector2(w, h))
-					generated.append(r)
-
-		y -= randi_range(min_sp, max_sp)
-
-
-func _too_close_to_divider(r: Rect2, min_dist: float = 100.0) -> bool:
-	for dy in [2000, 4000, 6000]:
-		if abs(r.get_center().y - dy) < min_dist:
-			return true
-	return false
-
-
-func _add_moving_platforms() -> void:
-	# All coords ×2 from legacy
-	var positions: Array[Array] = [
-		# [x, y, range, speed, delay, type]
-		# Level 1 (bottom)
-		[600, 6800, 500, 35, 0, "horizontal"],
-		[1200, 6600, 400, 40, 30, "horizontal"],
-		[400, 6400, 600, 25, 60, "horizontal"],
-		[1000, 5800, 480, 40, 90, "horizontal"],
-		[700, 5600, 800, 30, 60, "horizontal"],
-		[1300, 5400, 640, 35, 30, "horizontal"],
-		# Level 2
-		[500, 4800, 560, 40, 0, "horizontal"],
-		[1100, 4600, 640, 25, 60, "horizontal"],
-		[1500, 4400, 480, 35, 30, "horizontal"],
-		[1200, 3800, 560, 35, 45, "horizontal"],
-		[600, 3600, 800, 25, 60, "horizontal"],
-		[1400, 3400, 640, 30, 30, "horizontal"],
-		# Level 3
-		[800, 2800, 700, 35, 0, "horizontal"],
-		[400, 2600, 560, 40, 60, "horizontal"],
-		[1200, 2400, 600, 25, 30, "horizontal"],
-		[1400, 1800, 720, 40, 45, "horizontal"],
-		[700, 1600, 480, 25, 60, "horizontal"],
-		[1300, 1400, 800, 30, 30, "horizontal"],
-		# Level 4 (top)
-		[500, 1200, 640, 35, 0, "horizontal"],
-		[1100, 1000, 560, 40, 30, "horizontal"],
-		[900, 400, 480, 35, 45, "horizontal"],
-		[1200, 200, 640, 40, 30, "horizontal"],
-		# Vertical
-		[300, 6400, 400, 20, 0, "vertical"],
-		[1700, 6200, 360, 25, 45, "vertical"],
-		[360, 5000, 440, 30, 60, "vertical"],
-		[1760, 3000, 400, 25, 90, "vertical"],
-		[200, 1600, 560, 30, 60, "vertical"],
-		[1800, 1400, 440, 40, 30, "vertical"],
-		# Extra
-		[400, 2400, 800, 25, 30, "vertical"],
-		[1200, 3600, 900, 30, 60, "horizontal"],
-	]
-
-	for p in positions:
-		var plat_w: int = randi_range(160, 512)
-		if not _too_close_to_divider(Rect2(p[0], p[1], plat_w, 32), 120.0):
-			var mp := MOVING_PLAT_SCENE.instantiate()
-			mp.global_position = Vector2(p[0], p[1])
-			mp.move_range = p[2]
-			mp.move_speed = p[3]
-			mp.move_delay = p[4]
-			mp.move_type = p[5]
-			# Resize collision to match random width
-			var col_shape: CollisionShape2D = mp.get_node("CollisionShape2D")
-			col_shape.shape = col_shape.shape.duplicate()
-			col_shape.shape.size = Vector2(plat_w, 32)
-			# Resize sprite to tile across full width
-			# Resize sprite to tile across full width
-			var spr: Sprite2D = mp.get_node("Sprite2D")
-			spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-			spr.region_enabled = true
-			spr.region_rect = Rect2(0, 0, plat_w / 2.0, spr.texture.get_height())
-			platforms_node.add_child(mp)
+	while current_y > 500.0:
+		var progress := 1.0 - (current_y / max_depth)
+		var step_y: float = lerp(80.0, 180.0, progress)
+		
+		# Skip spawning if too close to an existing divider from World.tscn
+		var near_divider := false
+		for div_y in dividers_y:
+			if abs(current_y - div_y) < 250.0:
+				near_divider = true
+				break
+				
+		if near_divider:
+			current_y -= step_y
+			continue
+			
+		var chance: float = lerp(0.95, 0.6, progress)
+		if randf() < chance:
+			# Spawn 1 to 4 platforms per height step to increase density
+			var max_plats := int(lerp(4.0, 1.0, progress))
+			var plat_count := randi_range(1, maxi(1, max_plats))
+			
+			for i in range(plat_count):
+				var max_b := int(lerp(8.0, 3.0, progress))
+				var min_b := 2
+				var blocks := randi_range(min_b, maxi(min_b, max_b))
+				var w := float(blocks * 64)
+				
+				var x := randf_range(128.0, WORLD_WIDTH - 128.0 - w)
+				var type_roll := randf()
+				var p_y := current_y + randf_range(-30.0, 30.0)
+				
+				if type_roll < 0.6: # Static
+					_create_static_platform(Vector2(x, p_y), Vector2(w, plat_h))
+				else: # Moving
+					var mp := MOVING_PLAT_SCENE.instantiate()
+					mp.global_position = Vector2(x, p_y)
+					mp.move_speed = randf_range(20.0, 50.0)
+					mp.move_delay = randf_range(0.0, 90.0)
+					if type_roll < 0.8:
+						mp.move_type = "horizontal"
+						mp.move_range = randf_range(300.0, 800.0)
+					else:
+						mp.move_type = "vertical"
+						mp.move_range = randf_range(300.0, 600.0)
+					
+					var col_shape: CollisionShape2D = mp.get_node("CollisionShape2D")
+					col_shape.shape = col_shape.shape.duplicate()
+					col_shape.shape.size = Vector2(w, plat_h)
+					var spr: Sprite2D = mp.get_node("Sprite2D")
+					spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+					spr.region_enabled = true
+					spr.region_rect = Rect2(0, 0, w / 2.0, spr.texture.get_height())
+					platforms_node.add_child(mp)
+				
+		current_y -= step_y

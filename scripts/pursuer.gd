@@ -1,13 +1,14 @@
 extends CharacterBody2D
 ## Pursuer — chases the player, jumps over walls and pits.
 
-const GRAVITY: float = 4032.0 # 0.8 * 60 * 60 * 2 * 0.7
-const TERMINAL_VEL: float = 480.0 # term_vel 4 * 60 * 2
-const MOVE_SPEED: float = 160.0 # speed 80 * 2
-const JUMP_POWER: float = -1560.0 # -13 * 60 * 2
-const JUMP_COOLDOWN: float = 1.333 # 80 frames / 60 fps
-const PLAYER_DETECT: float = 1600.0 # 800 * 2
-const WORLD_BOTTOM: float = 8400.0
+const GRAVITY: float = 4500.0
+const TERMINAL_VEL: float = 1800.0
+const MOVE_SPEED: float = 300.0 # Slightly slower than max player speed for fairness
+const ACCELERATION: float = 1200.0 # Smooth acceleration
+const FRICTION: float = 2400.0
+const JUMP_POWER: float = -1700.0
+const JUMP_COOLDOWN: float = 0.5
+const PLAYER_DETECT: float = 1600.0
 
 var _player: CharacterBody2D
 var _jump_timer: float = 0.0
@@ -40,7 +41,7 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(_player):
 		return
 
-	if global_position.y > WORLD_BOTTOM:
+	if global_position.y > _player.global_position.y + 1500.0:
 		queue_free()
 		return
 
@@ -67,12 +68,16 @@ func _update_ai(delta: float) -> void:
 	var dist_y: float = _player.global_position.y - global_position.y
 	var dist_total: float = sqrt(dist_x * dist_x + dist_y * dist_y)
 
-	if abs(dist_x) > 20.0 and dist_total < PLAYER_DETECT:
+	var target_speed := 0.0
+	if abs(dist_x) > 10.0 and dist_total < PLAYER_DETECT:
 		var direction: float = sign(dist_x)
-		velocity.x = direction * MOVE_SPEED
+		target_speed = direction * MOVE_SPEED
 		_facing_right = direction > 0.0
+
+	if target_speed != 0.0:
+		velocity.x = move_toward(velocity.x, target_speed, ACCELERATION * delta)
 	else:
-		velocity.x = 0.0
+		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
 
 	# Gravity
 	velocity.y += GRAVITY * delta

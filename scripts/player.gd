@@ -26,6 +26,7 @@ var has_double_jump: bool = false
 var has_strike: bool = false
 var dashing_down: bool = false
 var flying: bool = false
+var is_crushed: bool = false
 
 var facing_right: bool = true
 var animation_state: String = "standing"
@@ -57,6 +58,7 @@ signal player_died
 
 func _ready() -> void:
 	inv_timer.timeout.connect(_on_invincibility_timeout)
+	set_collision_mask_value(6, true) # Layer 6 is World Bounds
 	_load_sprites()
 	_update_sprite()
 
@@ -83,8 +85,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		_handle_input()
 
-	if not flying:
+	if not flying and not is_crushed:
 		_apply_gravity(delta)
+	elif is_crushed:
+		_apply_crush_gravity(delta)
 
 	# Coyote time: if just walked off edge, start timer
 	var was_on_floor := is_on_floor()
@@ -102,6 +106,18 @@ func _physics_process(delta: float) -> void:
 	# Cancel dash if moving upwards (e.g. trampolines, bounces)
 	if velocity.y < 0:
 		dashing_down = false
+
+	# Crush detection
+	# A player is crushed if they cannot move in opposite directions simultaneously
+	if can_input and not invincible and not is_crushed:
+		var stuck_h := test_move(global_transform, Vector2.RIGHT) and test_move(global_transform, Vector2.LEFT)
+		var stuck_v := test_move(global_transform, Vector2.UP) and test_move(global_transform, Vector2.DOWN)
+		
+		# For diagonal squeezes, if we are overlapping in place
+		var embedded := test_move(global_transform, Vector2.ZERO)
+		
+		if stuck_h or stuck_v or embedded:
+			_handle_crush()
 
 	_update_animation(delta)
 
@@ -123,6 +139,28 @@ func _apply_gravity(delta: float) -> void:
 	velocity.y += GRAVITY * delta
 	if velocity.y > TERMINAL_VELOCITY:
 		velocity.y = TERMINAL_VELOCITY
+
+
+func _apply_crush_gravity(delta: float) -> void:
+	# Slow, smooth fall during crush to prevent zipping through the floor instantly
+	var crush_terminal := 400.0
+	velocity.y += (GRAVITY * 0.2) * delta
+	if velocity.y > crush_terminal:
+		velocity.y = crush_terminal
+		
+	# Fall safe: don't fall below the map floor
+	# Since player doesn't have direct access to max_depth cleanly here, 
+	# we can just use a large arbitrary bottom limit based on parent if needed,
+	# but an easier way is to just let them fall max 600px total during a crush.
+	# Actually, we can check if y > (the lowest point minus a bit).
+	# We'll just define a fallback or ask the World.
+	var world_node := get_parent()
+	var bottom_lim := 8000.0
+	if world_node and "max_depth" in world_node:
+		bottom_lim = world_node.max_depth - 100.0
+		
+	if global_position.y >= bottom_lim:
+		_end_crush()
 
 
 # ── Input ───────────────────────────────────────────────────────────────────
@@ -209,9 +247,9 @@ func _snap_strike() -> void:
 		current_strike.global_position = global_position + Vector2(-52, 0)
 
 
-# ── Damage ──────────────────────────────────────────────────────────────────
+# ── Damage & Crush ──────────────────────────────────────────────────────────
 func take_damage() -> bool:
-	if invincible or flying:
+	if invincible or flying or not can_input:
 		return false
 	health -= 1
 	invincible = true
@@ -219,8 +257,56 @@ func take_damage() -> bool:
 	velocity.y = KNOCKBACK_FORCE
 	player_damaged.emit(health)
 	if health <= 0:
-		player_died.emit()
+		_die()
 	return true
+
+
+func _handle_crush() -> void:
+	is_crushed = true
+	can_input = false
+	velocity.x = 0.0
+	velocity.y = 0.0
+	set_collision_mask_value(1, false) # Fall through platforms
+	
+	health -= 1
+	invincible = true
+	inv_timer.start()
+	player_damaged.emit(health)
+	
+	if health <= 0:
+		_die()
+	else:
+		# Recover from crush
+		var t := get_tree().create_timer(2.0)
+		t.timeout.connect(_end_crush)
+
+
+func _end_crush() -> void:
+	if is_instance_valid(self ) and health > 0 and is_crushed:
+		is_crushed = false
+		set_collision_mask_value(1, true)
+		can_input = true
+
+
+func _die() -> void:
+	if not can_input:
+		pass
+	can_input = false
+	velocity.x = 0.0
+	velocity.y = -600.0
+	dashing_down = false
+	sprite.rotation_degrees = -90.0
+	set_collision_mask_value(1, false)
+	set_collision_mask_value(2, false)
+	set_collision_mask_value(3, false)
+	set_collision_mask_value(4, false)
+	
+	var tween := create_tween()
+	tween.tween_property(sprite, "modulate:a", 0.0, 1.0)
+	tween.tween_callback(func():
+		player_died.emit()
+		queue_free()
+	)
 
 
 func _on_invincibility_timeout() -> void:

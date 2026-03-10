@@ -36,7 +36,7 @@ limit_bottom = 8000
 
 [node name="Floor" type="StaticBody2D" parent="Platforms"]
 position = Vector2(1000, 7968)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Floor"]
 scale = Vector2(2, 2)
@@ -47,7 +47,7 @@ shape = SubResource("Shape_Floor")
 
 [node name="WallLeft" type="StaticBody2D" parent="Platforms"]
 position = Vector2(-64, 7744)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/WallLeft"]
 texture_repeat = 2
@@ -61,7 +61,7 @@ shape = SubResource("Shape_Wall")
 
 [node name="WallRight" type="StaticBody2D" parent="Platforms"]
 position = Vector2(2064, 7744)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/WallRight"]
 texture_repeat = 2
@@ -75,7 +75,7 @@ shape = SubResource("Shape_Wall")
 
 [node name="Divider_2000_Left" type="StaticBody2D" parent="Platforms"]
 position = Vector2(300, 2000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Left"]
 texture_repeat = 2
@@ -89,7 +89,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_2000_Right" type="StaticBody2D" parent="Platforms"]
 position = Vector2(1700, 2000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Right"]
 texture_repeat = 2
@@ -103,7 +103,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_4000_Left" type="StaticBody2D" parent="Platforms"]
 position = Vector2(300, 4000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Left"]
 texture_repeat = 2
@@ -117,7 +117,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_4000_Right" type="StaticBody2D" parent="Platforms"]
 position = Vector2(1700, 4000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Right"]
 texture_repeat = 2
@@ -131,7 +131,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_6000_Left" type="StaticBody2D" parent="Platforms"]
 position = Vector2(300, 6000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Left"]
 texture_repeat = 2
@@ -145,7 +145,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_6000_Right" type="StaticBody2D" parent="Platforms"]
 position = Vector2(1700, 6000)
-collision_layer = 1
+collision_layer = 33
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Right"]
 texture_repeat = 2
@@ -334,12 +334,8 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -150.0
-offset_top = 10.0
+offset_top = 20.0
 offset_right = 150.0
 offset_bottom = 50.0
 text = "It's solver time"
 horizontal_alignment = 1
-
-[node name="EnemySpawnTimer" type="Timer" parent="."]
-wait_time = 2.0
-autostart = true
