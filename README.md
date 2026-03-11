@@ -24,6 +24,7 @@ Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) an
 | **Strike (Attack)** | `Z`, `J` |
 | **Toggle Flight (Cheat)** | `F` |
 | **Reset Game** | `R` |
+| **Pause** | `ESC` |
 
 ## 🛠️ Installation & Running
 
