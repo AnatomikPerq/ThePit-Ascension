@@ -5,3 +5,4 @@ export_presets.cfg
 **/*.blend1
 .vscode
 output.md
+.py

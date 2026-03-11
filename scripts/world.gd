@@ -21,7 +21,7 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/Player.tscn")
 const TRAMPOLINE_SCENE: PackedScene = preload("res://scenes/Trampoline.tscn")
 
 # ── State ───────────────────────────────────────────────────────────────────
-enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY}
+enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY, PAUSED}
 var state: int = GameState.PLAYING
 
 var player: CharacterBody2D
@@ -29,6 +29,9 @@ var spawn_timer: float = 0.0
 var current_spawn_interval: float = 2.0
 var upgrade_milestones: Array[float] = []
 var notification_timer: float = 0.0
+
+var show_debug: bool = false
+var debug_free_zones: Array[Rect2] = []
 
 # Background color cycling
 var bg_colors: Array[Color] = [
@@ -55,7 +58,6 @@ var bg_time: float = 0.0
 @onready var upgrade_menu: Panel = $CanvasLayer/UpgradeMenu
 @onready var game_over_screen: ColorRect = $CanvasLayer/GameOverScreen
 @onready var victory_screen: ColorRect = $CanvasLayer/VictoryScreen
-@onready var dim_overlay: ColorRect = $CanvasLayer/DimOverlay
 
 
 func _ready() -> void:
@@ -70,7 +72,7 @@ func _ready() -> void:
 	var fps_label := Label.new()
 	fps_label.name = "FPSLabel"
 	fps_label.position = Vector2(1780, 20) # Top right corner roughly
-	fps_label.add_theme_font_size_override("font_size", 32)
+	fps_label.add_theme_font_size_override("font_size", 20)
 	hud.add_child(fps_label)
 
 	# Camera limits — keep within world bounds
@@ -84,13 +86,23 @@ func _ready() -> void:
 	$CanvasLayer/UpgradeMenu/DoubleJumpBtn.pressed.connect(_on_double_jump_chosen)
 	$CanvasLayer/UpgradeMenu/StrikeBtn.pressed.connect(_on_strike_chosen)
 
-	# Make upgrade menu work while paused
-	$CanvasLayer/UpgradeMenu.process_mode = Node.PROCESS_MODE_ALWAYS
-	$CanvasLayer/UpgradeMenu/DoubleJumpBtn.process_mode = Node.PROCESS_MODE_ALWAYS
-	$CanvasLayer/UpgradeMenu/StrikeBtn.process_mode = Node.PROCESS_MODE_ALWAYS
+	# World should pause normally.
+	self.process_mode = Node.PROCESS_MODE_INHERIT
+
+	# Let the CanvasLayer (or a specific control) process while paused for menus
+	$CanvasLayer.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Set background
 	RenderingServer.set_default_clear_color(bg_colors[0])
+	
+	# Load and attach UI input handler script manually
+	var ui_script: Script = load("res://scripts/ui_input.gd")
+	if ui_script:
+		var input_node := Node.new()
+		input_node.name = "UIInputHandler"
+		input_node.set_script(ui_script)
+		input_node.process_mode = Node.PROCESS_MODE_ALWAYS
+		$CanvasLayer.add_child(input_node)
 
 
 func _process(delta: float) -> void:
@@ -119,8 +131,8 @@ func _process(delta: float) -> void:
 		if spawn_timer >= current_spawn_interval:
 			spawn_timer = 0.0
 			_spawn_enemy()
-			# Increase difficulty gradually
-			if current_spawn_interval > 0.6:
+			# Increase difficulty gradually (lower interval allowed)
+			if current_spawn_interval > 0.4:
 				current_spawn_interval -= 0.05
 
 	# Update camera to follow player
@@ -154,11 +166,19 @@ func _process(delta: float) -> void:
 		_check_milestones()
 		_check_victory()
 
+	if show_debug:
+		queue_redraw()
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Reset on R
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_R:
 		_restart()
+
+	# Toggle Debug Hitboxes on U
+	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_U:
+		show_debug = not show_debug
+		queue_redraw()
 
 
 func _check_milestones() -> void:
@@ -176,6 +196,27 @@ func _check_victory() -> void:
 		victory_screen.visible = true
 		get_tree().paused = true
 
+
+func _pause_game() -> void:
+	state = GameState.PAUSED
+	get_tree().paused = true
+	var pause_label = hud.get_node_or_null("PauseLabel")
+	if not pause_label:
+		pause_label = Label.new()
+		pause_label.name = "PauseLabel"
+		pause_label.text = "PAUSED (Press ESC to Resume)"
+		pause_label.add_theme_font_size_override("font_size", 48)
+		pause_label.set_anchors_preset(Control.PRESET_CENTER)
+		pause_label.position = Vector2(WORLD_WIDTH / 2 - 1350, 300) # Roughly center
+		hud.add_child(pause_label)
+	pause_label.visible = true
+
+func _resume_game() -> void:
+	state = GameState.PLAYING
+	get_tree().paused = false
+	var pause_label = hud.get_node_or_null("PauseLabel")
+	if pause_label:
+		pause_label.visible = false
 
 func _show_upgrade_menu() -> void:
 	state = GameState.UPGRADE_MENU
@@ -264,9 +305,9 @@ func _spawn_enemy() -> void:
 
 	# Calculate probabilities based on progress
 	# Start (progress 0.0): Golem 100, Slime 90, Pursuer 1
-	# End (progress 1.0): Golem 40, Slime 10, Pursuer 80
-	var w_golem: float = lerp(100.0, 40.0, progress)
-	var w_slime: float = lerp(90.0, 10.0, progress)
+	# End (progress 1.0): Golem 60, Slime 25, Pursuer 80
+	var w_golem: float = lerp(100.0, 60.0, progress)
+	var w_slime: float = lerp(90.0, 25.0, progress)
 	var w_pursuer: float = lerp(1.0, 80.0, progress)
 	
 	var total_weight: float = w_golem + w_slime + w_pursuer
@@ -290,8 +331,8 @@ func _spawn_enemy() -> void:
 			return # Re-roll essentially negated, wait for next timer tick
 
 	var spawn_y: float = player.global_position.y - 1200.0
-	if spawn_y < 400.0:
-		spawn_y = 400.0
+	if spawn_y < -800.0:
+		spawn_y = -800.0
 
 	var x: float
 	if type_name == "pursuer":
@@ -378,12 +419,12 @@ func _generate_platforms() -> void:
 	for i in range(1, level_count):
 		dividers_y.append(max_depth - i * float(level_height))
 	
-	# Start generating platforms from the bottom up (leaving 500px gap at the very bottom floor to prevent clutter)
+	# Start generating platforms from the bottom up
 	var current_y := max_depth - 800.0
 	var plat_h := 32.0
 
-	while current_y > 500.0:
-		var progress := 1.0 - (current_y / max_depth)
+	while current_y > -400.0:
+		var progress := 1.0 - (maxf(current_y, 0.0) / max_depth)
 		var step_y: float = lerp(80.0, 180.0, progress)
 		
 		# Skip spawning if too close to an existing divider from World.tscn
@@ -395,6 +436,7 @@ func _generate_platforms() -> void:
 				
 		if near_divider:
 			current_y -= step_y
+			debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
 			continue
 			
 		var chance: float = lerp(0.95, 0.6, progress)
@@ -437,3 +479,56 @@ func _generate_platforms() -> void:
 					platforms_node.add_child(mp)
 				
 		current_y -= step_y
+		debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
+
+# ── Debug Draw ──────────────────────────────────────────────────────────────
+func _process_debug_draw() -> void:
+	if not show_debug: return
+	queue_redraw()
+
+func _draw() -> void:
+	if not show_debug: return
+	
+	# Draw Free Zones
+	var fzone_color := Color(1.0, 0.0, 1.0, 0.15) # Light purple
+	for fz in debug_free_zones:
+		draw_rect(fz, fzone_color)
+		
+	# Draw Platform Hitboxes
+	var plat_color := Color(0.0, 1.0, 0.0, 0.4) # Green
+	for p in platforms_node.get_children():
+		if p is CollisionObject2D:
+			for child in p.get_children():
+				if child is CollisionShape2D and child.shape is RectangleShape2D:
+					var shape := child.shape as RectangleShape2D
+					var shape_tf: Transform2D = child.global_transform
+					var r := Rect2(shape_tf.origin - shape.size / 2.0, shape.size)
+					draw_rect(r, plat_color)
+						
+	# Draw Mobs Hitboxes
+	var mob_color := Color(1.0, 0.0, 0.0, 0.4) # Red
+	for e in enemies_node.get_children():
+		# Try Area2Ds or CharacterBody2D
+		for child in e.get_children():
+			if child is CollisionShape2D and child.shape is RectangleShape2D:
+				var r := Rect2(child.global_position - child.shape.size / 2.0, child.shape.size)
+				draw_rect(r, mob_color)
+			elif child is Area2D or child is StaticBody2D or child is AnimatableBody2D:
+				for gc in child.get_children():
+					if gc is CollisionShape2D and gc.shape is RectangleShape2D:
+						var shape := gc.shape as RectangleShape2D
+						var r := Rect2(gc.global_position - shape.size / 2.0, shape.size)
+						draw_rect(r, mob_color)
+			elif child is StaticBody2D or child is AnimatableBody2D:
+				for gc in child.get_children():
+					if gc is CollisionShape2D and gc.shape is RectangleShape2D:
+						var r := Rect2(gc.global_position - gc.shape.size / 2.0, gc.shape.size)
+						draw_rect(r, mob_color)
+						
+	# Player Hitbox
+	if is_instance_valid(player):
+		var p_color := Color(0.0, 0.0, 1.0, 0.4)
+		for child in player.get_children():
+			if child is CollisionShape2D and child.shape is RectangleShape2D:
+				var r := Rect2(child.global_position - child.shape.size / 2.0, child.shape.size)
+				draw_rect(r, p_color)
