@@ -27,3 +27,7 @@ one_shot = true
 [node name="StrikeCooldownTimer" type="Timer" parent="." unique_id=104165585]
 wait_time = 0.45
 one_shot = true
+
+[node name="ShockwaveCooldownTimer" type="Timer" parent="."]
+wait_time = 3.0
+one_shot = true

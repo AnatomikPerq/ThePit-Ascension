@@ -17,6 +17,8 @@ const MOVING_PLAT_SCENE: PackedScene = preload("res://scenes/MovingPlatform.tscn
 const GOLEM_SCENE: PackedScene = preload("res://scenes/Golem.tscn")
 const SLIME_SCENE: PackedScene = preload("res://scenes/Slime.tscn")
 const PURSUER_SCENE: PackedScene = preload("res://scenes/Pursuer.tscn")
+const BAT_SCENE: PackedScene = preload("res://scenes/Bat.tscn")
+const SPITTER_SCENE: PackedScene = preload("res://scenes/Spitter.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/Player.tscn")
 const TRAMPOLINE_SCENE: PackedScene = preload("res://scenes/Trampoline.tscn")
 
@@ -62,7 +64,9 @@ var bg_time: float = 0.0
 
 func _ready() -> void:
 	max_depth = float(level_count * level_height)
-	upgrade_milestones = [max_depth * 0.75, max_depth * 0.25]
+	# Milestones in ascending depth order (closest to surface first).
+	# Each triggers the upgrade menu once as the player ascends past it.
+	upgrade_milestones = [max_depth * 0.75, max_depth * 0.5, max_depth * 0.25]
 	
 	_generate_map()
 	_spawn_player()
@@ -85,6 +89,7 @@ func _ready() -> void:
 
 	$CanvasLayer/UpgradeMenu/DoubleJumpBtn.pressed.connect(_on_double_jump_chosen)
 	$CanvasLayer/UpgradeMenu/StrikeBtn.pressed.connect(_on_strike_chosen)
+	$CanvasLayer/UpgradeMenu/ShockwaveBtn.pressed.connect(_on_shockwave_chosen)
 
 	# World should pause normally.
 	self.process_mode = Node.PROCESS_MODE_INHERIT
@@ -145,6 +150,8 @@ func _process(delta: float) -> void:
 		skills_text += "[WING] "
 	if player.has_strike:
 		skills_text += "[STRIKE] "
+	if player.has_shockwave:
+		skills_text += "[SHOCKWAVE] "
 	if player.flying:
 		skills_text += "[FLIGHT] "
 	skills_label.text = skills_text
@@ -242,6 +249,15 @@ func _on_strike_chosen() -> void:
 	_close_upgrade_menu()
 
 
+func _on_shockwave_chosen() -> void:
+	if not player.has_shockwave:
+		player.has_shockwave = true
+		_show_notification("UNLOCKED: SHOCKWAVE BLAST")
+	else:
+		_show_notification("ALREADY OWNED (XP BONUS)")
+	_close_upgrade_menu()
+
+
 func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
 	state = GameState.PLAYING
@@ -304,13 +320,15 @@ func _spawn_enemy() -> void:
 	var progress := 1.0 - (current_depth / max_depth)
 
 	# Calculate probabilities based on progress
-	# Start (progress 0.0): Golem 100, Slime 90, Pursuer 1
-	# End (progress 1.0): Golem 60, Slime 25, Pursuer 80
-	var w_golem: float = lerp(100.0, 60.0, progress)
-	var w_slime: float = lerp(90.0, 25.0, progress)
-	var w_pursuer: float = lerp(1.0, 80.0, progress)
-	
-	var total_weight: float = w_golem + w_slime + w_pursuer
+	# Start (progress 0.0): Golem 100, Slime 90, Pursuer 1, Bat 0, Spitter 0
+	# End (progress 1.0):   Golem 45, Slime 20, Pursuer 60, Bat 40, Spitter 35
+	var w_golem: float = lerp(100.0, 45.0, progress)
+	var w_slime: float = lerp(90.0, 20.0, progress)
+	var w_pursuer: float = lerp(1.0, 60.0, progress)
+	var w_bat: float = lerp(0.0, 40.0, progress)
+	var w_spitter: float = lerp(0.0, 35.0, progress)
+
+	var total_weight: float = w_golem + w_slime + w_pursuer + w_bat + w_spitter
 	var roll: float = randf() * total_weight
 
 	var type_name := ""
@@ -318,8 +336,12 @@ func _spawn_enemy() -> void:
 		type_name = "golem"
 	elif roll < w_golem + w_slime:
 		type_name = "slime"
-	else:
+	elif roll < w_golem + w_slime + w_pursuer:
 		type_name = "pursuer"
+	elif roll < w_golem + w_slime + w_pursuer + w_bat:
+		type_name = "bat"
+	else:
+		type_name = "spitter"
 
 	# Limit Pursuers
 	if type_name == "pursuer":
@@ -338,6 +360,11 @@ func _spawn_enemy() -> void:
 	if type_name == "pursuer":
 		x = 128.0 if randf() < 0.5 else WORLD_WIDTH - 192.0
 		spawn_y = player.global_position.y - 800.0
+	elif type_name == "spitter":
+		# Spitters need solid ground: spawn on a platform near the player's
+		# altitude so they don't immediately fall out of view.
+		spawn_y = player.global_position.y - randf_range(500.0, 1000.0)
+		x = randf_range(200.0, WORLD_WIDTH - 200.0)
 	else:
 		x = randf_range(200.0, WORLD_WIDTH - 200.0)
 
@@ -350,6 +377,10 @@ func _spawn_enemy() -> void:
 		"pursuer":
 			enemy = PURSUER_SCENE.instantiate()
 			enemy.add_to_group("pursuer_group")
+		"bat":
+			enemy = BAT_SCENE.instantiate()
+		"spitter":
+			enemy = SPITTER_SCENE.instantiate()
 
 	enemy.global_position = Vector2(x, spawn_y)
 	enemy.set_player_ref(player)

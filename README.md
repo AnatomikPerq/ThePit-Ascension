@@ -10,7 +10,7 @@ Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) an
 
 - **Procedural Level Generation**: Platform layouts and enemy spawns adapt to your depth dynamically.
 - **Dynamic Entities**: Moving platforms (horizontal and vertical), trampolines, and dangerous enemies.
-- **Upgrade System**: Reach specific milestones to unlock Double Jump and Sideways Strike.
+- **Upgrade System**: Reach specific milestones to unlock Double Jump, Sideways Strike, and Shockwave Blast.
 - **Godot 4 Powered**: Smooth 60FPS physics, crisp 1080p pixel-art scaling, and a robust component system.
 - **Responsive Controls**: Includes coyote time, strike combo cooldowns, and precise platforming logic.
 
@@ -22,6 +22,7 @@ Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) an
 | **Jump** | `Up Arrow`, `W`, `Space` |
 | **Dash Down** | `Down Arrow`, `S` |
 | **Strike (Attack)** | `Z`, `J` |
+| **Shockwave Blast** | `C` |
 | **Toggle Flight (Cheat)** | `F` |
 | **Reset Game** | `R` |
 | **Pause** | `ESC` |

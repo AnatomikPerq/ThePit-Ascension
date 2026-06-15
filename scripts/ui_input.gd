@@ -25,3 +25,6 @@ func _input(event: InputEvent) -> void:
 			elif event.physical_keycode == KEY_X:
 				world._on_strike_chosen()
 				get_viewport().set_input_as_handled()
+			elif event.physical_keycode == KEY_C:
+				world._on_shockwave_chosen()
+				get_viewport().set_input_as_handled()

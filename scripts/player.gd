@@ -12,6 +12,7 @@ const FLIGHT_SPEED: float = 1000.0 # 500 * 2
 const KNOCKBACK_FORCE: float = -1200.0 # -10 * 60 * 2
 
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
+const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
 
 # ── Sprites ─────────────────────────────────────────────────────────────────
 var sprite_frames: Dictionary = {}
@@ -24,6 +25,7 @@ var invincible: bool = false
 var jump_count: int = 0
 var has_double_jump: bool = false
 var has_strike: bool = false
+var has_shockwave: bool = false
 var dashing_down: bool = false
 var flying: bool = false
 var is_crushed: bool = false
@@ -34,6 +36,7 @@ var animation_frame: int = 0
 var animation_timer: float = 0.0
 
 var current_strike: Node = null
+var current_shockwave: Node = null
 var can_input: bool = true
 
 # ── Node References ─────────────────────────────────────────────────────────
@@ -41,6 +44,7 @@ var can_input: bool = true
 @onready var inv_timer: Timer = $InvincibilityTimer
 @onready var coyote_timer: Timer = $CoyoteTimer
 @onready var strike_cd_timer: Timer = $StrikeCooldownTimer
+@onready var shockwave_cd_timer: Timer = $ShockwaveCooldownTimer
 
 # ── Animation delays (ms) ──────────────────────────────────────────────────
 const ANIM_DELAYS: Dictionary = {
@@ -197,6 +201,10 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("attack") and has_strike:
 		_try_strike()
 
+	# Shockwave (radial blast) — unlocked upgrade, longer cooldown.
+	if Input.is_action_just_pressed("shockwave") and has_shockwave:
+		_try_shockwave()
+
 
 func _handle_flight_input() -> void:
 	var dir_x := Input.get_axis("move_left", "move_right")
@@ -245,6 +253,17 @@ func _snap_strike() -> void:
 		current_strike.global_position = global_position + Vector2(52, 0)
 	else:
 		current_strike.global_position = global_position + Vector2(-52, 0)
+
+
+# ── Shockwave ────────────────────────────────────────────────────────────────
+func _try_shockwave() -> void:
+	if not shockwave_cd_timer.is_stopped():
+		return
+	shockwave_cd_timer.start()
+	var wave := SHOCKWAVE_SCENE.instantiate()
+	wave.setup(self)
+	get_parent().add_child(wave)
+	current_shockwave = wave
 
 
 # ── Damage & Crush ──────────────────────────────────────────────────────────
