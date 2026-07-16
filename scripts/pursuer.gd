@@ -9,6 +9,8 @@ const FRICTION: float = 2400.0
 const JUMP_POWER: float = -1700.0
 const JUMP_COOLDOWN: float = 0.5
 const PLAYER_DETECT: float = 1600.0
+const SCORE: int = 150
+const SCORE_COLOR := Color(0.95, 0.35, 0.35)
 
 var _player: CharacterBody2D
 var _jump_timer: float = 0.0
@@ -137,18 +139,17 @@ func _check_collisions() -> void:
 	# Priority 1: Strike
 	for area in areas:
 		if area.is_in_group("strike"):
-			_is_dead = true
-			queue_free()
+			_die()
 			return
 
 	# Priority 2: Stomp (Only if dashing down!)
 	for body in $StompArea.get_overlapping_bodies():
 		if body.is_in_group("player") and body.velocity.y >= 0.0:
 			if body.dashing_down:
-				body.velocity.y = 0.0
+				body.velocity.y = -900.0 # dash-kill rebound
 				body.dashing_down = false
-				_is_dead = true
-				queue_free()
+				Sfx.play("stomp", -6.0)
+				_die()
 				return
 			else:
 				# Hitting top area without dash => takes damage
@@ -159,3 +160,9 @@ func _check_collisions() -> void:
 		for body in $DamageArea.get_overlapping_bodies():
 			if body.is_in_group("player"):
 				body.take_damage()
+
+
+func _die() -> void:
+	_is_dead = true
+	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
+	queue_free()

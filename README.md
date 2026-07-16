@@ -9,10 +9,15 @@ Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) an
 ## 🌟 Features
 
 - **Procedural Level Generation**: Platform layouts and enemy spawns adapt to your depth dynamically.
-- **Dynamic Entities**: Moving platforms (horizontal and vertical), trampolines, and dangerous enemies.
-- **Upgrade System**: Reach specific milestones to unlock Double Jump, Sideways Strike, and Shockwave Blast.
-- **Godot 4 Powered**: Smooth 60FPS physics, crisp 1080p pixel-art scaling, and a robust component system.
-- **Responsive Controls**: Includes coyote time, strike combo cooldowns, and precise platforming logic.
+- **Dynamic Entities**: Moving platforms (horizontal and vertical), trampolines, and 5 enemy types (Golem, Slime, Pursuer, Bat, Spitter).
+- **Upgrade System**: Reach milestones to unlock Double Jump, Sideways Strike, Shockwave Blast — or take **+1 Max HP** with a full heal.
+- **Score & Combos**: Chained kills within 3 seconds multiply your score. Best score is saved between sessions.
+- **Juicy Feedback**: Screen shake, hitstop, squash & stretch, dash ghost trails, particle bursts and floating score popups.
+- **Living Atmosphere**: Background color shifts from molten depths to pre-dawn sky as you ascend; drifting embers, vignette.
+- **Procedural Audio**: All SFX and the ambient music loop are synthesized in code at startup — zero audio assets.
+- **Main Menu & Run Stats**: Title screen, pause overlay, and end screens with kills / max combo / time / record.
+- **Godot 4 Powered**: Smooth physics, crisp 1080p pixel-art scaling, and a robust component system.
+- **Responsive Controls**: Includes coyote time, strike cooldowns, stomp rebounds, and precise platforming logic.
 
 ## 🎮 Controls
 
@@ -21,11 +26,13 @@ Ascend through the treacherous PIT! You start at the very bottom (Depth 8000) an
 | **Move Left/Right** | `Left/Right Arrows`, `A / D` |
 | **Jump** | `Up Arrow`, `W`, `Space` |
 | **Dash Down** | `Down Arrow`, `S` |
-| **Strike (Attack)** | `Z`, `J` |
+| **Strike (Attack)** | `Z`, `J`, `LMB` |
 | **Shockwave Blast** | `C` |
+| **Upgrade Menu Picks** | `Z / X / C / V` |
+| **Music On/Off** | `M` |
 | **Toggle Flight (Cheat)** | `F` |
 | **Reset Game** | `R` |
-| **Pause** | `ESC` |
+| **Pause / Main Menu** | `ESC` |
 
 ## 🛠️ Installation & Running
 

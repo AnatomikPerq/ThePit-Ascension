@@ -6,6 +6,7 @@ extends Node2D
 # ── Constants (×2) ──────────────────────────────────────────────────────────
 const WORLD_WIDTH: int = 2000 # 1000 * 2
 const WALL_THICK: int = 128 # 64 * 2
+const CAMERA_BASE_OFFSET := Vector2(0, -120)
 
 @export var level_count: int = 4
 @export var level_height: int = 2000
@@ -30,20 +31,19 @@ var player: CharacterBody2D
 var spawn_timer: float = 0.0
 var current_spawn_interval: float = 2.0
 var upgrade_milestones: Array[float] = []
+var zone_milestones: Array[float] = []
 var notification_timer: float = 0.0
 
 var show_debug: bool = false
 var debug_free_zones: Array[Rect2] = []
 
-# Background color cycling
-var bg_colors: Array[Color] = [
-	Color(0.059, 0.0, 0.0),
-	Color(0.251, 0.0, 0.0),
-	Color(0.059, 0.0, 0.0),
-	Color(0.290, 0.220, 0.0),
-	Color(0.059, 0.0, 0.0),
+# Background palette by ascent progress: molten depths → pre-dawn surface.
+var bg_by_ascent: Array[Color] = [
+	Color(0.14, 0.02, 0.02), # bottom: molten dark red
+	Color(0.10, 0.03, 0.10), # ember purple
+	Color(0.04, 0.05, 0.13), # deep blue
+	Color(0.08, 0.11, 0.20), # top: pre-dawn
 ]
-const BG_TRANSITION_TIME: float = 15.0
 var bg_time: float = 0.0
 
 # ── Node references ─────────────────────────────────────────────────────────
@@ -61,23 +61,35 @@ var bg_time: float = 0.0
 @onready var game_over_screen: ColorRect = $CanvasLayer/GameOverScreen
 @onready var victory_screen: ColorRect = $CanvasLayer/VictoryScreen
 
+# HUD nodes built in code
+var score_label: Label
+var combo_label: Label
+var progress_bar: ProgressBar
+var ability_icons: Dictionary = {} # name -> Panel
+var pause_overlay: ColorRect
+var heart_full_tex: ImageTexture
+var heart_empty_tex: ImageTexture
+var _combo_tween: Tween
+
 
 func _ready() -> void:
 	max_depth = float(level_count * level_height)
 	# Milestones in ascending depth order (closest to surface first).
 	# Each triggers the upgrade menu once as the player ascends past it.
 	upgrade_milestones = [max_depth * 0.75, max_depth * 0.5, max_depth * 0.25]
-	
+	for i in range(1, level_count):
+		zone_milestones.append(max_depth - i * float(level_height))
+
+	Game.new_run()
+	Game.score_changed.connect(_on_score_changed)
+
 	_generate_map()
 	_spawn_player()
+	_build_heart_textures()
 	_build_hp_bar()
-
-	# Create FPS Label dynamically
-	var fps_label := Label.new()
-	fps_label.name = "FPSLabel"
-	fps_label.position = Vector2(1780, 20) # Top right corner roughly
-	fps_label.add_theme_font_size_override("font_size", 20)
-	hud.add_child(fps_label)
+	_build_hud_extras()
+	_style_screens()
+	_style_upgrade_menu()
 
 	# Camera limits — keep within world bounds
 	camera.limit_left = - WALL_THICK
@@ -85,7 +97,8 @@ func _ready() -> void:
 	camera.limit_top = -384
 	camera.limit_bottom = int(max_depth) + 120
 	# Offset player slightly below center so we see more above
-	camera.offset = Vector2(0, -120)
+	camera.offset = CAMERA_BASE_OFFSET
+	_build_embers()
 
 	$CanvasLayer/UpgradeMenu/DoubleJumpBtn.pressed.connect(_on_double_jump_chosen)
 	$CanvasLayer/UpgradeMenu/StrikeBtn.pressed.connect(_on_strike_chosen)
@@ -98,8 +111,8 @@ func _ready() -> void:
 	$CanvasLayer.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Set background
-	RenderingServer.set_default_clear_color(bg_colors[0])
-	
+	RenderingServer.set_default_clear_color(bg_by_ascent[0])
+
 	# Load and attach UI input handler script manually
 	var ui_script: Script = load("res://scripts/ui_input.gd")
 	if ui_script:
@@ -111,16 +124,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Background color cycling
-	if state != GameState.VICTORY:
-		bg_time += delta
-		var progress: float = fmod(bg_time, BG_TRANSITION_TIME) / BG_TRANSITION_TIME
-		var color_index: float = progress * (bg_colors.size() - 1)
-		var idx1: int = int(color_index)
-		var idx2: int = mini(idx1 + 1, bg_colors.size() - 1)
-		var local_p: float = color_index - idx1
-		var c: Color = bg_colors[idx1].lerp(bg_colors[idx2], local_p)
-		RenderingServer.set_default_clear_color(c)
+	bg_time += delta
+	_update_background()
 
 	if state == GameState.GAME_OVER:
 		if Input.is_action_just_pressed("jump"):
@@ -140,11 +145,286 @@ func _process(delta: float) -> void:
 			if current_spawn_interval > 0.4:
 				current_spawn_interval -= 0.05
 
-	# Update camera to follow player
+	# Update camera to follow player (+ screen shake)
 	camera.global_position = player.global_position
+	camera.offset = CAMERA_BASE_OFFSET + Fx.get_shake_offset()
 
-	# HUD updates
+	_update_hud(delta)
+
+	# Game logic
+	if state == GameState.PLAYING:
+		_check_milestones()
+		_check_zones()
+		_check_victory()
+
+	if show_debug:
+		queue_redraw()
+
+
+# ── Background & atmosphere ─────────────────────────────────────────────────
+func _update_background() -> void:
+	if state == GameState.VICTORY:
+		return
+	var ascent := 0.0
+	if is_instance_valid(player):
+		ascent = clampf(1.0 - player.global_position.y / max_depth, 0.0, 1.0)
+	# Sample the palette by ascent progress.
+	var f: float = ascent * (bg_by_ascent.size() - 1)
+	var idx: int = int(f)
+	var idx2: int = mini(idx + 1, bg_by_ascent.size() - 1)
+	var c: Color = bg_by_ascent[idx].lerp(bg_by_ascent[idx2], f - idx)
+	# Subtle slow "breathing" of the depths.
+	c = c.lightened(0.04 * (0.5 + 0.5 * sin(bg_time * 0.35)))
+	RenderingServer.set_default_clear_color(c)
+
+
+func _build_embers() -> void:
+	var p := CPUParticles2D.new()
+	p.name = "Embers"
+	p.amount = 70
+	p.lifetime = 7.0
+	p.preprocess = 6.0
+	p.local_coords = false
+	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	p.emission_rect_extents = Vector2(1150, 720)
+	p.direction = Vector2.UP
+	p.spread = 25.0
+	p.gravity = Vector2(0, -25)
+	p.initial_velocity_min = 8.0
+	p.initial_velocity_max = 45.0
+	p.scale_amount_min = 1.5
+	p.scale_amount_max = 3.5
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.2, 0.8, 1.0])
+	ramp.colors = PackedColorArray([
+		Color(1.0, 0.55, 0.25, 0.0),
+		Color(1.0, 0.55, 0.25, 0.30),
+		Color(1.0, 0.4, 0.2, 0.22),
+		Color(1.0, 0.4, 0.2, 0.0),
+	])
+	p.color_ramp = ramp
+	camera.add_child(p)
+
+
+# ── HUD ─────────────────────────────────────────────────────────────────────
+func _build_heart_textures() -> void:
+	var pattern: Array[String] = [
+		".XX.XX.",
+		"XXXXXXX",
+		"XXXXXXX",
+		".XXXXX.",
+		"..XXX..",
+		"...X...",
+	]
+	heart_full_tex = _texture_from_pattern(pattern, Color(0.92, 0.22, 0.3))
+	heart_empty_tex = _texture_from_pattern(pattern, Color(0.24, 0.07, 0.10))
+
+
+func _texture_from_pattern(pattern: Array[String], color: Color) -> ImageTexture:
+	var h := pattern.size()
+	var w := pattern[0].length()
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	for y in h:
+		for x in w:
+			if pattern[y][x] == "X":
+				img.set_pixel(x, y, color)
+	return ImageTexture.create_from_image(img)
+
+
+func _build_hp_bar() -> void:
+	for child in hp_bar.get_children():
+		hp_bar.remove_child(child)
+		child.queue_free()
+	hp_bar.add_theme_constant_override("separation", 8)
+	for i in range(player.max_health):
+		var heart := TextureRect.new()
+		heart.custom_minimum_size = Vector2(42, 36)
+		heart.stretch_mode = TextureRect.STRETCH_SCALE
+		heart.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		heart.texture = heart_full_tex if i < player.health else heart_empty_tex
+		hp_bar.add_child(heart)
+
+
+func _update_hp_display() -> void:
+	var hearts := hp_bar.get_children()
+	for i in range(hearts.size()):
+		hearts[i].texture = heart_full_tex if i < player.health else heart_empty_tex
+
+
+func _build_hud_extras() -> void:
+	# Vignette (behind all HUD text).
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
+	grad.colors = PackedColorArray([
+		Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.0), Color(0, 0, 0, 0.45),
+	])
+	var vtex := GradientTexture2D.new()
+	vtex.gradient = grad
+	vtex.fill = GradientTexture2D.FILL_RADIAL
+	vtex.fill_from = Vector2(0.5, 0.5)
+	vtex.fill_to = Vector2(0.5, 0.0)
+	vtex.width = 512
+	vtex.height = 512
+	var vignette := TextureRect.new()
+	vignette.name = "Vignette"
+	vignette.texture = vtex
+	vignette.stretch_mode = TextureRect.STRETCH_SCALE
+	vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(vignette)
+	hud.move_child(vignette, 0)
+
+	# Score / combo (top-left, under hearts).
+	score_label = Label.new()
+	score_label.name = "ScoreLabel"
+	score_label.position = Vector2(20, 64)
+	score_label.add_theme_font_size_override("font_size", 26)
+	score_label.text = "SCORE 000000"
+	hud.add_child(score_label)
+
+	combo_label = Label.new()
+	combo_label.name = "ComboLabel"
+	combo_label.position = Vector2(20, 96)
+	combo_label.size = Vector2(200, 34)
+	combo_label.pivot_offset = Vector2(0, 17)
+	combo_label.add_theme_font_size_override("font_size", 28)
+	combo_label.visible = false
+	hud.add_child(combo_label)
+
+	# Ascent progress bar (right edge).
+	progress_bar = ProgressBar.new()
+	progress_bar.name = "AscentBar"
+	progress_bar.anchor_left = 1.0
+	progress_bar.anchor_right = 1.0
+	progress_bar.anchor_top = 0.5
+	progress_bar.anchor_bottom = 0.5
+	progress_bar.offset_left = -44.0
+	progress_bar.offset_right = -26.0
+	progress_bar.offset_top = -300.0
+	progress_bar.offset_bottom = 300.0
+	progress_bar.fill_mode = ProgressBar.FILL_BOTTOM_TO_TOP
+	progress_bar.min_value = 0.0
+	progress_bar.max_value = 100.0
+	progress_bar.show_percentage = false
+	var sb_bg := StyleBoxFlat.new()
+	sb_bg.bg_color = Color(0.05, 0.03, 0.05, 0.7)
+	sb_bg.set_border_width_all(2)
+	sb_bg.border_color = Color(0.9, 0.6, 0.25, 0.5)
+	sb_bg.set_corner_radius_all(4)
+	var sb_fill := StyleBoxFlat.new()
+	sb_fill.bg_color = Color(0.95, 0.62, 0.2)
+	sb_fill.set_corner_radius_all(4)
+	progress_bar.add_theme_stylebox_override("background", sb_bg)
+	progress_bar.add_theme_stylebox_override("fill", sb_fill)
+	hud.add_child(progress_bar)
+
+	var surface_label := Label.new()
+	surface_label.text = "SURFACE"
+	surface_label.anchor_left = 1.0
+	surface_label.anchor_right = 1.0
+	surface_label.anchor_top = 0.5
+	surface_label.anchor_bottom = 0.5
+	surface_label.offset_left = -110.0
+	surface_label.offset_right = -10.0
+	surface_label.offset_top = -336.0
+	surface_label.offset_bottom = -308.0
+	surface_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	surface_label.add_theme_font_size_override("font_size", 18)
+	surface_label.add_theme_color_override("font_color", Color(0.95, 0.72, 0.35))
+	hud.add_child(surface_label)
+
+	# Ability icons (bottom-left).
+	var icons := HBoxContainer.new()
+	icons.name = "AbilityIcons"
+	icons.anchor_top = 1.0
+	icons.anchor_bottom = 1.0
+	icons.offset_left = 20.0
+	icons.offset_top = -92.0
+	icons.offset_bottom = -20.0
+	icons.add_theme_constant_override("separation", 12)
+	hud.add_child(icons)
+	for def in [["strike", "Z"], ["shockwave", "C"]]:
+		var panel := Panel.new()
+		panel.custom_minimum_size = Vector2(72, 72)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.05, 0.08, 0.85)
+		sb.set_border_width_all(2)
+		sb.border_color = Color(0.9, 0.6, 0.25, 0.8)
+		sb.set_corner_radius_all(8)
+		panel.add_theme_stylebox_override("panel", sb)
+		var key_label := Label.new()
+		key_label.text = def[1]
+		key_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		key_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		key_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		key_label.add_theme_font_size_override("font_size", 34)
+		panel.add_child(key_label)
+		panel.visible = false
+		icons.add_child(panel)
+		ability_icons[def[0]] = panel
+
+	# Pause overlay.
+	pause_overlay = ColorRect.new()
+	pause_overlay.name = "PauseOverlay"
+	pause_overlay.color = Color(0.0, 0.0, 0.0, 0.6)
+	pause_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pause_overlay.visible = false
+	$CanvasLayer.add_child(pause_overlay)
+	var pv := VBoxContainer.new()
+	pv.anchor_left = 0.5
+	pv.anchor_right = 0.5
+	pv.anchor_top = 0.5
+	pv.anchor_bottom = 0.5
+	pv.offset_left = -400.0
+	pv.offset_right = 400.0
+	pv.offset_top = -80.0
+	pv.offset_bottom = 80.0
+	pv.alignment = BoxContainer.ALIGNMENT_CENTER
+	pv.add_theme_constant_override("separation", 16)
+	pause_overlay.add_child(pv)
+	var pt := Label.new()
+	pt.text = "PAUSED"
+	pt.add_theme_font_size_override("font_size", 72)
+	pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pv.add_child(pt)
+	var ph := Label.new()
+	ph.text = "ESC — resume      R — restart      M — music"
+	ph.add_theme_font_size_override("font_size", 24)
+	ph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ph.modulate = Color(1, 1, 1, 0.7)
+	pv.add_child(ph)
+
+	# FPS label (top right, under depth).
+	var fps_label := Label.new()
+	fps_label.name = "FPSLabel"
+	fps_label.anchor_left = 1.0
+	fps_label.anchor_right = 1.0
+	fps_label.offset_left = -250.0
+	fps_label.offset_right = -20.0
+	fps_label.offset_top = 52.0
+	fps_label.offset_bottom = 78.0
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_label.add_theme_font_size_override("font_size", 18)
+	fps_label.modulate = Color(1, 1, 1, 0.6)
+	hud.add_child(fps_label)
+
+	# Existing label styling.
+	depth_label.add_theme_font_size_override("font_size", 26)
+	depth_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	skills_label.add_theme_font_size_override("font_size", 20)
+	skills_label.position.y = 136.0
+	notif_label.add_theme_font_size_override("font_size", 34)
+	notif_label.add_theme_color_override("font_color", Color(0.98, 0.8, 0.3))
+	notif_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	notif_label.add_theme_constant_override("outline_size", 8)
+	flight_label.add_theme_font_size_override("font_size", 22)
+	flight_label.add_theme_color_override("font_color", Color(0.5, 0.85, 1.0))
+
+
+func _update_hud(delta: float) -> void:
 	depth_label.text = "DEPTH: %d" % int(player.global_position.y)
+
 	var skills_text := "Skills: "
 	if player.has_double_jump:
 		skills_text += "[WING] "
@@ -157,26 +437,53 @@ func _process(delta: float) -> void:
 	skills_label.text = skills_text
 	flight_label.text = "FLIGHT MODE ACTIVE" if player.flying else ""
 
+	# Ascent progress.
+	var ascent := clampf(1.0 - player.global_position.y / max_depth, 0.0, 1.0)
+	progress_bar.value = ascent * 100.0
+
+	# Ability cooldown icons.
+	if ability_icons.has("strike"):
+		var icon: Panel = ability_icons["strike"]
+		icon.visible = player.has_strike
+		icon.modulate.a = 0.35 if not player.strike_cd_timer.is_stopped() else 1.0
+	if ability_icons.has("shockwave"):
+		var icon2: Panel = ability_icons["shockwave"]
+		icon2.visible = player.has_shockwave
+		icon2.modulate.a = 0.35 if not player.shockwave_cd_timer.is_stopped() else 1.0
+
 	# Notification fade
 	if notification_timer > 0.0:
 		notification_timer -= delta
 		if notification_timer <= 0.0:
 			notif_label.text = ""
 
-	# Update FPS
 	var fps_node: Label = hud.get_node_or_null("FPSLabel")
 	if fps_node:
 		fps_node.text = "FPS: %d" % Engine.get_frames_per_second()
 
-	# Game logic
-	if state == GameState.PLAYING:
-		_check_milestones()
-		_check_victory()
 
-	if show_debug:
-		queue_redraw()
+func _on_score_changed(score: int, combo: int) -> void:
+	if score_label:
+		score_label.text = "SCORE %06d" % score
+	if combo_label == null:
+		return
+	if combo >= 2:
+		combo_label.visible = true
+		combo_label.text = "COMBO x%d" % combo
+		var heat := clampf((combo - 2) / 8.0, 0.0, 1.0)
+		combo_label.add_theme_color_override(
+			"font_color", Color(1.0, lerpf(1.0, 0.45, heat), lerpf(1.0, 0.1, heat)))
+		if _combo_tween and _combo_tween.is_valid():
+			_combo_tween.kill()
+		combo_label.scale = Vector2(1.35, 1.35)
+		_combo_tween = create_tween()
+		_combo_tween.tween_property(combo_label, "scale", Vector2.ONE, 0.2)\
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		combo_label.visible = false
 
 
+# ── Input / state transitions ───────────────────────────────────────────────
 func _unhandled_input(event: InputEvent) -> void:
 	# Reset on R
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_R:
@@ -192,7 +499,19 @@ func _check_milestones() -> void:
 	for i in range(upgrade_milestones.size() - 1, -1, -1):
 		if player.global_position.y < upgrade_milestones[i]:
 			upgrade_milestones.remove_at(i)
+			Game.add_score(500, player.global_position, Color(0.98, 0.8, 0.3))
 			_show_upgrade_menu()
+			break
+
+
+func _check_zones() -> void:
+	for i in range(zone_milestones.size() - 1, -1, -1):
+		if player.global_position.y < zone_milestones[i]:
+			zone_milestones.remove_at(i)
+			var level := clampi(int((max_depth - player.global_position.y) / level_height) + 1, 1, level_count)
+			_show_notification("LEVEL %d / %d" % [level, level_count])
+			Game.add_score(250)
+			Sfx.play("click", -8.0, 1.2)
 			break
 
 
@@ -200,35 +519,26 @@ func _check_victory() -> void:
 	if player.global_position.y < 200.0:
 		state = GameState.VICTORY
 		player.can_input = false
-		victory_screen.visible = true
-		get_tree().paused = true
+		_show_victory()
 
 
 func _pause_game() -> void:
 	state = GameState.PAUSED
 	get_tree().paused = true
-	var pause_label = hud.get_node_or_null("PauseLabel")
-	if not pause_label:
-		pause_label = Label.new()
-		pause_label.name = "PauseLabel"
-		pause_label.text = "PAUSED (Press ESC to Resume)"
-		pause_label.add_theme_font_size_override("font_size", 48)
-		pause_label.set_anchors_preset(Control.PRESET_CENTER)
-		pause_label.position = Vector2(WORLD_WIDTH / 2 - 1350, 300) # Roughly center
-		hud.add_child(pause_label)
-	pause_label.visible = true
+	pause_overlay.visible = true
+
 
 func _resume_game() -> void:
 	state = GameState.PLAYING
 	get_tree().paused = false
-	var pause_label = hud.get_node_or_null("PauseLabel")
-	if pause_label:
-		pause_label.visible = false
+	pause_overlay.visible = false
+
 
 func _show_upgrade_menu() -> void:
 	state = GameState.UPGRADE_MENU
 	get_tree().paused = true
 	upgrade_menu.visible = true
+	Sfx.play("upgrade", -6.0)
 
 
 func _on_double_jump_chosen() -> void:
@@ -237,6 +547,7 @@ func _on_double_jump_chosen() -> void:
 		_show_notification("UNLOCKED: DOUBLE JUMP")
 	else:
 		_show_notification("ALREADY OWNED (XP BONUS)")
+		Game.add_score(300)
 	_close_upgrade_menu()
 
 
@@ -246,6 +557,7 @@ func _on_strike_chosen() -> void:
 		_show_notification("UNLOCKED: SIDEWAYS STRIKE")
 	else:
 		_show_notification("ALREADY OWNED (XP BONUS)")
+		Game.add_score(300)
 	_close_upgrade_menu()
 
 
@@ -255,6 +567,16 @@ func _on_shockwave_chosen() -> void:
 		_show_notification("UNLOCKED: SHOCKWAVE BLAST")
 	else:
 		_show_notification("ALREADY OWNED (XP BONUS)")
+		Game.add_score(300)
+	_close_upgrade_menu()
+
+
+func _on_heal_chosen() -> void:
+	player.max_health += 1
+	player.health = player.max_health
+	_build_hp_bar()
+	Sfx.play("heal", -6.0)
+	_show_notification("MAX HP +1, FULLY HEALED")
 	_close_upgrade_menu()
 
 
@@ -262,11 +584,147 @@ func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
 	state = GameState.PLAYING
 	get_tree().paused = false
+	Sfx.play("click", -8.0)
 
 
 func _show_notification(text: String) -> void:
 	notif_label.text = text
 	notification_timer = 3.0
+
+
+# ── Menus & screens styling ─────────────────────────────────────────────────
+func _style_upgrade_menu() -> void:
+	# Panel look.
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.04, 0.07, 0.96)
+	sb.set_border_width_all(3)
+	sb.border_color = Color(0.95, 0.62, 0.2)
+	sb.set_corner_radius_all(12)
+	upgrade_menu.add_theme_stylebox_override("panel", sb)
+
+	# Widen for a 4th option.
+	upgrade_menu.offset_left = -570.0
+	upgrade_menu.offset_right = 570.0
+
+	var title: Label = upgrade_menu.get_node("Title")
+	title.add_theme_font_size_override("font_size", 40)
+	title.add_theme_color_override("font_color", Color(0.98, 0.8, 0.3))
+
+	var heal_btn := Button.new()
+	heal_btn.name = "HealBtn"
+	heal_btn.text = "+1 MAX HP\nFULL HEAL\n(V)"
+	upgrade_menu.add_child(heal_btn)
+	heal_btn.pressed.connect(_on_heal_chosen)
+
+	var buttons: Array[Button] = [
+		upgrade_menu.get_node("DoubleJumpBtn") as Button,
+		upgrade_menu.get_node("StrikeBtn") as Button,
+		upgrade_menu.get_node("ShockwaveBtn") as Button,
+		heal_btn,
+	]
+	var btn_sb := StyleBoxFlat.new()
+	btn_sb.bg_color = Color(0.12, 0.08, 0.12)
+	btn_sb.set_border_width_all(2)
+	btn_sb.border_color = Color(0.9, 0.6, 0.25, 0.6)
+	btn_sb.set_corner_radius_all(10)
+	var btn_hover: StyleBoxFlat = btn_sb.duplicate()
+	btn_hover.bg_color = Color(0.22, 0.13, 0.10)
+	btn_hover.border_color = Color(0.98, 0.8, 0.3)
+	var btn_pressed: StyleBoxFlat = btn_sb.duplicate()
+	btn_pressed.bg_color = Color(0.30, 0.18, 0.10)
+	for i in buttons.size():
+		var b := buttons[i]
+		b.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		b.position = Vector2(40.0 + i * 270.0, 110.0)
+		b.size = Vector2(250.0, 200.0)
+		b.add_theme_stylebox_override("normal", btn_sb)
+		b.add_theme_stylebox_override("hover", btn_hover)
+		b.add_theme_stylebox_override("pressed", btn_pressed)
+		b.add_theme_font_size_override("font_size", 22)
+
+	var help: Label = upgrade_menu.get_node("HelpLabel")
+	help.text = "Click to select or press Z, X, C, V"
+	help.modulate = Color(1, 1, 1, 0.65)
+
+
+func _style_screens() -> void:
+	for screen: Control in [game_over_screen, victory_screen]:
+		var title: Label = screen.get_node("Title") if screen.has_node("Title") else screen.get_node("GG")
+		title.add_theme_font_size_override("font_size", 96)
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		title.anchor_left = 0.5
+		title.anchor_right = 0.5
+		title.anchor_top = 0.5
+		title.anchor_bottom = 0.5
+		title.offset_left = -500.0
+		title.offset_right = 500.0
+		title.offset_top = -260.0
+		title.offset_bottom = -140.0
+		title.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+		var sub: Label = screen.get_node("SubTitle")
+		sub.add_theme_font_size_override("font_size", 26)
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sub.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		sub.anchor_left = 0.5
+		sub.anchor_right = 0.5
+		sub.anchor_top = 0.5
+		sub.anchor_bottom = 0.5
+		sub.offset_left = -400.0
+		sub.offset_right = 400.0
+		sub.offset_top = -125.0
+		sub.offset_bottom = -85.0
+	var go_title: Label = game_over_screen.get_node("Title")
+	go_title.add_theme_color_override("font_color", Color(0.95, 0.25, 0.25))
+	var gg: Label = victory_screen.get_node("GG")
+	gg.add_theme_color_override("font_color", Color(0.98, 0.8, 0.3))
+
+	# Stats label on both screens, filled when shown.
+	for screen: Control in [game_over_screen, victory_screen]:
+		var stats := Label.new()
+		stats.name = "Stats"
+		stats.anchor_left = 0.5
+		stats.anchor_right = 0.5
+		stats.anchor_top = 0.5
+		stats.anchor_bottom = 0.5
+		stats.offset_left = -350.0
+		stats.offset_right = 350.0
+		stats.offset_top = 70.0
+		stats.offset_bottom = 220.0
+		stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		stats.add_theme_font_size_override("font_size", 24)
+		stats.modulate = Color(1, 1, 1, 0.85)
+		screen.add_child(stats)
+
+
+func _stats_text(new_record: bool) -> String:
+	var depth_now := 0
+	if is_instance_valid(player):
+		depth_now = int(player.global_position.y)
+	var text := "SCORE %d\nKILLS %d      MAX COMBO x%d\nDEPTH %d      TIME %s\n" % [
+		Game.score, Game.kills, Game.max_combo, depth_now, Game.run_time_text(),
+	]
+	if new_record:
+		text += "NEW RECORD!\n"
+	else:
+		text += "BEST %d\n" % Game.best_score
+	return text + "\nESC — main menu"
+
+
+func _show_victory() -> void:
+	Game.add_score(2000)
+	victory_screen.visible = true
+	victory_screen.get_node("Stats").text = _stats_text(Game.finish_run())
+	Sfx.play("win", -4.0)
+	# Confetti around the player.
+	for i in 10:
+		var t := get_tree().create_timer(0.15 * i)
+		t.timeout.connect(func() -> void:
+			if is_instance_valid(player):
+				var pos := player.global_position + Vector2(randf_range(-500, 500), randf_range(-450, 150))
+				Fx.burst(pos, Color.from_hsv(randf(), 0.8, 1.0), 20, 380.0, 0.9, 350.0)
+		)
 
 
 # ── Player ──────────────────────────────────────────────────────────────────
@@ -281,34 +739,23 @@ func _spawn_player() -> void:
 func _on_player_died() -> void:
 	state = GameState.GAME_OVER
 	game_over_screen.visible = true
+	game_over_screen.get_node("Stats").text = _stats_text(Game.finish_run())
 
 
 func _on_player_damaged(_new_health: int) -> void:
 	_update_hp_display()
 
 
-func _build_hp_bar() -> void:
-	for child in hp_bar.get_children():
-		child.queue_free()
-	for i in range(player.max_health):
-		var heart := ColorRect.new()
-		heart.custom_minimum_size = Vector2(30, 16)
-		heart.color = Color(0.8, 0.2, 0.2) if i < player.health else Color(0.2, 0.0, 0.0)
-		hp_bar.add_child(heart)
-
-
-func _update_hp_display() -> void:
-	var hearts := hp_bar.get_children()
-	for i in range(hearts.size()):
-		if i < player.health:
-			hearts[i].color = Color(0.8, 0.2, 0.2)
-		else:
-			hearts[i].color = Color(0.2, 0.0, 0.0)
-
-
 func _restart() -> void:
+	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+
+func go_to_menu() -> void:
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
 
 
 # ── Enemy Spawning ──────────────────────────────────────────────────────────
@@ -438,7 +885,7 @@ func _create_static_platform(pos: Vector2, size: Vector2) -> void:
 	spr.scale = Vector2(2, 2)
 	spr.region_enabled = true
 	spr.region_rect = Rect2(0, 0, size.x / 2.0, 16)
-	
+
 	body.add_child(spr)
 	platforms_node.add_child(body)
 
@@ -449,7 +896,7 @@ func _generate_platforms() -> void:
 	var dividers_y: Array[float] = []
 	for i in range(1, level_count):
 		dividers_y.append(max_depth - i * float(level_height))
-	
+
 	# Start generating platforms from the bottom up
 	var current_y := max_depth - 800.0
 	var plat_h := 32.0
@@ -457,49 +904,49 @@ func _generate_platforms() -> void:
 	while current_y > -400.0:
 		var progress := 1.0 - (maxf(current_y, 0.0) / max_depth)
 		var step_y: float = lerp(80.0, 180.0, progress)
-		
+
 		# Skip spawning if too close to an existing divider from World.tscn
 		var near_divider := false
 		for div_y in dividers_y:
 			if abs(current_y - div_y) < 250.0:
 				near_divider = true
 				break
-				
+
 		if near_divider:
 			current_y -= step_y
 			debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
 			continue
-			
+
 		var chance: float = lerp(0.95, 0.6, progress)
 		if randf() < chance:
 			# Spawn 1 to 4 platforms per height step to increase density
 			var max_plats := int(lerp(4.0, 1.0, progress))
 			var plat_count := randi_range(1, maxi(1, max_plats))
-			
+
 			for i in range(plat_count):
 				var max_b := int(lerp(8.0, 3.0, progress))
 				var min_b := 2
 				var blocks := randi_range(min_b, maxi(min_b, max_b))
 				var w := float(blocks * 64)
-				
+
 				var x := randf_range(128.0, WORLD_WIDTH - 128.0 - w)
 				var type_roll := randf()
 				var p_y := current_y + randf_range(-30.0, 30.0)
-				
+
 				if type_roll < 0.6: # Static
 					_create_static_platform(Vector2(x, p_y), Vector2(w, plat_h))
 				else: # Moving
 					var mp := MOVING_PLAT_SCENE.instantiate()
 					mp.global_position = Vector2(x, p_y)
 					mp.move_speed = randf_range(20.0, 50.0)
-					mp.move_delay = randf_range(0.0, 90.0)
+					mp.move_delay = randi_range(0, 90)
 					if type_roll < 0.8:
 						mp.move_type = "horizontal"
 						mp.move_range = randf_range(300.0, 800.0)
 					else:
 						mp.move_type = "vertical"
 						mp.move_range = randf_range(300.0, 600.0)
-					
+
 					var col_shape: CollisionShape2D = mp.get_node("CollisionShape2D")
 					col_shape.shape = col_shape.shape.duplicate()
 					col_shape.shape.size = Vector2(w, plat_h)
@@ -508,23 +955,20 @@ func _generate_platforms() -> void:
 					spr.region_enabled = true
 					spr.region_rect = Rect2(0, 0, w / 2.0, spr.texture.get_height())
 					platforms_node.add_child(mp)
-				
+
 		current_y -= step_y
 		debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
 
-# ── Debug Draw ──────────────────────────────────────────────────────────────
-func _process_debug_draw() -> void:
-	if not show_debug: return
-	queue_redraw()
 
+# ── Debug Draw ──────────────────────────────────────────────────────────────
 func _draw() -> void:
 	if not show_debug: return
-	
+
 	# Draw Free Zones
 	var fzone_color := Color(1.0, 0.0, 1.0, 0.15) # Light purple
 	for fz in debug_free_zones:
 		draw_rect(fz, fzone_color)
-		
+
 	# Draw Platform Hitboxes
 	var plat_color := Color(0.0, 1.0, 0.0, 0.4) # Green
 	for p in platforms_node.get_children():
@@ -535,7 +979,7 @@ func _draw() -> void:
 					var shape_tf: Transform2D = child.global_transform
 					var r := Rect2(shape_tf.origin - shape.size / 2.0, shape.size)
 					draw_rect(r, plat_color)
-						
+
 	# Draw Mobs Hitboxes
 	var mob_color := Color(1.0, 0.0, 0.0, 0.4) # Red
 	for e in enemies_node.get_children():
@@ -550,12 +994,7 @@ func _draw() -> void:
 						var shape := gc.shape as RectangleShape2D
 						var r := Rect2(gc.global_position - shape.size / 2.0, shape.size)
 						draw_rect(r, mob_color)
-			elif child is StaticBody2D or child is AnimatableBody2D:
-				for gc in child.get_children():
-					if gc is CollisionShape2D and gc.shape is RectangleShape2D:
-						var r := Rect2(gc.global_position - gc.shape.size / 2.0, gc.shape.size)
-						draw_rect(r, mob_color)
-						
+
 	# Player Hitbox
 	if is_instance_valid(player):
 		var p_color := Color(0.0, 0.0, 1.0, 0.4)

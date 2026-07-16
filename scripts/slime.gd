@@ -5,7 +5,8 @@ extends Node2D
 
 const FALL_SPEED: float = 480.0 # term_vel 4 * 60 * 2
 const DRIFT_SPEED: float = 100.0 # speed 50 * 2
-const WORLD_BOTTOM: float = 8400.0
+const SCORE: int = 75
+const SCORE_COLOR := Color(0.35, 0.9, 0.4)
 
 const TRAMPOLINE_SCENE: PackedScene = preload("res://scenes/Trampoline.tscn")
 
@@ -46,7 +47,7 @@ func _physics_process(delta: float) -> void:
 	# Priority 2: Stomp
 	for body in $StompArea.get_overlapping_bodies():
 		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			body.velocity.y = 0.0
+			body.velocity.y = -700.0 # bounce, trampoline lands below
 			body.dashing_down = false
 			_die_and_spawn()
 			return
@@ -60,6 +61,7 @@ func _physics_process(delta: float) -> void:
 
 func _die_and_spawn() -> void:
 	_is_dead = true
+	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	var sprite: Sprite2D = get_node_or_null("Sprite2D")
 	if sprite:
 		sprite.visible = false

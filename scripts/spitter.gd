@@ -11,6 +11,8 @@ const GRAVITY: float = 4500.0
 const TERMINAL_VEL: float = 1800.0
 const SHOOT_RANGE: float = 1100.0
 const SHOOT_COOLDOWN: float = 2.2
+const SCORE: int = 150
+const SCORE_COLOR := Color(0.5, 0.95, 0.3)
 const PROJECTILE_SCENE: PackedScene = preload("res://scenes/Projectile.tscn")
 
 var _player: CharacterBody2D
@@ -96,8 +98,9 @@ func _check_collisions() -> void:
 	for body in $StompArea.get_overlapping_bodies():
 		if body.is_in_group("player") and body.velocity.y >= 0.0:
 			if body.get("dashing_down") == true:
-				body.velocity.y = 0.0
+				body.velocity.y = -900.0 # dash-kill rebound
 				body.dashing_down = false
+				Sfx.play("stomp", -6.0)
 				_die()
 				return
 			else:
@@ -114,6 +117,7 @@ func _check_collisions() -> void:
 
 func _die() -> void:
 	_is_dead = true
+	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	queue_free()
 
 

@@ -11,6 +11,8 @@ const ACCELERATION: float = 900.0
 const DETECT_RANGE: float = 1400.0
 const BOB_AMPLITUDE: float = 28.0
 const BOB_FREQUENCY: float = 6.0 # radians / second
+const SCORE: int = 125
+const SCORE_COLOR := Color(0.75, 0.4, 0.95)
 
 var _player: CharacterBody2D
 var _is_dead: bool = false
@@ -79,8 +81,9 @@ func _check_collisions() -> void:
 	for body in $StompArea.get_overlapping_bodies():
 		if body.is_in_group("player") and body.velocity.y >= 0.0:
 			if body.get("dashing_down") == true:
-				body.velocity.y = 0.0
+				body.velocity.y = -900.0 # dash-kill rebound
 				body.dashing_down = false
+				Sfx.play("stomp", -6.0)
 				_die()
 				return
 			else:
@@ -97,6 +100,7 @@ func _check_collisions() -> void:
 
 func _die() -> void:
 	_is_dead = true
+	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	queue_free()
 
 

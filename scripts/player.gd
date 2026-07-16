@@ -10,6 +10,7 @@ const JUMP_FORCE: float = -1800.0 # -15 * 60 * 2
 const DASH_SPEED: float = 3600.0 # 30 * 60 * 2
 const FLIGHT_SPEED: float = 1000.0 # 500 * 2
 const KNOCKBACK_FORCE: float = -1200.0 # -10 * 60 * 2
+const HARD_LANDING_SPEED: float = 900.0 # fall speed that kicks up dust
 
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
@@ -39,6 +40,9 @@ var current_strike: Node = null
 var current_shockwave: Node = null
 var can_input: bool = true
 
+var _trail_timer: float = 0.0
+var _squash_tween: Tween
+
 # ── Node References ─────────────────────────────────────────────────────────
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var inv_timer: Timer = $InvincibilityTimer
@@ -62,7 +66,6 @@ signal player_died
 
 func _ready() -> void:
 	inv_timer.timeout.connect(_on_invincibility_timeout)
-	set_collision_mask_value(6, true) # Layer 6 is World Bounds
 	_load_sprites()
 	_update_sprite()
 
@@ -96,6 +99,7 @@ func _physics_process(delta: float) -> void:
 
 	# Coyote time: if just walked off edge, start timer
 	var was_on_floor := is_on_floor()
+	var fall_speed := velocity.y
 	move_and_slide()
 	var now_on_floor := is_on_floor()
 
@@ -107,19 +111,32 @@ func _physics_process(delta: float) -> void:
 			dashing_down = false
 		jump_count = 0
 
+	# Landing feedback: dust + thud + squash after a serious fall.
+	if not was_on_floor and now_on_floor and fall_speed > HARD_LANDING_SPEED:
+		Fx.dust(global_position + Vector2(0, 30), 12)
+		Sfx.play("land", -10.0, randf_range(0.95, 1.05))
+		_squash(Vector2(2.5, 1.5))
+
 	# Cancel dash if moving upwards (e.g. trampolines, bounces)
 	if velocity.y < 0:
 		dashing_down = false
+
+	# Dash trail ghosts.
+	if dashing_down:
+		_trail_timer += delta
+		if _trail_timer >= 0.03:
+			_trail_timer = 0.0
+			Fx.ghost(sprite, Color(0.6, 0.85, 1.0, 0.45))
 
 	# Crush detection
 	# A player is crushed if they cannot move in opposite directions simultaneously
 	if can_input and not invincible and not is_crushed:
 		var stuck_h := test_move(global_transform, Vector2.RIGHT) and test_move(global_transform, Vector2.LEFT)
 		var stuck_v := test_move(global_transform, Vector2.UP) and test_move(global_transform, Vector2.DOWN)
-		
+
 		# For diagonal squeezes, if we are overlapping in place
 		var embedded := test_move(global_transform, Vector2.ZERO)
-		
+
 		if stuck_h or stuck_v or embedded:
 			_handle_crush()
 
@@ -151,18 +168,13 @@ func _apply_crush_gravity(delta: float) -> void:
 	velocity.y += (GRAVITY * 0.2) * delta
 	if velocity.y > crush_terminal:
 		velocity.y = crush_terminal
-		
-	# Fall safe: don't fall below the map floor
-	# Since player doesn't have direct access to max_depth cleanly here, 
-	# we can just use a large arbitrary bottom limit based on parent if needed,
-	# but an easier way is to just let them fall max 600px total during a crush.
-	# Actually, we can check if y > (the lowest point minus a bit).
-	# We'll just define a fallback or ask the World.
+
+	# Fall safe: don't fall below the map floor.
 	var world_node := get_parent()
 	var bottom_lim := 8000.0
 	if world_node and "max_depth" in world_node:
 		bottom_lim = world_node.max_depth - 100.0
-		
+
 	if global_position.y >= bottom_lim:
 		_end_crush()
 
@@ -192,6 +204,7 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("dash_down") and not is_on_floor():
 		dashing_down = true
 		velocity.y = DASH_SPEED
+		_squash(Vector2(1.5, 2.5))
 
 	# Jump (just_pressed events)
 	if Input.is_action_just_pressed("jump"):
@@ -228,10 +241,16 @@ func _try_jump() -> void:
 		jump_count = 1
 		coyote_timer.stop()
 		dashing_down = false
+		Fx.dust(global_position + Vector2(0, 30), 8)
+		Sfx.play("jump", -12.0, randf_range(0.95, 1.05))
+		_squash(Vector2(1.6, 2.4))
 	elif has_double_jump and jump_count < 2:
 		velocity.y = JUMP_FORCE * 0.9
 		jump_count = 2
 		dashing_down = false
+		Fx.burst(global_position + Vector2(0, 20), Color(0.6, 0.85, 1.0, 0.9), 12, 200.0, 0.4, 250.0)
+		Sfx.play("djump", -12.0, randf_range(0.95, 1.05))
+		_squash(Vector2(1.6, 2.4))
 
 
 # ── Strike ──────────────────────────────────────────────────────────────────
@@ -239,8 +258,9 @@ func _try_strike() -> void:
 	if not strike_cd_timer.is_stopped():
 		return
 	strike_cd_timer.start()
+	Sfx.play("strike", -10.0, randf_range(0.9, 1.1))
 	var s := STRIKE_SCENE.instantiate()
-	s.setup(self , facing_right)
+	s.setup(self, facing_right)
 	get_parent().add_child(s)
 	current_strike = s
 
@@ -260,6 +280,8 @@ func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
 		return
 	shockwave_cd_timer.start()
+	Sfx.play("shock", -6.0)
+	Fx.shake(0.45)
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.setup(self)
 	get_parent().add_child(wave)
@@ -274,6 +296,10 @@ func take_damage() -> bool:
 	invincible = true
 	inv_timer.start()
 	velocity.y = KNOCKBACK_FORCE
+	Sfx.play("hurt", -6.0)
+	Fx.shake(0.35)
+	Fx.flash(sprite)
+	Fx.burst(global_position, Color(0.9, 0.2, 0.2), 12, 260.0, 0.4)
 	player_damaged.emit(health)
 	if health <= 0:
 		_die()
@@ -286,12 +312,15 @@ func _handle_crush() -> void:
 	velocity.x = 0.0
 	velocity.y = 0.0
 	set_collision_mask_value(1, false) # Fall through platforms
-	
+
 	health -= 1
 	invincible = true
 	inv_timer.start()
+	Sfx.play("crush", -4.0)
+	Fx.shake(0.55)
+	Fx.flash(sprite)
 	player_damaged.emit(health)
-	
+
 	if health <= 0:
 		_die()
 	else:
@@ -301,15 +330,13 @@ func _handle_crush() -> void:
 
 
 func _end_crush() -> void:
-	if is_instance_valid(self ) and health > 0 and is_crushed:
+	if is_instance_valid(self) and health > 0 and is_crushed:
 		is_crushed = false
 		set_collision_mask_value(1, true)
 		can_input = true
 
 
 func _die() -> void:
-	if not can_input:
-		pass
 	can_input = false
 	velocity.x = 0.0
 	velocity.y = -600.0
@@ -319,10 +346,13 @@ func _die() -> void:
 	set_collision_mask_value(2, false)
 	set_collision_mask_value(3, false)
 	set_collision_mask_value(4, false)
-	
+	Sfx.play("die", -4.0)
+	Fx.shake(0.7)
+	Fx.burst(global_position, Color(0.9, 0.15, 0.15), 26, 420.0, 0.8)
+
 	var tween := create_tween()
 	tween.tween_property(sprite, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(func():
+	tween.tween_callback(func() -> void:
 		player_died.emit()
 		queue_free()
 	)
@@ -330,6 +360,17 @@ func _die() -> void:
 
 func _on_invincibility_timeout() -> void:
 	invincible = false
+
+
+# ── Squash & stretch ────────────────────────────────────────────────────────
+## Briefly deform the sprite (base scale is 2×2), then spring back.
+func _squash(target: Vector2) -> void:
+	if _squash_tween and _squash_tween.is_valid():
+		_squash_tween.kill()
+	sprite.scale = target
+	_squash_tween = create_tween()
+	_squash_tween.tween_property(sprite, "scale", Vector2(2.0, 2.0), 0.18)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 # ── Animation ───────────────────────────────────────────────────────────────

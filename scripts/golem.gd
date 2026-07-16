@@ -4,7 +4,8 @@ extends Node2D
 ## StompArea (top): player contact → spawn Platform.
 
 const FALL_SPEED: float = 360.0 # term_vel 3 * 60 * 2
-const WORLD_BOTTOM: float = 8400.0
+const SCORE: int = 50
+const SCORE_COLOR := Color(0.75, 0.72, 0.62)
 
 var _active_texture: Texture2D
 var _player: CharacterBody2D
@@ -42,7 +43,7 @@ func _physics_process(delta: float) -> void:
 	# Priority 2: Stomp
 	for body in $StompArea.get_overlapping_bodies():
 		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			body.velocity.y = 0.0
+			body.velocity.y = -600.0 # satisfying rebound
 			body.dashing_down = false
 			_die_and_transform()
 			return
@@ -56,6 +57,9 @@ func _physics_process(delta: float) -> void:
 
 func _die_and_transform() -> void:
 	_is_dead = true
+	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
+	Fx.dust(global_position, 14)
+	Sfx.play("thud", -8.0, randf_range(0.9, 1.1))
 	call_deferred("_deferred_transform")
 
 
