@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://cstrike01"]
+
+[ext_resource type="Script" uid="uid://doiu1uo2th2ip" path="res://scripts/strike.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://088fvslmgjbs" path="res://assets/sprites/punch_1.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(80, 64)
+
+[node name="Strike" type="Area2D" unique_id=383251958 groups=["strike"]]
+collision_layer = 8
+collision_mask = 16
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=290215926]
+scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1752994211]
+shape = SubResource("RectangleShape2D_1")

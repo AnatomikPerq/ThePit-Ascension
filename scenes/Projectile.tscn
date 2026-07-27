@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://cprojectile01"]
+
+[ext_resource type="Script" path="res://scripts/projectile.gd" id="1_script"]
+
+[sub_resource type="CircleShape2D" id="Shape_Blob"]
+radius = 14.0
+
+[node name="Projectile" type="Area2D" groups=["enemy_projectile"]]
+collision_layer = 16
+collision_mask = 10
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(2, 2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("Shape_Blob")

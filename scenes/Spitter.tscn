@@ -1,0 +1,41 @@
+[gd_scene format=3 uid="uid://cspitter01"]
+
+[ext_resource type="Script" path="res://scripts/spitter.gd" id="1_script"]
+
+[sub_resource type="RectangleShape2D" id="Shape_Body"]
+size = Vector2(44, 52)
+
+[sub_resource type="RectangleShape2D" id="Shape_Damage"]
+size = Vector2(44, 48)
+
+[sub_resource type="RectangleShape2D" id="Shape_Stomp"]
+size = Vector2(46, 8)
+
+[node name="Spitter" type="CharacterBody2D" groups=["enemy"]]
+collision_layer = 16
+collision_mask = 17
+script = ExtResource("1_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(2, 2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 2)
+shape = SubResource("Shape_Body")
+
+[node name="DamageArea" type="Area2D" parent="."]
+position = Vector2(0, 4)
+collision_layer = 16
+collision_mask = 10
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DamageArea"]
+position = Vector2(0, -2)
+shape = SubResource("Shape_Damage")
+
+[node name="StompArea" type="Area2D" parent="."]
+position = Vector2(0, -24)
+collision_layer = 16
+collision_mask = 10
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea"]
+shape = SubResource("Shape_Stomp")
