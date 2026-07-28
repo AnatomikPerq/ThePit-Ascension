@@ -1,27 +1,19 @@
 extends Node2D
 ## World — main game controller.
-## Handles procedural level generation, enemy spawning, HUD, and game state.
-## All coordinates are ×2 scaled from the legacy Pygame FINAL.py.
+## Builds the level from a WorldProfile + seed, spawns enemies, runs the HUD
+## and the in-run state machine. All coordinates are ×2 scaled from the legacy
+## Pygame FINAL.py.
 
-# ── Constants (×2) ──────────────────────────────────────────────────────────
-const WORLD_WIDTH: int = 2000 # 1000 * 2
-const WALL_THICK: int = 128 # 64 * 2
 const CAMERA_BASE_OFFSET := Vector2(0, -120)
-
-@export var level_count: int = 4
-@export var level_height: int = 2000
-var max_depth: float = 8000.0
-
-# ── Scenes ──────────────────────────────────────────────────────────────────
-const PLATFORM_SCENE: PackedScene = preload("res://scenes/Platform.tscn")
-const MOVING_PLAT_SCENE: PackedScene = preload("res://scenes/MovingPlatform.tscn")
-const GOLEM_SCENE: PackedScene = preload("res://scenes/Golem.tscn")
-const SLIME_SCENE: PackedScene = preload("res://scenes/Slime.tscn")
-const PURSUER_SCENE: PackedScene = preload("res://scenes/Pursuer.tscn")
-const BAT_SCENE: PackedScene = preload("res://scenes/Bat.tscn")
-const SPITTER_SCENE: PackedScene = preload("res://scenes/Spitter.tscn")
 const PLAYER_SCENE: PackedScene = preload("res://scenes/Player.tscn")
-const TRAMPOLINE_SCENE: PackedScene = preload("res://scenes/Trampoline.tscn")
+
+## Every number the world is built and paced from. One .tres per world.
+@export var profile: WorldProfile
+## 0 = roll a fresh seed. Setting a value before add_child reproduces a world
+## exactly — the fingerprint harness does, and the multiplayer host will.
+@export var world_seed: int = 0
+
+var max_depth: float = 8000.0
 
 # ── State ───────────────────────────────────────────────────────────────────
 enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY, PAUSED}
@@ -37,13 +29,6 @@ var notification_timer: float = 0.0
 var show_debug: bool = false
 var debug_free_zones: Array[Rect2] = []
 
-# Background palette by ascent progress: molten depths → pre-dawn surface.
-var bg_by_ascent: Array[Color] = [
-	Color(0.14, 0.02, 0.02), # bottom: molten dark red
-	Color(0.10, 0.03, 0.10), # ember purple
-	Color(0.04, 0.05, 0.13), # deep blue
-	Color(0.08, 0.11, 0.20), # top: pre-dawn
-]
 var bg_time: float = 0.0
 
 # ── Node references ─────────────────────────────────────────────────────────
@@ -73,17 +58,23 @@ var _combo_tween: Tween
 
 
 func _ready() -> void:
-	max_depth = float(level_count * level_height)
-	# Milestones in ascending depth order (closest to surface first).
-	# Each triggers the upgrade menu once as the player ascends past it.
-	upgrade_milestones = [max_depth * 0.75, max_depth * 0.5, max_depth * 0.25]
-	for i in range(1, level_count):
-		zone_milestones.append(max_depth - i * float(level_height))
+	max_depth = profile.max_depth()
+	current_spawn_interval = profile.spawn_interval_start
+	# Milestones trigger the upgrade menu once each as the player ascends past.
+	upgrade_milestones.clear()
+	for fraction in profile.upgrade_fractions:
+		upgrade_milestones.append(max_depth * fraction)
+	zone_milestones = profile.divider_ys()
 
 	Game.new_run()
 	Game.score_changed.connect(_on_score_changed)
 
-	_generate_map()
+	while world_seed == 0:
+		world_seed = randi()
+	var plan := WorldGenerator.generate(profile, world_seed)
+	WorldBuilder.build(plan, profile.theme, platforms_node)
+	debug_free_zones = plan.free_zones
+
 	_spawn_player()
 	_build_hp_bar()
 	_build_hud_extras()
@@ -91,10 +82,10 @@ func _ready() -> void:
 	_style_upgrade_menu()
 
 	# Camera limits — keep within world bounds
-	camera.limit_left = - WALL_THICK
-	camera.limit_right = WORLD_WIDTH + WALL_THICK
-	camera.limit_top = -384
-	camera.limit_bottom = int(max_depth) + 120
+	camera.limit_left = int(-profile.wall_thickness)
+	camera.limit_right = int(profile.world_width + profile.wall_thickness)
+	camera.limit_top = int(profile.camera_top_limit)
+	camera.limit_bottom = int(max_depth + profile.camera_bottom_margin)
 	# Offset player slightly below center so we see more above
 	camera.offset = CAMERA_BASE_OFFSET
 	_build_embers()
@@ -110,7 +101,7 @@ func _ready() -> void:
 	$CanvasLayer.process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Set background
-	RenderingServer.set_default_clear_color(bg_by_ascent[0])
+	RenderingServer.set_default_clear_color(profile.theme.background_by_ascent.sample(0.0))
 
 
 func _process(delta: float) -> void:
@@ -158,11 +149,8 @@ func _update_background() -> void:
 	var ascent := 0.0
 	if is_instance_valid(player):
 		ascent = clampf(1.0 - player.global_position.y / max_depth, 0.0, 1.0)
-	# Sample the palette by ascent progress.
-	var f: float = ascent * (bg_by_ascent.size() - 1)
-	var idx: int = int(f)
-	var idx2: int = mini(idx + 1, bg_by_ascent.size() - 1)
-	var c: Color = bg_by_ascent[idx].lerp(bg_by_ascent[idx2], f - idx)
+	# Sample the theme's palette by ascent progress.
+	var c := profile.theme.background_by_ascent.sample(ascent)
 	# Subtle slow "breathing" of the depths.
 	c = c.lightened(0.04 * (0.5 + 0.5 * sin(bg_time * 0.35)))
 	RenderingServer.set_default_clear_color(c)
@@ -496,15 +484,17 @@ func _check_zones() -> void:
 	for i in range(zone_milestones.size() - 1, -1, -1):
 		if player.global_position.y < zone_milestones[i]:
 			zone_milestones.remove_at(i)
-			var level := clampi(int((max_depth - player.global_position.y) / level_height) + 1, 1, level_count)
-			show_notification("LEVEL %d / %d" % [level, level_count])
+			var level := clampi(
+				int((max_depth - player.global_position.y) / profile.level_height) + 1,
+				1, profile.level_count)
+			show_notification("LEVEL %d / %d" % [level, profile.level_count])
 			Game.add_score(250)
 			Audio.play(&"zone")
 			break
 
 
 func _check_victory() -> void:
-	if player.global_position.y < 200.0:
+	if player.global_position.y < profile.victory_y:
 		state = GameState.VICTORY
 		player.can_input = false
 		_show_victory()
@@ -713,7 +703,8 @@ func _show_victory() -> void:
 # ── Player ──────────────────────────────────────────────────────────────────
 func _spawn_player() -> void:
 	player = PLAYER_SCENE.instantiate()
-	player.global_position = Vector2(WORLD_WIDTH / 2.0, max_depth - 300.0)
+	player.global_position = Vector2(
+		profile.world_width / 2.0, max_depth - profile.player_spawn_height)
 	add_child(player)
 	player.player_died.connect(_on_player_died)
 	player.player_damaged.connect(_on_player_damaged)
@@ -742,204 +733,62 @@ func go_to_menu() -> void:
 # ── Enemy Spawning ──────────────────────────────────────────────────────────
 
 func _spawn_enemy() -> void:
-	# Calculate depth progress (0.0 at top, 1.0 at bottom)
+	# Ascent progress: 0.0 at the bottom of the pit, 1.0 at the surface.
 	var current_depth := maxf(0.0, minf(max_depth, player.global_position.y))
-	# We want t=0 at the start (highest depth number) and t=1 at the end (lowest depth number)
 	var progress := 1.0 - (current_depth / max_depth)
 
-	# Calculate probabilities based on progress
-	# Start (progress 0.0): Golem 100, Slime 90, Pursuer 1, Bat 0, Spitter 0
-	# End (progress 1.0):   Golem 45, Slime 20, Pursuer 60, Bat 40, Spitter 35
-	var w_golem: float = lerp(100.0, 45.0, progress)
-	var w_slime: float = lerp(90.0, 20.0, progress)
-	var w_pursuer: float = lerp(1.0, 60.0, progress)
-	var w_bat: float = lerp(0.0, 40.0, progress)
-	var w_spitter: float = lerp(0.0, 35.0, progress)
+	# Weighted roll over the profile's spawn table.
+	var weights: Array[float] = []
+	var total := 0.0
+	for entry in profile.spawn_table:
+		var w := lerpf(entry.weight_start, entry.weight_end, progress)
+		weights.append(w)
+		total += w
+	if total <= 0.0:
+		return
 
-	var total_weight: float = w_golem + w_slime + w_pursuer + w_bat + w_spitter
-	var roll: float = randf() * total_weight
+	var roll := randf() * total
+	var chosen: SpawnEntry = profile.spawn_table.back()
+	for i in profile.spawn_table.size():
+		roll -= weights[i]
+		if roll < 0.0:
+			chosen = profile.spawn_table[i]
+			break
 
-	var type_name := ""
-	if roll < w_golem:
-		type_name = "golem"
-	elif roll < w_golem + w_slime:
-		type_name = "slime"
-	elif roll < w_golem + w_slime + w_pursuer:
-		type_name = "pursuer"
-	elif roll < w_golem + w_slime + w_pursuer + w_bat:
-		type_name = "bat"
-	else:
-		type_name = "spitter"
-
-	# Limit Pursuers
-	if type_name == "pursuer":
-		var pursuer_count := 0
+	if chosen.max_alive > 0:
+		var alive := 0
 		for e in enemies_node.get_children():
-			if e.is_in_group("pursuer_group"):
-				pursuer_count += 1
-		if pursuer_count >= 20:
-			return # Re-roll essentially negated, wait for next timer tick
+			if e.is_in_group(chosen.group):
+				alive += 1
+		if alive >= chosen.max_alive:
+			return # wait for the next timer tick
 
-	var spawn_y: float = player.global_position.y - 1200.0
-	if spawn_y < -800.0:
-		spawn_y = -800.0
-
-	var x: float
-	if type_name == "pursuer":
-		x = 128.0 if randf() < 0.5 else WORLD_WIDTH - 192.0
-		spawn_y = player.global_position.y - 800.0
-	elif type_name == "spitter":
-		# Spitters need solid ground: spawn on a platform near the player's
-		# altitude so they don't immediately fall out of view.
-		spawn_y = player.global_position.y - randf_range(500.0, 1000.0)
-		x = randf_range(200.0, WORLD_WIDTH - 200.0)
-	else:
-		x = randf_range(200.0, WORLD_WIDTH - 200.0)
-
-	var enemy: Node
-	match type_name:
-		"golem":
-			enemy = GOLEM_SCENE.instantiate()
-		"slime":
-			enemy = SLIME_SCENE.instantiate()
-		"pursuer":
-			enemy = PURSUER_SCENE.instantiate()
-			enemy.add_to_group("pursuer_group")
-		"bat":
-			enemy = BAT_SCENE.instantiate()
-		"spitter":
-			enemy = SPITTER_SCENE.instantiate()
-
+	var enemy: Node2D = chosen.scene.instantiate()
+	if chosen.group != &"":
+		enemy.add_to_group(chosen.group)
 	enemies_node.add_child(enemy)
-	enemy.global_position = Vector2(x, spawn_y)
+	enemy.global_position = _spawn_position(chosen)
 	enemy.set_player_ref(player)
 
 
-# ── Map Generation ──────────────────────────────────────────────────────────
-func _generate_map() -> void:
-	# Base walls scale from bottom to top
-	var y_pos := max_depth - 512.0
-	while y_pos > -3000.0:
-		_create_wall(Vector2(-128, y_pos), Vector2(128, 512))
-		_create_wall(Vector2(WORLD_WIDTH, y_pos), Vector2(128, 512))
-		y_pos -= 512.0
-
-	_generate_platforms()
-
-
-func _create_wall(pos: Vector2, size: Vector2) -> void:
-	var body := StaticBody2D.new()
-	body.position = pos + size / 2.0
-	# Was 33 (bits 1 and 6). Nothing in the project ever masked bit 6.
-	body.collision_layer = Layers.WORLD
-	var shape := CollisionShape2D.new()
-	var rect := RectangleShape2D.new()
-	rect.size = size
-	shape.shape = rect
-	body.add_child(shape)
-
-	var tex: Texture2D = preload("res://assets/sprites/wall_map.png")
-	var spr := Sprite2D.new()
-	spr.texture = tex
-	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	spr.scale = Vector2(2, 2)
-	spr.region_enabled = true
-	spr.region_rect = Rect2(0, 0, size.x / 2.0, size.y / 2.0)
-	body.add_child(spr)
-
-	platforms_node.add_child(body)
-
-
-func _create_static_platform(pos: Vector2, size: Vector2) -> void:
-	var body := StaticBody2D.new()
-	body.position = pos + size / 2.0
-	body.collision_layer = Layers.WORLD
-	var shape := CollisionShape2D.new()
-	var rect := RectangleShape2D.new()
-	rect.size = size
-	shape.shape = rect
-	body.add_child(shape)
-
-	var tex: Texture2D = preload("res://assets/sprites/platform_part.png")
-	var spr := Sprite2D.new()
-	spr.texture = tex
-	spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	spr.scale = Vector2(2, 2)
-	spr.region_enabled = true
-	spr.region_rect = Rect2(0, 0, size.x / 2.0, 16)
-
-	body.add_child(spr)
-	platforms_node.add_child(body)
-
-
-func _generate_platforms() -> void:
-	# Keep user's preset layout for dividers conceptually,
-	# but we must calculate the positions dynamically so it works with ANY level_count / max_depth.
-	var dividers_y: Array[float] = []
-	for i in range(1, level_count):
-		dividers_y.append(max_depth - i * float(level_height))
-
-	# Start generating platforms from the bottom up
-	var current_y := max_depth - 800.0
-	var plat_h := 32.0
-
-	while current_y > -400.0:
-		var progress := 1.0 - (maxf(current_y, 0.0) / max_depth)
-		var step_y: float = lerp(80.0, 180.0, progress)
-
-		# Skip spawning if too close to an existing divider from World.tscn
-		var near_divider := false
-		for div_y in dividers_y:
-			if abs(current_y - div_y) < 250.0:
-				near_divider = true
-				break
-
-		if near_divider:
-			current_y -= step_y
-			debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
-			continue
-
-		var chance: float = lerp(0.95, 0.6, progress)
-		if randf() < chance:
-			# Spawn 1 to 4 platforms per height step to increase density
-			var max_plats := int(lerp(4.0, 1.0, progress))
-			var plat_count := randi_range(1, maxi(1, max_plats))
-
-			for i in range(plat_count):
-				var max_b := int(lerp(8.0, 3.0, progress))
-				var min_b := 2
-				var blocks := randi_range(min_b, maxi(min_b, max_b))
-				var w := float(blocks * 64)
-
-				var x := randf_range(128.0, WORLD_WIDTH - 128.0 - w)
-				var type_roll := randf()
-				var p_y := current_y + randf_range(-30.0, 30.0)
-
-				if type_roll < 0.6: # Static
-					_create_static_platform(Vector2(x, p_y), Vector2(w, plat_h))
-				else: # Moving
-					var mp := MOVING_PLAT_SCENE.instantiate()
-					mp.global_position = Vector2(x, p_y)
-					mp.move_speed = randf_range(20.0, 50.0)
-					mp.move_delay = randi_range(0, 90)
-					if type_roll < 0.8:
-						mp.move_type = "horizontal"
-						mp.move_range = randf_range(300.0, 800.0)
-					else:
-						mp.move_type = "vertical"
-						mp.move_range = randf_range(300.0, 600.0)
-
-					var col_shape: CollisionShape2D = mp.get_node("CollisionShape2D")
-					col_shape.shape = col_shape.shape.duplicate()
-					col_shape.shape.size = Vector2(w, plat_h)
-					var spr: Sprite2D = mp.get_node("Sprite2D")
-					spr.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-					spr.region_enabled = true
-					spr.region_rect = Rect2(0, 0, w / 2.0, spr.texture.get_height())
-					platforms_node.add_child(mp)
-
-		current_y -= step_y
-		debug_free_zones.append(Rect2(0, current_y, WORLD_WIDTH, step_y))
+func _spawn_position(entry: SpawnEntry) -> Vector2:
+	var player_y := player.global_position.y
+	match entry.placement:
+		SpawnEntry.Placement.WALL:
+			var x := profile.wall_spawn_inset_left if randf() < 0.5 \
+					else profile.world_width - profile.wall_spawn_inset_right
+			return Vector2(x, player_y - entry.above_player_min)
+		SpawnEntry.Placement.PLATFORM_BAND:
+			# Needs solid ground: appear in the platform band near the player's
+			# altitude instead of falling in from far above.
+			return Vector2(
+				randf_range(profile.spawn_margin_x, profile.world_width - profile.spawn_margin_x),
+				player_y - randf_range(entry.above_player_min, entry.above_player_max))
+		_: # SKY
+			var y := maxf(player_y - entry.above_player_min, profile.spawn_ceiling_y)
+			return Vector2(
+				randf_range(profile.spawn_margin_x, profile.world_width - profile.spawn_margin_x),
+				y)
 
 
 # ── Debug Draw ──────────────────────────────────────────────────────────────

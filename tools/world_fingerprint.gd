@@ -47,9 +47,10 @@ func _run() -> void:
 
 
 func _fingerprint(world_seed: int) -> Dictionary:
-	seed(world_seed)
 	var packed: PackedScene = load("res://scenes/World.tscn")
 	var world: Node = packed.instantiate()
+	# Exactly what a multiplayer client will do with the host's seed.
+	world.world_seed = world_seed
 	# No awaits. _ready() — and therefore the whole generation — runs
 	# synchronously inside add_child(), so the geometry is readable immediately.
 	# Waiting frames made this unstable: MovingPlatform starts oscillating on its

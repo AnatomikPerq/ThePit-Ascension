@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SpawnEntry" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/defs/spawn_entry.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/Spitter.tscn" id="2_scene"]
+
+[resource]
+resource_name = "spitter"
+script = ExtResource("1_script")
+scene = ExtResource("2_scene")
+weight_start = 0.0
+weight_end = 35.0
+placement = 2
+above_player_min = 500.0
+above_player_max = 1000.0

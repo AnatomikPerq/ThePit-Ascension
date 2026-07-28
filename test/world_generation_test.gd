@@ -20,8 +20,8 @@ func after_test() -> void:
 ## with no frames elapsed. Waiting frames would let MovingPlatform start
 ## oscillating and make the sample time-dependent.
 func _build(world_seed: int) -> Node:
-	seed(world_seed)
 	var world: Node = load("res://scenes/World.tscn").instantiate()
+	world.world_seed = world_seed
 	add_child(world)
 	_worlds.append(world)
 	return world
@@ -56,6 +56,29 @@ func test_same_seed_produces_identical_geometry() -> void:
 		assert_array(second) \
 			.override_failure_message("seed %d generated different geometry on a second run" % s) \
 			.is_equal(first)
+
+
+## The generator itself, without a scene: two plans from the same seed must be
+## record-for-record identical. This is the cheap fast check; the scene-level
+## tests above prove the builder faithfully transfers the plan into nodes.
+func test_generator_is_a_pure_function_of_the_seed() -> void:
+	var profile: WorldProfile = load("res://data/worlds/pit.tres")
+	for s in SEEDS:
+		var a := _plan_lines(WorldGenerator.generate(profile, s))
+		var b := _plan_lines(WorldGenerator.generate(profile, s))
+		assert_array(b) \
+			.override_failure_message("WorldGenerator is not pure for seed %d" % s) \
+			.is_equal(a)
+		assert_array(a).is_not_empty()
+
+
+func _plan_lines(plan: WorldPlan) -> Array[String]:
+	var out: Array[String] = []
+	for piece in plan.statics:
+		out.append("%d %s" % [piece.kind, piece.rect])
+	for m in plan.movers:
+		out.append("mover %s %s %d %f %d %f" % [m.position, m.size, m.axis, m.speed, m.delay, m.travel])
+	return out
 
 
 func test_different_seeds_produce_different_geometry() -> void:

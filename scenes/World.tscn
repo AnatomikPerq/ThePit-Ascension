@@ -2,21 +2,11 @@
 
 [ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui_input.gd" id="2_uiinput"]
-[ext_resource type="Texture2D" uid="uid://dmf6ayjhdxyp0" path="res://assets/sprites/level_floor.png" id="tex_divider"]
-[ext_resource type="Texture2D" uid="uid://dgiqdrgpiwhob" path="res://assets/sprites/floor_map.png" id="tex_floor"]
-[ext_resource type="Texture2D" uid="uid://cms0xiuwxuw3j" path="res://assets/sprites/wall_map.png" id="tex_wall"]
-
-[sub_resource type="RectangleShape2D" id="Shape_Floor"]
-size = Vector2(2000, 64)
-
-[sub_resource type="RectangleShape2D" id="Shape_Wall"]
-size = Vector2(128, 512)
-
-[sub_resource type="RectangleShape2D" id="Shape_Divider"]
-size = Vector2(600, 64)
+[ext_resource type="Resource" path="res://data/worlds/pit.tres" id="3_profile"]
 
 [node name="World" type="Node2D" unique_id=1323789333]
 script = ExtResource("1_script")
+profile = ExtResource("3_profile")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1636867807]
 position_smoothing_enabled = true
@@ -29,101 +19,6 @@ drag_right_margin = 0.3
 drag_bottom_margin = 0.25
 
 [node name="Platforms" type="Node2D" parent="." unique_id=1146815044]
-
-[node name="Floor" type="StaticBody2D" parent="Platforms" unique_id=1652976067]
-position = Vector2(1000, 7968)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Floor" unique_id=1048427714]
-scale = Vector2(2, 2)
-texture = ExtResource("tex_floor")
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Floor" unique_id=1301705835]
-shape = SubResource("Shape_Floor")
-
-[node name="Divider_2000_Left" type="StaticBody2D" parent="Platforms" unique_id=1965441000]
-position = Vector2(300, 2000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Left" unique_id=1974734129]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_2000_Left" unique_id=478412520]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_2000_Right" type="StaticBody2D" parent="Platforms" unique_id=2121559842]
-position = Vector2(1700, 2000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Right" unique_id=1287076559]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_2000_Right" unique_id=1517268956]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_4000_Left" type="StaticBody2D" parent="Platforms" unique_id=1060849920]
-position = Vector2(300, 4000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Left" unique_id=787782494]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_4000_Left" unique_id=126369975]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_4000_Right" type="StaticBody2D" parent="Platforms" unique_id=393336379]
-position = Vector2(1700, 4000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Right" unique_id=1268527016]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_4000_Right" unique_id=646414034]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_6000_Left" type="StaticBody2D" parent="Platforms" unique_id=679755185]
-position = Vector2(300, 6000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Left" unique_id=1094084178]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_6000_Left" unique_id=165366873]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_6000_Right" type="StaticBody2D" parent="Platforms" unique_id=1536394383]
-position = Vector2(1700, 6000)
-collision_layer = 1
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Right" unique_id=1153613536]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_6000_Right" unique_id=1253623906]
-shape = SubResource("Shape_Divider")
 
 [node name="Enemies" type="Node2D" parent="." unique_id=83102023]
 
