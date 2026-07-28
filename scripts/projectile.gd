@@ -5,6 +5,8 @@ extends Area2D
 
 const LIFETIME: float = 4.0
 const SPEED: float = 700.0
+const HIT_BURST: BurstPreset = preload("res://data/fx/projectile_hit.tres")
+const FIZZLE_BURST: BurstPreset = preload("res://data/fx/projectile_fizzle.tres")
 
 var _velocity: Vector2 = Vector2.ZERO
 var _life: float = LIFETIME
@@ -47,14 +49,14 @@ func _physics_process(delta: float) -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		body.take_damage()
-		Fx.burst(global_position, Color(0.45, 0.95, 0.3), 8, 180.0, 0.35)
+		Fx.burst(global_position, HIT_BURST)
 		queue_free()
 
 
 func _on_area_entered(area: Area2D) -> void:
 	# Destroyed by the player's Strike or Shockwave.
 	if area.is_in_group("strike"):
-		Fx.burst(global_position, Color(0.45, 0.95, 0.3), 10, 220.0, 0.4)
+		Fx.burst(global_position, FIZZLE_BURST)
 		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3))
 		queue_free()
 

@@ -14,9 +14,13 @@ var max_combo: int = 0
 var best_score: int = 0
 var run_start_ms: int = 0
 var _combo_time: float = 0.0
+var _kill_burst: BurstPreset
 
 
 func _ready() -> void:
+	# load, not a preload const: an autoload's preloads pin resources past
+	# shutdown (same lesson as the sound bank).
+	_kill_burst = load("res://data/fx/kill.tres")
 	var cf := ConfigFile.new()
 	if cf.load(SAVE_PATH) == OK:
 		best_score = cf.get_value("run", "best_score", 0)
@@ -67,7 +71,7 @@ func enemy_killed(pos: Vector2, base_points: int, color: Color) -> void:
 	if combo > 1:
 		text += "  x%d" % combo
 	Fx.popup(pos + Vector2(0, -50), text, color)
-	Fx.burst(pos, color, 14 + mini(combo * 2, 16))
+	Fx.burst(pos, _kill_burst, color, 14 + mini(combo * 2, 16))
 	Audio.play(&"kill", clampf(0.9 + combo * 0.07, 0.9, 1.7))
 
 

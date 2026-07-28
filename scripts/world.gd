@@ -6,6 +6,7 @@ extends Node2D
 
 const CAMERA_BASE_OFFSET := Vector2(0, -120)
 const PLAYER_SCENE: PackedScene = preload("res://scenes/Player.tscn")
+const CONFETTI_BURST: BurstPreset = preload("res://data/fx/confetti.tres")
 
 ## Every number the world is built and paced from. One .tres per world.
 @export var profile: WorldProfile
@@ -69,6 +70,10 @@ func _ready() -> void:
 	Game.new_run()
 	Game.score_changed.connect(_on_score_changed)
 
+	# World-space effects (bursts, popups, ghosts) spawn under this scene
+	# and die with it.
+	Fx.effects_root = self
+
 	while world_seed == 0:
 		world_seed = randi()
 	var plan := WorldGenerator.generate(profile, world_seed)
@@ -102,6 +107,11 @@ func _ready() -> void:
 
 	# Set background
 	RenderingServer.set_default_clear_color(profile.theme.background_by_ascent.sample(0.0))
+
+
+func _exit_tree() -> void:
+	if Fx.effects_root == self:
+		Fx.effects_root = null
 
 
 func _process(delta: float) -> void:
@@ -696,7 +706,7 @@ func _show_victory() -> void:
 		t.timeout.connect(func() -> void:
 			if is_instance_valid(player):
 				var pos := player.global_position + Vector2(randf_range(-500, 500), randf_range(-450, 150))
-				Fx.burst(pos, Color.from_hsv(randf(), 0.8, 1.0), 20, 380.0, 0.9, 350.0)
+				Fx.burst(pos, CONFETTI_BURST, Color.from_hsv(randf(), 0.8, 1.0))
 		)
 
 

@@ -15,6 +15,10 @@ const HARD_LANDING_SPEED: float = 900.0 # fall speed that kicks up dust
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
 
+const DOUBLE_JUMP_BURST: BurstPreset = preload("res://data/fx/double_jump.tres")
+const HURT_BURST: BurstPreset = preload("res://data/fx/player_hurt.tres")
+const DEATH_BURST: BurstPreset = preload("res://data/fx/player_death.tres")
+
 # ── State ───────────────────────────────────────────────────────────────────
 var health: int = 5
 var max_health: int = 5
@@ -226,7 +230,7 @@ func _try_jump() -> void:
 		velocity.y = JUMP_FORCE * 0.9
 		jump_count = 2
 		dashing_down = false
-		Fx.burst(global_position + Vector2(0, 20), Color(0.6, 0.85, 1.0, 0.9), 12, 200.0, 0.4, 250.0)
+		Fx.burst(global_position + Vector2(0, 20), DOUBLE_JUMP_BURST)
 		Audio.play(&"double_jump")
 		_squash(Vector2(1.6, 2.4))
 
@@ -277,7 +281,7 @@ func take_damage() -> bool:
 	Audio.play(&"hurt")
 	Fx.shake(0.35)
 	Fx.flash(sprite)
-	Fx.burst(global_position, Color(0.9, 0.2, 0.2), 12, 260.0, 0.4)
+	Fx.burst(global_position, HURT_BURST)
 	player_damaged.emit(health)
 	if health <= 0:
 		_die()
@@ -327,7 +331,7 @@ func _die() -> void:
 	set_collision_mask_value(4, false)
 	Audio.play(&"die")
 	Fx.shake(0.7)
-	Fx.burst(global_position, Color(0.9, 0.15, 0.15), 26, 420.0, 0.8)
+	Fx.burst(global_position, DEATH_BURST)
 
 	var tween := create_tween()
 	tween.tween_property(sprite, "modulate:a", 0.0, 1.0)

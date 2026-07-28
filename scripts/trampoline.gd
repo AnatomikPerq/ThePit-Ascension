@@ -7,6 +7,7 @@ extends Area2D
 ## AnimationPlayer clip now.
 
 const LAUNCH_VELOCITY: float = -2760.0 # -23 * 60 * 2
+const BOUNCE_BURST: BurstPreset = preload("res://data/fx/trampoline_bounce.tres")
 
 @onready var anim: AnimationPlayer = $AnimationPlayer
 
@@ -28,4 +29,4 @@ func _on_body_entered(body: Node2D) -> void:
 	body.jump_count = 0
 	body.dashing_down = false
 	Audio.play(&"bounce")
-	Fx.burst(global_position + Vector2(0, -10), Color(0.35, 0.9, 0.4, 0.9), 10, 240.0, 0.45, 400.0)
+	Fx.burst(global_position + Vector2(0, -10), BOUNCE_BURST)
