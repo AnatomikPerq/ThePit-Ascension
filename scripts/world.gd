@@ -810,9 +810,9 @@ func _spawn_enemy() -> void:
 		"spitter":
 			enemy = SPITTER_SCENE.instantiate()
 
+	enemies_node.add_child(enemy)
 	enemy.global_position = Vector2(x, spawn_y)
 	enemy.set_player_ref(player)
-	enemies_node.add_child(enemy)
 
 
 # ── Map Generation ──────────────────────────────────────────────────────────

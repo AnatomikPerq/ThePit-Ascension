@@ -1,8 +1,10 @@
-[gd_scene format=3 uid="uid://cgolem01"]
+[gd_scene load_steps=8 format=3 uid="uid://cgolem01"]
 
 [ext_resource type="Script" uid="uid://3fiq5vux6ie4" path="res://scripts/golem.gd" id="1_script"]
 [ext_resource type="SpriteFrames" path="res://data/animations/golem_frames.tres" id="2_frames"]
 
+[ext_resource type="Script" path="res://src/entities/enemy_combat.gd" id="3_combat"]
+[ext_resource type="Resource" path="res://data/enemies/golem.tres" id="4_stats"]
 [sub_resource type="RectangleShape2D" id="Shape_Damage"]
 size = Vector2(56, 20)
 
@@ -45,3 +47,7 @@ collision_mask = 10
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea" unique_id=998982542]
 position = Vector2(0, 14)
 shape = SubResource("Shape_Stomp")
+
+[node name="Combat" type="Node" parent="."]
+script = ExtResource("3_combat")
+stats = ExtResource("4_stats")

@@ -1,125 +1,64 @@
 extends CharacterBody2D
-## Spitter — stationary ranged enemy. Stands on platforms and lobs acid blobs
-## at the player when they are roughly horizontal and within range.
+## Spitter — stationary ranged enemy. Rests on a platform and lobs acid at the
+## player when they are roughly level and in range. Only a dash-down kills it.
 ##
-## DamageArea: contact hurts the player.
-## StompArea: stomp from above (with dash_down) or a Strike kills it.
-##
-## Texture lives on the scene's Sprite2D (assets/sprites/spitter.png).
+## Contact resolution lives in the Combat child (EnemyCombat); this script keeps
+## only the aiming and shooting.
 
 const GRAVITY: float = 4500.0
 const TERMINAL_VEL: float = 1800.0
 const SHOOT_RANGE: float = 1100.0
+const SHOOT_VERTICAL_RANGE: float = 700.0
 const SHOOT_COOLDOWN: float = 2.2
-const SCORE: int = 150
-const SCORE_COLOR := Color(0.5, 0.95, 0.3)
+## Seconds of wind-up between deciding to fire and the shot leaving.
+const CHARGE_TIME: float = 0.25
+## Seconds for the telegraph glow to fade once the player leaves range.
+const CHARGE_DECAY: float = 0.5
 const PROJECTILE_SCENE: PackedScene = preload("res://scenes/Projectile.tscn")
 
-var _player: CharacterBody2D
-var _is_dead: bool = false
 var _shoot_timer: float = SHOOT_COOLDOWN
 var _facing_right: bool = true
-var _charge: float = 0.0 # ramps while aiming for a telegraph glow
+var _charge: float = 0.0 # 0..1, drives the telegraph tint
 
+@onready var combat: EnemyCombat = $Combat
 @onready var sprite: Sprite2D = $Sprite2D
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
-	_player = player
+	# $Combat, not the @onready reference: the spawner calls this before
+	# the enemy is added to the tree, when @onready values are still null.
+	($Combat as EnemyCombat).player = player
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(_player):
+	if combat.is_dead or not is_instance_valid(combat.player):
 		return
 
-	if global_position.y > _player.global_position.y + 1500.0:
-		queue_free()
-		return
-
-	if _is_dead:
-		return
-
-	# Gravity so it rests on platforms like the Pursuer.
-	velocity.y += GRAVITY * delta
-	if velocity.y > TERMINAL_VEL:
-		velocity.y = TERMINAL_VEL
+	# Gravity, so it settles onto whatever platform it spawned above.
+	velocity.y = minf(velocity.y + GRAVITY * delta, TERMINAL_VEL)
 	move_and_slide()
 
-	# Aim at the player.
-	var dist_x: float = _player.global_position.x - global_position.x
-	var dist_y: float = _player.global_position.y - global_position.y
-	var within_range: bool = abs(dist_x) < SHOOT_RANGE and abs(dist_y) < 700.0
-	_facing_right = dist_x > 0.0
+	var to_player: Vector2 = combat.player.global_position - global_position
+	_facing_right = to_player.x > 0.0
 	sprite.flip_h = not _facing_right
 
+	var in_range := absf(to_player.x) < SHOOT_RANGE and absf(to_player.y) < SHOOT_VERTICAL_RANGE
 	_shoot_timer -= delta
-	if within_range and _shoot_timer <= 0.0:
-		_shoot(delta)
+	if in_range and _shoot_timer <= 0.0:
+		_charge += delta / CHARGE_TIME
+		if _charge >= 1.0:
+			_fire()
 	else:
-		# Fade the charge glow out when not firing.
-		_charge = move_toward(_charge, 0.0, delta * 2.0)
+		_charge = move_toward(_charge, 0.0, delta / CHARGE_DECAY)
 
-	# Reddish tint ramps up as a telegraph right before/at firing.
+	# Reddens as the shot winds up, so the player gets a tell.
 	sprite.modulate = Color(1.0, 1.0 - _charge * 0.5, 1.0 - _charge * 0.5)
 
-	_check_collisions()
 
-
-func _shoot(delta: float) -> void:
-	# Small wind-up telegraph before the shot fires.
-	_charge += delta * 4.0
-	if _charge < 1.0:
-		return
+func _fire() -> void:
 	_charge = 0.0
 	_shoot_timer = SHOOT_COOLDOWN
-
 	var proj: Area2D = PROJECTILE_SCENE.instantiate()
 	var muzzle: Vector2 = global_position + Vector2(28.0 if _facing_right else -28.0, -10.0)
-	proj.setup(muzzle, _player.global_position, _player)
+	proj.setup(muzzle, combat.player.global_position, combat.player)
 	get_parent().add_child(proj)
-
-
-func _check_collisions() -> void:
-	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
-	if has_node("DamageArea"):
-		areas.append_array($DamageArea.get_overlapping_areas())
-
-	# Priority 1: Strike / Shockwave
-	for area in areas:
-		if area.is_in_group("strike"):
-			_die()
-			return
-
-	# Priority 2: Stomp — require a downward dash (like the Pursuer).
-	for body in $StompArea.get_overlapping_bodies():
-		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			if body.get("dashing_down") == true:
-				body.velocity.y = -900.0 # dash-kill rebound
-				body.dashing_down = false
-				Audio.play(&"stomp")
-				_die()
-				return
-			else:
-				body.take_damage()
-				return
-
-	# Priority 3: Contact damage
-	if has_node("DamageArea"):
-		for body in $DamageArea.get_overlapping_bodies():
-			if body.is_in_group("player"):
-				# A player who is dashing down from above is mid-stomp. Without this
-				# guard the outcome depends on which Area2D the engine happens to
-				# report first: DamageArea covers the whole body while StompArea is a
-				# thin strip on top, so a legitimate dash-kill was frequently turned
-				# into the player taking a hit, then knocked upward so that the stomp
-				# check failed its `velocity.y >= 0` guard a frame later.
-				if body.get("dashing_down") == true and body.global_position.y < global_position.y:
-					continue
-				body.take_damage()
-				return
-
-
-func _die() -> void:
-	_is_dead = true
-	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
-	queue_free()

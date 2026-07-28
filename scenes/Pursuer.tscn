@@ -1,8 +1,10 @@
-[gd_scene format=3 uid="uid://cpursuer01"]
+[gd_scene load_steps=8 format=3 uid="uid://cpursuer01"]
 
 [ext_resource type="Script" uid="uid://j5v5rxnfclk7" path="res://scripts/pursuer.gd" id="1_script"]
 [ext_resource type="SpriteFrames" path="res://data/animations/pursuer_frames.tres" id="2_frames"]
 
+[ext_resource type="Script" path="res://src/entities/enemy_combat.gd" id="3_combat"]
+[ext_resource type="Resource" path="res://data/enemies/pursuer.tres" id="4_stats"]
 [sub_resource type="RectangleShape2D" id="Shape_Body"]
 size = Vector2(56, 77)
 
@@ -52,3 +54,7 @@ target_position = Vector2(0, 20)
 [node name="WallDetector" type="RayCast2D" parent="." unique_id=267115102]
 position = Vector2(30, 0)
 target_position = Vector2(20, 0)
+
+[node name="Combat" type="Node" parent="."]
+script = ExtResource("3_combat")
+stats = ExtResource("4_stats")

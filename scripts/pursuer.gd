@@ -1,66 +1,55 @@
 extends CharacterBody2D
-## Pursuer — chases the player, jumps over walls and pits.
+## Pursuer — chases the player along the ground and jumps over walls and gaps.
+## Only a dash-down kills it; landing on it any other way costs you health.
+##
+## Contact resolution lives in the Combat child (EnemyCombat); this script keeps
+## only the chase.
 
 const GRAVITY: float = 4500.0
 const TERMINAL_VEL: float = 1800.0
-const MOVE_SPEED: float = 300.0 # Slightly slower than max player speed for fairness
-const ACCELERATION: float = 1200.0 # Smooth acceleration
+const MOVE_SPEED: float = 300.0 # slightly under the player's top speed, for fairness
+const ACCELERATION: float = 1200.0
 const FRICTION: float = 2400.0
 const JUMP_POWER: float = -1700.0
 const JUMP_COOLDOWN: float = 0.5
 const PLAYER_DETECT: float = 1600.0
-const SCORE: int = 150
-const SCORE_COLOR := Color(0.95, 0.35, 0.35)
 
-var _player: CharacterBody2D
 var _jump_timer: float = 0.0
 var _stuck_timer: float = 0.0
 var _facing_right: bool = true
-var _is_dead: bool = false
 
+@onready var combat: EnemyCombat = $Combat
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var edge_ray: RayCast2D = $EdgeDetector
 @onready var wall_ray: RayCast2D = $WallDetector
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
-	_player = player
+	# $Combat, not the @onready reference: the spawner calls this before
+	# the enemy is added to the tree, when @onready values are still null.
+	($Combat as EnemyCombat).player = player
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(_player):
+	if combat.is_dead or not is_instance_valid(combat.player):
 		return
-
-	if global_position.y > _player.global_position.y + 1500.0:
-		queue_free()
-		return
-
-	if _is_dead:
-		return
-
 	_update_ai(delta)
 	sprite.flip_h = not _facing_right
-	_check_collisions()
 
 
 func _update_ai(delta: float) -> void:
-	# Timers
 	if _jump_timer > 0.0:
 		_jump_timer -= delta
+	_stuck_timer = 0.0 if is_on_floor() else _stuck_timer + delta
 
-	if is_on_floor():
-		_stuck_timer = 0.0
-	else:
-		_stuck_timer += delta
-
-	# Chase player within detection range
-	var dist_x: float = _player.global_position.x - global_position.x
-	var dist_y: float = _player.global_position.y - global_position.y
-	var dist_total: float = sqrt(dist_x * dist_x + dist_y * dist_y)
+	var target := combat.player.global_position
+	var dist_x: float = target.x - global_position.x
+	var dist_y: float = target.y - global_position.y
+	var dist_total := sqrt(dist_x * dist_x + dist_y * dist_y)
 
 	var target_speed := 0.0
-	if abs(dist_x) > 10.0 and dist_total < PLAYER_DETECT:
-		var direction: float = sign(dist_x)
+	if absf(dist_x) > 10.0 and dist_total < PLAYER_DETECT:
+		var direction := signf(dist_x)
 		target_speed = direction * MOVE_SPEED
 		_facing_right = direction > 0.0
 
@@ -69,12 +58,9 @@ func _update_ai(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, FRICTION * delta)
 
-	# Gravity
-	velocity.y += GRAVITY * delta
-	if velocity.y > TERMINAL_VEL:
-		velocity.y = TERMINAL_VEL
+	velocity.y = minf(velocity.y + GRAVITY * delta, TERMINAL_VEL)
 
-	# Update raycast directions based on facing
+	# Point both feelers the way we are walking.
 	var ray_dir_x: float = 30.0 if _facing_right else -30.0
 	edge_ray.position.x = ray_dir_x
 	wall_ray.position.x = ray_dir_x * 0.5
@@ -82,73 +68,21 @@ func _update_ai(delta: float) -> void:
 
 	move_and_slide()
 
-	# Jump conditions
-	if is_on_floor() and _jump_timer <= 0.0:
-		var should_jump := false
-
-		# Wall ahead
-		if wall_ray.is_colliding():
-			should_jump = true
-
-		# Edge ahead — no ground below, player across gap
-		if not should_jump and not edge_ray.is_colliding():
-			if (dist_x > 0.0 and _facing_right) or (dist_x < 0.0 and not _facing_right):
-				should_jump = true
-
-		# Player above
-		if not should_jump and _player.global_position.y < global_position.y - 200.0 and abs(dist_x) < 300.0:
-			should_jump = true
-
-		# Stuck
-		if not should_jump and _stuck_timer > 3.0:
-			should_jump = true
-			_stuck_timer = 0.0
-
-		if should_jump:
-			velocity.y = JUMP_POWER
-			_jump_timer = JUMP_COOLDOWN
+	if is_on_floor() and _jump_timer <= 0.0 and _should_jump(dist_x, target.y):
+		velocity.y = JUMP_POWER
+		_jump_timer = JUMP_COOLDOWN
 
 
-func _check_collisions() -> void:
-	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
-	if has_node("DamageArea"):
-		areas.append_array($DamageArea.get_overlapping_areas())
-
-	# Priority 1: Strike
-	for area in areas:
-		if area.is_in_group("strike"):
-			_die()
-			return
-
-	# Priority 2: Stomp (Only if dashing down!)
-	for body in $StompArea.get_overlapping_bodies():
-		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			if body.dashing_down:
-				body.velocity.y = -900.0 # dash-kill rebound
-				body.dashing_down = false
-				Audio.play(&"stomp")
-				_die()
-				return
-			else:
-				# Hitting top area without dash => takes damage
-				body.take_damage()
-
-	# Priority 3: Damage
-	if has_node("DamageArea"):
-		for body in $DamageArea.get_overlapping_bodies():
-			if body.is_in_group("player"):
-				# A player who is dashing down from above is mid-stomp. Without this
-				# guard the outcome depends on which Area2D the engine happens to
-				# report first: DamageArea covers the whole body while StompArea is a
-				# thin strip on top, so a legitimate dash-kill was frequently turned
-				# into the player taking a hit, then knocked upward so that the stomp
-				# check failed its `velocity.y >= 0` guard a frame later.
-				if body.get("dashing_down") == true and body.global_position.y < global_position.y:
-					continue
-				body.take_damage()
-
-
-func _die() -> void:
-	_is_dead = true
-	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
-	queue_free()
+func _should_jump(dist_x: float, player_y: float) -> bool:
+	if wall_ray.is_colliding():
+		return true # wall ahead
+	# No ground ahead, and the player is on the far side of the gap.
+	if not edge_ray.is_colliding():
+		if (dist_x > 0.0 and _facing_right) or (dist_x < 0.0 and not _facing_right):
+			return true
+	if player_y < global_position.y - 200.0 and absf(dist_x) < 300.0:
+		return true # player is above us
+	if _stuck_timer > 3.0:
+		_stuck_timer = 0.0
+		return true # wedged somewhere; hop and hope
+	return false

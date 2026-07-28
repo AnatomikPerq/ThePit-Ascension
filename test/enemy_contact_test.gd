@@ -94,7 +94,11 @@ func _run_contact(key: String, dashing: bool, use_strike: bool) -> Outcome:
 
 	var out := Outcome.new()
 	out.enemy_freed = not is_instance_valid(enemy) or enemy.is_queued_for_deletion()
-	out.enemy_died = out.enemy_freed or enemy.get("_is_dead") == true
+	if out.enemy_freed:
+		out.enemy_died = true
+	else:
+		var combat := enemy.get_node_or_null("Combat")
+		out.enemy_died = combat != null and combat.is_dead
 	out.player_health = player.health
 	out.player_velocity_y = player.velocity.y
 	out.player_dashing = player.dashing_down
