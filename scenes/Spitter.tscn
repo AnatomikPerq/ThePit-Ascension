@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cspitter01"]
+[gd_scene load_steps=9 format=3 uid="uid://cspitter01"]
 
 [ext_resource type="Script" path="res://scripts/spitter.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/sprites/spitter.png" id="2_tex"]
@@ -49,6 +49,17 @@ size = Vector2(44, 48)
 [sub_resource type="RectangleShape2D" id="Shape_Stomp"]
 size = Vector2(46, 8)
 
+[sub_resource type="SceneReplicationConfig" id="SRC_enemy"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath("Sprite2D:flip_h")
+properties/1/spawn = false
+properties/1/replication_mode = 2
+properties/2/path = NodePath("Sprite2D:modulate")
+properties/2/spawn = false
+properties/2/replication_mode = 2
+
 [node name="Spitter" type="CharacterBody2D" groups=["enemy"]]
 collision_layer = 16
 collision_mask = 17
@@ -91,3 +102,6 @@ one_shot = true
 [node name="Combat" type="Node" parent="."]
 script = ExtResource("3_combat")
 stats = ExtResource("4_stats")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_enemy")

@@ -27,6 +27,8 @@ func set_player_ref(player: CharacterBody2D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not Net.is_sim_authority():
+		return # movement is mirrored from the host
 	if combat.is_dead:
 		return
 	position.y += FALL_SPEED * delta
@@ -35,7 +37,10 @@ func _physics_process(delta: float) -> void:
 
 func _on_killed(_by_strike: bool) -> void:
 	sprite.visible = false
-	_leave_trampoline.call_deferred()
+	# Only the sim authority spawns the trampoline and frees this node; the
+	# spawners mirror both to everyone else.
+	if Net.is_sim_authority():
+		_leave_trampoline.call_deferred()
 
 
 func _leave_trampoline() -> void:
@@ -45,6 +50,8 @@ func _leave_trampoline() -> void:
 	var container := get_tree().get_first_node_in_group(&"trampoline_container")
 	if container == null:
 		container = get_parent()
-	container.add_child(t)
-	t.global_position = global_position
+	t.position = global_position - container.global_position
+	# add_child(_, true): readable names are what lets the MultiplayerSpawner
+	# mirror this node onto every peer.
+	container.add_child(t, true)
 	queue_free()

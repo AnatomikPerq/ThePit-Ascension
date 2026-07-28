@@ -31,6 +31,9 @@ step "state probe (pause, input reachability, restart)"
 step "world fingerprint"
 "$GODOT" --headless --path . tools/world_fingerprint.tscn 2>&1 | grep -E "seed|WARNING" || fail=1
 
+step "net probe (host + client over a localhost socket)"
+bash tools/run_net_probe.sh "$GODOT" | tail -1 || fail=1
+
 step "conventions"
 bash tools/check_conventions.sh || fail=1
 

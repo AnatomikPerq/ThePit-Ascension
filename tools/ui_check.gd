@@ -29,6 +29,12 @@ func _run() -> void:
 	await _shot("menu.png")
 	menu.free()
 
+	var lobby: Node = load("res://scenes/Lobby.tscn").instantiate()
+	get_tree().root.add_child(lobby)
+	await _frames(10)
+	await _shot("lobby.png")
+	lobby.free()
+
 	var world: Node = load("res://scenes/World.tscn").instantiate()
 	world.world_seed = 20260728
 	get_tree().root.add_child(world)
@@ -57,7 +63,7 @@ func _run() -> void:
 	await _frames(5)
 	await _shot("victory.png")
 
-	print("ui_check: wrote 6 captures to ", _out_dir)
+	print("ui_check: wrote 7 captures to ", _out_dir)
 	get_tree().quit(0)
 
 

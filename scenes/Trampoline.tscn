@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://ctrampoline01"]
+[gd_scene load_steps=6 format=3 uid="uid://ctrampoline01"]
 
 [ext_resource type="Script" uid="uid://bfe5by86mtmkp" path="res://scripts/trampoline.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://daltt52tghplt" path="res://assets/sprites/slime_active.png" id="2_tex"]
@@ -27,6 +27,11 @@ _data = {
 &"squash": SubResource("Animation_squash")
 }
 
+[sub_resource type="SceneReplicationConfig" id="SRC_trampoline"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+
 [node name="Trampoline" type="Area2D" unique_id=543650877 groups=["trampoline"]]
 collision_layer = 4
 collision_mask = 2
@@ -44,3 +49,6 @@ libraries = {
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=626921991]
 position = Vector2(0, -4)
 shape = SubResource("RectangleShape2D_1")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_trampoline")

@@ -38,6 +38,9 @@ var show_debug: bool = false
 var debug_free_zones: Array[Rect2] = []
 
 var bg_time: float = 0.0
+## Set on every machine when the session's run ends (someone reached the
+## surface). Stops the host simulation and further milestones.
+var _session_over: bool = false
 
 # ── Node references ─────────────────────────────────────────────────────────
 @onready var camera: Camera2D = $Camera2D
@@ -55,9 +58,14 @@ func _ready() -> void:
 	max_depth = profile.max_depth()
 	current_spawn_interval = profile.spawn_interval_start
 
-	Game.new_run()
+	Game.new_run(Net.session_peers)
 	Game.score_changed.connect(hud.on_score_changed)
 	upgrade_menu.chosen.connect(choose_upgrade)
+	if Net.active:
+		Net.peers_changed.connect(_prune_disconnected)
+		Net.session_closed.connect(_on_session_closed)
+		# The session has one shared run; a personal restart makes no sense.
+		game_over_screen.get_node(^"SubTitle").text = "ESC — leave session"
 
 	# World-space effects (bursts, popups, ghosts) spawn under this scene
 	# and die with it.
@@ -69,7 +77,7 @@ func _ready() -> void:
 	WorldBuilder.build(plan, profile.theme, platforms_node)
 	debug_free_zones = plan.free_zones
 
-	_spawn_player()
+	_spawn_players()
 	hud.build_hp_bar(player.max_health, player.health)
 
 	# Camera limits — keep within world bounds
@@ -93,16 +101,9 @@ func _process(delta: float) -> void:
 	bg_time += delta
 	_update_background()
 
-	if state == GameState.GAME_OVER:
-		if Input.is_action_just_pressed("jump"):
-			restart()
-		return
-
-	if not is_instance_valid(player):
-		return
-
-	# Time-based enemy spawner
-	if state == GameState.PLAYING:
+	# World simulation: spawning, milestones, victory. On the host this keeps
+	# running even when the local avatar is dead — the other players are not.
+	if _should_simulate():
 		spawn_timer += delta
 		if spawn_timer >= current_spawn_interval:
 			spawn_timer = 0.0
@@ -110,6 +111,17 @@ func _process(delta: float) -> void:
 			# Increase difficulty gradually (lower interval allowed)
 			if current_spawn_interval > profile.spawn_interval_min:
 				current_spawn_interval -= profile.spawn_interval_step
+		_check_milestones()
+		_check_zones()
+		_check_victory()
+
+	if state == GameState.GAME_OVER:
+		if not Net.active and Input.is_action_just_pressed("jump"):
+			restart()
+		return
+
+	if not is_instance_valid(player):
+		return
 
 	# Update camera to follow player (+ screen shake)
 	camera.global_position = player.global_position
@@ -117,14 +129,25 @@ func _process(delta: float) -> void:
 
 	hud.update(player, max_depth, delta)
 
-	# Game logic
-	if state == GameState.PLAYING:
-		_check_milestones()
-		_check_zones()
-		_check_victory()
-
 	if show_debug:
 		queue_redraw()
+
+
+## Solo: the run state machine gates everything. Session: the host simulates
+## as long as anyone is still climbing and nobody has won yet.
+func _should_simulate() -> bool:
+	if not Net.is_sim_authority():
+		return false
+	if Net.active:
+		return not _session_over and _any_avatar_alive()
+	return state == GameState.PLAYING
+
+
+func _any_avatar_alive() -> bool:
+	for avatar in players.values():
+		if is_instance_valid(avatar):
+			return true
+	return false
 
 
 # ── Background & atmosphere ─────────────────────────────────────────────────
@@ -185,11 +208,18 @@ func _check_milestones() -> void:
 			if avatar.global_position.y < milestones[i]:
 				milestones.remove_at(i)
 				Game.add_score(500, avatar.global_position, Color(0.98, 0.8, 0.3), peer_id)
-				# The choice is each player's own input; only the local
-				# player's milestone opens this machine's menu.
+				# The choice is each player's own input; the menu opens on the
+				# machine of whoever earned it.
 				if peer_id == Game.local_peer_id:
 					_show_upgrade_menu()
+				elif Net.active:
+					_offer_upgrade.rpc_id(peer_id)
 				break
+
+
+@rpc("authority", "call_remote", "reliable")
+func _offer_upgrade() -> void:
+	_show_upgrade_menu()
 
 
 func _check_zones() -> void:
@@ -202,37 +232,89 @@ func _check_zones() -> void:
 			if avatar.global_position.y < milestones[i]:
 				milestones.remove_at(i)
 				Game.add_score(250, Vector2.INF, Color.WHITE, peer_id)
+				var level := clampi(
+					int((max_depth - avatar.global_position.y) / profile.level_height) + 1,
+					1, profile.level_count)
 				if peer_id == Game.local_peer_id:
-					var level := clampi(
-						int((max_depth - avatar.global_position.y) / profile.level_height) + 1,
-						1, profile.level_count)
-					show_notification("LEVEL %d / %d" % [level, profile.level_count])
-					Audio.play(&"zone")
+					_zone_notice(level)
+				elif Net.active:
+					_zone_notice.rpc_id(peer_id, level)
 				break
 
 
+@rpc("authority", "call_remote", "reliable")
+func _zone_notice(level: int) -> void:
+	show_notification("LEVEL %d / %d" % [level, profile.level_count])
+	Audio.play(&"zone")
+
+
 func _check_victory() -> void:
+	if Net.active:
+		for peer_id in players:
+			var avatar := players[peer_id]
+			if is_instance_valid(avatar) and avatar.global_position.y < profile.victory_y:
+				# Host-authoritative: the surface bonus lands before the
+				# broadcast so every end screen shows the final number.
+				Game.add_score(2000, Vector2.INF, Color.WHITE, peer_id)
+				_end_session.rpc(peer_id)
+				return
+		return
 	if player.global_position.y < profile.victory_y:
 		state = GameState.VICTORY
 		player.can_input = false
 		_show_victory()
 
 
+## The shared run is over: somebody reached the surface. In co-op that is a
+## win for the team; in a race it is a win for exactly one machine.
+@rpc("authority", "call_local", "reliable")
+func _end_session(winner_peer: int) -> void:
+	_session_over = true
+	if is_instance_valid(player):
+		player.can_input = false
+	var won := winner_peer == Game.local_peer_id
+	if Net.mode == Net.Mode.RACE and not won:
+		state = GameState.GAME_OVER
+		game_over_screen.get_node(^"Title").text = "RACE OVER"
+		game_over_screen.show_with(
+			"PLAYER %d WON THE RACE\n\n" % winner_peer + _stats_text(Game.finish_run()))
+	else:
+		state = GameState.VICTORY
+		var text := _stats_text(Game.finish_run())
+		if not won:
+			text = "PLAYER %d REACHED THE SURFACE FIRST\n\n" % winner_peer + text
+		victory_screen.show_with(text)
+		Audio.play(&"win")
+		_confetti()
+
+
+## In a session one machine's menu must never freeze the others, so the tree
+## only actually pauses solo. The overlay still shows, and the local avatar
+## stops listening to input while it is up.
 func _pause_game() -> void:
 	state = GameState.PAUSED
-	get_tree().paused = true
+	if Net.active:
+		if is_instance_valid(player):
+			player.can_input = false
+	else:
+		get_tree().paused = true
 	pause_overlay.visible = true
 
 
 func _resume_game() -> void:
 	state = GameState.PLAYING
-	get_tree().paused = false
+	if Net.active:
+		if is_instance_valid(player) and not _session_over:
+			player.can_input = true
+	else:
+		get_tree().paused = false
 	pause_overlay.visible = false
 
 
 func _show_upgrade_menu() -> void:
 	state = GameState.UPGRADE_MENU
-	get_tree().paused = true
+	if not Net.active:
+		get_tree().paused = true
 	upgrade_menu.visible = true
 	Audio.play(&"upgrade")
 
@@ -279,7 +361,8 @@ func _on_heal_chosen() -> void:
 func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
 	state = GameState.PLAYING
-	get_tree().paused = false
+	if not Net.active:
+		get_tree().paused = false
 	Audio.play(&"ui_click")
 
 
@@ -303,30 +386,47 @@ func _show_victory() -> void:
 	Game.add_score(2000)
 	victory_screen.show_with(_stats_text(Game.finish_run()))
 	Audio.play(&"win")
-	# Confetti around the player.
+	_confetti()
+
+
+## Confetti around the local player. Cosmetic, so it never replicates.
+## Connected as a method, not a lambda: a SceneTreeTimer outliving this world
+## drops a method connection safely, while a lambda would call into a freed
+## instance.
+func _confetti() -> void:
 	for i in 10:
-		var t := get_tree().create_timer(0.15 * i)
-		t.timeout.connect(func() -> void:
-			if is_instance_valid(player):
-				var pos := player.global_position + Vector2(randf_range(-500, 500), randf_range(-450, 150))
-				Fx.burst(pos, CONFETTI_BURST, Color.from_hsv(randf(), 0.8, 1.0))
-		)
+		get_tree().create_timer(0.15 * i).timeout.connect(_confetti_burst)
+
+
+func _confetti_burst() -> void:
+	if is_instance_valid(player):
+		var pos := player.global_position + Vector2(randf_range(-500, 500), randf_range(-450, 150))
+		Fx.burst(pos, CONFETTI_BURST, Color.from_hsv(randf(), 0.8, 1.0))
 
 
 # ── Player ──────────────────────────────────────────────────────────────────
-func _spawn_player() -> void:
-	player = _spawn_avatar(Game.local_peer_id)
-	player.player_died.connect(_on_player_died)
-	player.player_damaged.connect(_on_player_damaged)
+## Every machine builds the same avatar set from the session roster (solo:
+## just the local player), spread around the spawn point. Deterministic, so
+## node paths agree on every peer and the synchronizers line up.
+func _spawn_players() -> void:
+	var roster := Net.session_peers if Net.active else ([Game.local_peer_id] as Array[int])
+	for i in roster.size():
+		var avatar := _spawn_avatar(roster[i], i - (roster.size() - 1) * 0.5)
+		if roster[i] == Game.local_peer_id:
+			player = avatar
+			player.player_died.connect(_on_player_died)
+			player.player_damaged.connect(_on_player_damaged)
 
 
-## One avatar, its identity and its personal milestone ladders. Multiplayer
-## calls this once per peer; solo calls it once.
-func _spawn_avatar(peer_id: int) -> CharacterBody2D:
+## One avatar, its identity and its personal milestone ladders.
+func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	var avatar: CharacterBody2D = PLAYER_SCENE.instantiate()
+	avatar.name = "Avatar%d" % peer_id
 	avatar.peer_id = peer_id
+	avatar.set_multiplayer_authority(peer_id)
 	avatar.global_position = Vector2(
-		profile.world_width / 2.0, max_depth - profile.player_spawn_height)
+		profile.world_width / 2.0 + slot_offset * 90.0,
+		max_depth - profile.player_spawn_height)
 	add_child(avatar)
 	players[peer_id] = avatar
 
@@ -336,6 +436,23 @@ func _spawn_avatar(peer_id: int) -> CharacterBody2D:
 	_upgrade_milestones[peer_id] = upgrades
 	_zone_milestones[peer_id] = profile.divider_ys()
 	return avatar
+
+
+## A peer dropped mid-run: remove its avatar everywhere.
+func _prune_disconnected() -> void:
+	if not Net.active:
+		return
+	for peer_id in players.keys():
+		if peer_id == Game.local_peer_id or peer_id in Net.session_peers:
+			continue
+		var avatar: CharacterBody2D = players[peer_id]
+		if is_instance_valid(avatar):
+			avatar.queue_free()
+		players.erase(peer_id)
+
+
+func _on_session_closed(_reason: String) -> void:
+	Router.to_menu()
 
 
 func _on_player_died() -> void:
@@ -348,10 +465,14 @@ func _on_player_damaged(new_health: int) -> void:
 
 
 func restart() -> void:
+	if Net.active:
+		return # the session has one shared run; leave via ESC instead
 	Router.restart_run()
 
 
 func go_to_menu() -> void:
+	if Net.active:
+		Net.leave()
 	Router.to_menu()
 
 
@@ -391,8 +512,10 @@ func _spawn_enemy() -> void:
 	var enemy: Node2D = chosen.scene.instantiate()
 	if chosen.group != &"":
 		enemy.add_to_group(chosen.group)
-	enemies_node.add_child(enemy)
-	enemy.global_position = _spawn_position(chosen)
+	# Position before add_child so the spawn packet carries it, and readable
+	# names (add_child(_, true)) so the MultiplayerSpawner can mirror it.
+	enemy.position = _spawn_position(chosen)
+	enemies_node.add_child(enemy, true)
 	enemy.set_player_ref(player)
 
 

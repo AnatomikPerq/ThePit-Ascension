@@ -70,10 +70,14 @@ func _process(delta: float) -> void:
 				score_changed.emit(run.peer_id, run.score, 0)
 
 
-## Called by enemies when a player kills/converts them. `killer_peer` 0 means
-## "the local player" — the solo default. Chained kills within COMBO_WINDOW
-## multiply the reward for that player only.
+## Called by enemies when a player kills/converts them — only where the sim
+## authority lives (solo, or the host). `killer_peer` 0 means "the local
+## player". Chained kills within COMBO_WINDOW multiply the reward for that
+## player only. In a session the resulting numbers are broadcast as an EVENT;
+## every machine fires its own cosmetics from it.
 func enemy_killed(pos: Vector2, base_points: int, color: Color, killer_peer: int = 0) -> void:
+	if Net.active and not multiplayer.is_server():
+		return # kills are the host's call
 	var run := run_of(killer_peer if killer_peer != 0 else local_peer_id)
 	if run == null:
 		return
@@ -84,25 +88,72 @@ func enemy_killed(pos: Vector2, base_points: int, color: Color, killer_peer: int
 	var gained := base_points * run.combo
 	run.score += gained
 	score_changed.emit(run.peer_id, run.score, run.combo)
+	_kill_feedback(pos, gained, run.combo, color)
+	if Net.is_host():
+		_remote_kill.rpc(run.peer_id, pos, gained, color,
+			run.score, run.kills, run.combo, run.max_combo)
 
-	# Cosmetics are local: in a networked session these fire from a replicated
-	# kill EVENT on each machine, never from replicated state.
+
+## Clients mirror the host's authoritative numbers and fire local cosmetics.
+@rpc("authority", "call_remote", "reliable")
+func _remote_kill(peer_id: int, pos: Vector2, gained: int, color: Color,
+		score: int, kills: int, combo: int, max_combo: int) -> void:
+	var run := run_of(peer_id)
+	if run == null:
+		return
+	run.score = score
+	run.kills = kills
+	run.combo = combo
+	run.max_combo = max_combo
+	run.combo_time = COMBO_WINDOW
+	score_changed.emit(peer_id, run.score, run.combo)
+	_kill_feedback(pos, gained, combo, color)
+
+
+func _kill_feedback(pos: Vector2, gained: int, combo: int, color: Color) -> void:
 	var text := "+%d" % gained
-	if run.combo > 1:
-		text += "  x%d" % run.combo
+	if combo > 1:
+		text += "  x%d" % combo
 	Fx.popup(pos + Vector2(0, -50), text, color)
-	Fx.burst(pos, _kill_burst, color, 14 + mini(run.combo * 2, 16))
-	Audio.play(&"kill", clampf(0.9 + run.combo * 0.07, 0.9, 1.7))
+	Fx.burst(pos, _kill_burst, color, 14 + mini(combo * 2, 16))
+	Audio.play(&"kill", clampf(0.9 + combo * 0.07, 0.9, 1.7))
 
 
 ## Flat score without combo (projectiles, milestones). `peer_id` 0 = local.
+## Clients route through the host so the host's numbers stay authoritative.
 func add_score(points: int, pos: Vector2 = Vector2.INF, color: Color = Color.WHITE,
 		peer_id: int = 0) -> void:
-	var run := run_of(peer_id if peer_id != 0 else local_peer_id)
+	var target := peer_id if peer_id != 0 else local_peer_id
+	if Net.active and not multiplayer.is_server():
+		_request_score.rpc_id(1, points, pos, color, target)
+		return
+	var run := run_of(target)
 	if run == null:
 		return
 	run.score += points
 	score_changed.emit(run.peer_id, run.score, run.combo)
+	if pos != Vector2.INF:
+		Fx.popup(pos + Vector2(0, -40), "+%d" % points, color, 24)
+	if Net.is_host():
+		_remote_score.rpc(run.peer_id, run.score, run.combo, points, pos, color)
+
+
+## A client may only ask for score on its own behalf.
+@rpc("any_peer", "call_remote", "reliable")
+func _request_score(points: int, pos: Vector2, color: Color, peer_id: int) -> void:
+	if multiplayer.get_remote_sender_id() != peer_id:
+		return
+	add_score(points, pos, color, peer_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _remote_score(peer_id: int, score: int, combo: int, points: int,
+		pos: Vector2, color: Color) -> void:
+	var run := run_of(peer_id)
+	if run == null:
+		return
+	run.score = score
+	score_changed.emit(peer_id, score, combo)
 	if pos != Vector2.INF:
 		Fx.popup(pos + Vector2(0, -40), "+%d" % points, color, 24)
 

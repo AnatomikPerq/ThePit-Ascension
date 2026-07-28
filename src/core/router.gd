@@ -12,10 +12,15 @@ extends Node
 
 const MENU_SCENE := "res://scenes/MainMenu.tscn"
 const WORLD_SCENE := "res://scenes/World.tscn"
+const LOBBY_SCENE := "res://scenes/Lobby.tscn"
 
 
 func to_menu() -> void:
 	_swap((load(MENU_SCENE) as PackedScene).instantiate())
+
+
+func to_lobby() -> void:
+	_swap((load(LOBBY_SCENE) as PackedScene).instantiate())
 
 
 ## 0 = roll a fresh seed. The multiplayer host passes the shared one.

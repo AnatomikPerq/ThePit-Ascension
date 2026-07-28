@@ -35,6 +35,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not Net.is_sim_authority():
+		return # movement and the telegraph are mirrored from the host
 	if combat.is_dead or not is_instance_valid(combat.player):
 		return
 
@@ -62,4 +64,5 @@ func fire() -> void:
 	var proj: Area2D = PROJECTILE_SCENE.instantiate()
 	var muzzle: Vector2 = global_position + Vector2(28.0 if _facing_right else -28.0, -10.0)
 	proj.setup(muzzle, combat.player.global_position, combat.player)
-	get_parent().add_child(proj)
+	# add_child(_, true): readable names let the MultiplayerSpawner mirror it.
+	get_parent().add_child(proj, true)

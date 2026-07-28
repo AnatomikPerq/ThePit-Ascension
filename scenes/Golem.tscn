@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cgolem01"]
+[gd_scene load_steps=9 format=3 uid="uid://cgolem01"]
 
 [ext_resource type="Script" uid="uid://3fiq5vux6ie4" path="res://scripts/golem.gd" id="1_script"]
 [ext_resource type="SpriteFrames" path="res://data/animations/golem_frames.tres" id="2_frames"]
@@ -13,6 +13,11 @@ size = Vector2(58, 44)
 
 [sub_resource type="RectangleShape2D" id="Shape_Crush"]
 size = Vector2(54, 38)
+
+[sub_resource type="SceneReplicationConfig" id="SRC_enemy"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
 
 [node name="Golem" type="Node2D" unique_id=2072041543 groups=["enemy"]]
 script = ExtResource("1_script")
@@ -51,3 +56,6 @@ shape = SubResource("Shape_Stomp")
 [node name="Combat" type="Node" parent="."]
 script = ExtResource("3_combat")
 stats = ExtResource("4_stats")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_enemy")

@@ -25,6 +25,14 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# Snap to the owner's side every frame. This lives here rather than in
+	# player.gd so it also works for remote avatars, whose player scripts run
+	# only the puppet branch.
+	if is_instance_valid(_player):
+		var side_x: float = 52.0 if _player.facing_right else -52.0
+		global_position = _player.global_position + Vector2(side_x, 0)
+		sprite.flip_h = not _player.facing_right
+
 	_life_timer -= delta
 	if _life_timer <= 0.0:
 		if is_instance_valid(_player) and _player.current_strike == self:

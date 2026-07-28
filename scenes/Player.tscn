@@ -1,10 +1,33 @@
-[gd_scene load_steps=6 format=3 uid="uid://cplayer01"]
+[gd_scene load_steps=7 format=3 uid="uid://cplayer01"]
 
 [ext_resource type="Script" uid="uid://d3h71svu74mjr" path="res://scripts/player.gd" id="1_script"]
 [ext_resource type="SpriteFrames" path="res://data/animations/player_frames.tres" id="2_frames"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(48, 64)
+
+[sub_resource type="SceneReplicationConfig" id="SRC_player"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:velocity")
+properties/1/spawn = false
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:facing_right")
+properties/2/spawn = true
+properties/2/replication_mode = 2
+properties/3/path = NodePath(".:dashing_down")
+properties/3/spawn = false
+properties/3/replication_mode = 2
+properties/4/path = NodePath(".:flying")
+properties/4/spawn = false
+properties/4/replication_mode = 2
+properties/5/path = NodePath(".:health")
+properties/5/spawn = true
+properties/5/replication_mode = 2
+properties/6/path = NodePath("AnimatedSprite2D:animation")
+properties/6/spawn = false
+properties/6/replication_mode = 2
 
 [sub_resource type="Animation" id="Animation_blink"]
 resource_name = "blink"
@@ -64,3 +87,6 @@ one_shot = true
 [node name="CrushRecoveryTimer" type="Timer" parent="."]
 wait_time = 2.0
 one_shot = true
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_player")

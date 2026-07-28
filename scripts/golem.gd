@@ -24,6 +24,8 @@ func set_player_ref(player: CharacterBody2D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if not Net.is_sim_authority():
+		return # movement is mirrored from the host
 	if combat.is_dead:
 		return
 	position.y += FALL_SPEED * delta

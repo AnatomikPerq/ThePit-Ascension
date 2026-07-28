@@ -58,6 +58,7 @@ var can_input: bool = true
 
 var _trail_timer: float = 0.0
 var _squash_tween: Tween
+var _puppet_anim: StringName = &""
 
 # ── Node References ─────────────────────────────────────────────────────────
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -79,6 +80,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if Net.active and not is_multiplayer_authority():
+		_puppet_process(delta)
+		return
+
 	if not can_input:
 		velocity.x = 0.0
 	else:
@@ -134,8 +139,20 @@ func _physics_process(delta: float) -> void:
 
 	_update_animation()
 
-	if current_strike:
-		_snap_strike()
+
+## Remote avatar: position, velocity and state flags arrive from the owning
+## peer's machine through the MultiplayerSynchronizer. Only presentation runs
+## here — no input, no gravity, no collision response.
+func _puppet_process(delta: float) -> void:
+	sprite.flip_h = not facing_right
+	if sprite.animation != _puppet_anim:
+		_puppet_anim = sprite.animation
+		sprite.play(_puppet_anim)
+	if dashing_down:
+		_trail_timer += delta
+		if _trail_timer >= 0.03:
+			_trail_timer = 0.0
+			Fx.ghost(sprite, Color(0.6, 0.85, 1.0, 0.45))
 
 
 # ── Gravity ─────────────────────────────────────────────────────────────────
@@ -240,10 +257,20 @@ func _try_jump() -> void:
 
 
 # ── Strike ──────────────────────────────────────────────────────────────────
+## Attacks spawn on EVERY machine: the host needs the hitbox to resolve
+## kills, the others need the visual. The cooldown gates only the owner.
 func _try_strike() -> void:
 	if not strike_cd_timer.is_stopped():
 		return
 	strike_cd_timer.start()
+	if Net.active:
+		_spawn_strike.rpc()
+	else:
+		_spawn_strike()
+
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_strike() -> void:
 	Audio.play(&"strike")
 	var s := STRIKE_SCENE.instantiate()
 	s.setup(self, facing_right)
@@ -251,21 +278,19 @@ func _try_strike() -> void:
 	current_strike = s
 
 
-func _snap_strike() -> void:
-	if not is_instance_valid(current_strike):
-		current_strike = null
-		return
-	if facing_right:
-		current_strike.global_position = global_position + Vector2(52, 0)
-	else:
-		current_strike.global_position = global_position + Vector2(-52, 0)
-
-
 # ── Shockwave ────────────────────────────────────────────────────────────────
 func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
 		return
 	shockwave_cd_timer.start()
+	if Net.active:
+		_spawn_shockwave.rpc()
+	else:
+		_spawn_shockwave()
+
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_shockwave() -> void:
 	Audio.play(&"shockwave")
 	Fx.shake(0.45)
 	var wave := SHOCKWAVE_SCENE.instantiate()
@@ -276,6 +301,9 @@ func _try_shockwave() -> void:
 
 # ── Damage & Crush ──────────────────────────────────────────────────────────
 func take_damage() -> bool:
+	# Health belongs to the owning machine; puppets never take damage locally.
+	if Net.active and not is_multiplayer_authority():
+		return false
 	if invincible or flying or not can_input:
 		return false
 	health -= 1
@@ -324,6 +352,17 @@ func _end_crush() -> void:
 
 
 func _die() -> void:
+	if Net.active:
+		_die_everywhere.rpc()
+	else:
+		_die_everywhere()
+
+
+## Runs on every machine so the death is seen everywhere; only the owning
+## machine emits player_died (its world shows the end screen) and the shake
+## is scaled down for spectators.
+@rpc("authority", "call_local", "reliable")
+func _die_everywhere() -> void:
 	can_input = false
 	velocity.x = 0.0
 	velocity.y = -600.0
@@ -333,16 +372,34 @@ func _die() -> void:
 	set_collision_mask_value(2, false)
 	set_collision_mask_value(3, false)
 	set_collision_mask_value(4, false)
+	var mine := not Net.active or is_multiplayer_authority()
 	Audio.play(&"die")
-	Fx.shake(0.7)
+	Fx.shake(0.7 if mine else 0.25)
 	Fx.burst(global_position, DEATH_BURST)
 
 	var tween := create_tween()
 	tween.tween_property(sprite, "modulate:a", 0.0, 1.0)
 	tween.tween_callback(func() -> void:
-		player_died.emit()
+		if mine:
+			player_died.emit()
 		queue_free()
 	)
+
+
+## Host-resolved harm to an avatar the host does not own (a mistimed stomp).
+## Only the avatar's own machine applies it.
+@rpc("any_peer", "call_remote", "reliable")
+func remote_hurt() -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
+		take_damage()
+
+
+## Host-resolved stomp rebound for an avatar the host does not own.
+@rpc("any_peer", "call_remote", "reliable")
+func remote_stomp(rebound: float) -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
+		velocity.y = rebound
+		dashing_down = false
 
 
 func _on_invincibility_timeout() -> void:

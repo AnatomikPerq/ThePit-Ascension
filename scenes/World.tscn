@@ -31,6 +31,14 @@ drag_bottom_margin = 0.25
 
 [node name="Trampolines" type="Node2D" parent="." unique_id=1972712193 groups=["trampoline_container"]]
 
+[node name="EnemySpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://scenes/Golem.tscn", "res://scenes/Slime.tscn", "res://scenes/Pursuer.tscn", "res://scenes/Bat.tscn", "res://scenes/Spitter.tscn", "res://scenes/Projectile.tscn")
+spawn_path = NodePath("../Enemies")
+
+[node name="TrampolineSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://scenes/Trampoline.tscn")
+spawn_path = NodePath("../Trampolines")
+
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=127504935]
 process_mode = 3
 

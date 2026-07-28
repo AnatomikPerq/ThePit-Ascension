@@ -13,6 +13,7 @@ func _ready() -> void:
 		best_label.text = "BEST SCORE  %d" % Game.best_score
 		best_label.visible = true
 	$UI/StartBtn.pressed.connect(_start_game)
+	$UI/MultiplayerBtn.pressed.connect(Router.to_lobby)
 	$UI/QuitBtn.pressed.connect(func() -> void: get_tree().quit())
 	_pulse_title()
 

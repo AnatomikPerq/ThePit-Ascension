@@ -32,6 +32,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	sprite.rotation += delta * 12.0 # cosmetic spin, every machine
+	if not Net.is_sim_authority():
+		return # motion is mirrored from the host
+
 	_life -= delta
 	if _life <= 0.0:
 		queue_free()
@@ -40,24 +44,33 @@ func _physics_process(delta: float) -> void:
 	# Gravity for the lob arc.
 	_velocity.y += 900.0 * delta
 	position += _velocity * delta
-	sprite.rotation += delta * 12.0
 
 	# Despawn far away from the player.
 	if is_instance_valid(_player):
 		if global_position.y > _player.global_position.y + 1400.0 or global_position.distance_to(_player.global_position) > 2200.0:
 			queue_free()
+
+
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
-		body.take_damage()
-		Fx.burst(global_position, HIT_BURST)
-		queue_free()
+		# Each machine hurts only its own avatar; the host owns the free, so a
+		# blob the host saw miss cannot hurt anyone.
+		if body.get("peer_id") == Game.local_peer_id:
+			body.take_damage()
+			Fx.burst(global_position, HIT_BURST)
+		if Net.is_sim_authority():
+			queue_free()
 
 
 func _on_area_entered(area: Area2D) -> void:
-	# Destroyed by the player's Strike or Shockwave.
+	# Destroyed by the player's Strike or Shockwave. Scoring is the sim
+	# authority's call; the strike hitboxes exist there too.
+	if not Net.is_sim_authority():
+		return
 	if area.is_in_group("strike"):
 		Fx.burst(global_position, FIZZLE_BURST)
-		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3))
+		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3),
+			area.get_meta(&"owner_peer", 0))
 		queue_free()
 
 

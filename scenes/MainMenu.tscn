@@ -81,6 +81,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "START  (SPACE)"
 
+[node name="MultiplayerBtn" type="Button" parent="UI"]
+custom_minimum_size = Vector2(360, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "MULTIPLAYER"
+
 [node name="QuitBtn" type="Button" parent="UI"]
 custom_minimum_size = Vector2(360, 64)
 layout_mode = 2

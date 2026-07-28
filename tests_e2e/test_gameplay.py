@@ -50,13 +50,14 @@ async def test_autoloads_are_present(game):
 async def test_menu_starts_a_run(game):
     await _start_run(game)
     assert await game.node_exists(WORLD)
-    assert await game.node_exists(WORLD + "/Player")
+    # Avatars are named by peer id; solo play is peer 1.
+    assert await game.node_exists(WORLD + "/Avatar1")
 
 
 @pytest.mark.asyncio
 async def test_player_spawns_deep_in_the_pit(game):
     await _start_run(game)
-    pos = await game.get_property(WORLD + "/Player", "global_position")
+    pos = await game.get_property(WORLD + "/Avatar1", "global_position")
     max_depth = await game.get_property(WORLD, "max_depth")
     # Spawn is max_depth - 300; 0 is the surface, so a large y means deep.
     assert pos["y"] > max_depth - 600
@@ -98,7 +99,7 @@ async def test_restart_works_while_paused(game):
     await game.wait_for_node(WORLD, timeout=30.0)
     await asyncio.sleep(0.5)
     assert not await game.is_paused(), "restart left the tree paused"
-    assert await game.node_exists(WORLD + "/Player")
+    assert await game.node_exists(WORLD + "/Avatar1")
 
 
 @pytest.mark.asyncio
