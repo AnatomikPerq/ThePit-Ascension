@@ -20,6 +20,10 @@ const HURT_BURST: BurstPreset = preload("res://data/fx/player_hurt.tres")
 const DEATH_BURST: BurstPreset = preload("res://data/fx/player_death.tres")
 
 # ── State ───────────────────────────────────────────────────────────────────
+## Which peer this avatar belongs to. 1 in solo; World assigns it on spawn.
+## Kills, score and milestones are credited through it.
+var peer_id: int = 1
+
 var health: int = 5
 var max_health: int = 5
 

@@ -102,8 +102,8 @@ func _run_contact(key: String, dashing: bool, use_strike: bool) -> Outcome:
 	out.player_health = player.health
 	out.player_velocity_y = player.velocity.y
 	out.player_dashing = player.dashing_down
-	out.score = Game.score
-	out.kills = Game.kills
+	out.score = Game.local_run().score
+	out.kills = Game.local_run().kills
 	for child in root.get_children():
 		if child != enemy and child != player and child != strike:
 			out.spawned.append(child.scene_file_path.get_file())

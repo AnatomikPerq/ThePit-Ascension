@@ -19,6 +19,9 @@ func _ready() -> void:
 	# The "punch" clip does not loop, so it holds on the last frame by itself —
 	# which is what the old hand-written frame counter emulated by clamping.
 	sprite.flip_h = not _facing_right
+	# Enemies find this hitbox through the "strike" group and credit the kill
+	# to whoever owns it.
+	set_meta(&"owner_peer", _player.get("peer_id") if is_instance_valid(_player) else 0)
 
 
 func _physics_process(delta: float) -> void:

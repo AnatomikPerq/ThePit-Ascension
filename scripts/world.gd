@@ -21,11 +21,18 @@ var max_depth: float = 8000.0
 enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY, PAUSED}
 var state: int = GameState.PLAYING
 
+## peer_id -> avatar. The "player" group is how enemies discover targets;
+## this dictionary is the authority for identity. Solo play is one entry.
+var players: Dictionary[int, CharacterBody2D] = {}
+## The avatar this machine steers: camera, HUD, input, end screens.
 var player: CharacterBody2D
+
 var spawn_timer: float = 0.0
 var current_spawn_interval: float = 2.0
-var upgrade_milestones: Array[float] = []
-var zone_milestones: Array[float] = []
+## Remaining milestone depths, per peer — each avatar earns its own upgrades
+## and its own zone crossings.
+var _upgrade_milestones: Dictionary[int, Array] = {}
+var _zone_milestones: Dictionary[int, Array] = {}
 
 var show_debug: bool = false
 var debug_free_zones: Array[Rect2] = []
@@ -47,11 +54,6 @@ var bg_time: float = 0.0
 func _ready() -> void:
 	max_depth = profile.max_depth()
 	current_spawn_interval = profile.spawn_interval_start
-	# Milestones trigger the upgrade menu once each as the player ascends past.
-	upgrade_milestones.clear()
-	for fraction in profile.upgrade_fractions:
-		upgrade_milestones.append(max_depth * fraction)
-	zone_milestones = profile.divider_ys()
 
 	Game.new_run()
 	Game.score_changed.connect(hud.on_score_changed)
@@ -174,25 +176,39 @@ func show_notification(text: String) -> void:
 
 
 func _check_milestones() -> void:
-	for i in range(upgrade_milestones.size() - 1, -1, -1):
-		if player.global_position.y < upgrade_milestones[i]:
-			upgrade_milestones.remove_at(i)
-			Game.add_score(500, player.global_position, Color(0.98, 0.8, 0.3))
-			_show_upgrade_menu()
-			break
+	for peer_id in players:
+		var avatar := players[peer_id]
+		if not is_instance_valid(avatar):
+			continue
+		var milestones: Array = _upgrade_milestones[peer_id]
+		for i in range(milestones.size() - 1, -1, -1):
+			if avatar.global_position.y < milestones[i]:
+				milestones.remove_at(i)
+				Game.add_score(500, avatar.global_position, Color(0.98, 0.8, 0.3), peer_id)
+				# The choice is each player's own input; only the local
+				# player's milestone opens this machine's menu.
+				if peer_id == Game.local_peer_id:
+					_show_upgrade_menu()
+				break
 
 
 func _check_zones() -> void:
-	for i in range(zone_milestones.size() - 1, -1, -1):
-		if player.global_position.y < zone_milestones[i]:
-			zone_milestones.remove_at(i)
-			var level := clampi(
-				int((max_depth - player.global_position.y) / profile.level_height) + 1,
-				1, profile.level_count)
-			show_notification("LEVEL %d / %d" % [level, profile.level_count])
-			Game.add_score(250)
-			Audio.play(&"zone")
-			break
+	for peer_id in players:
+		var avatar := players[peer_id]
+		if not is_instance_valid(avatar):
+			continue
+		var milestones: Array = _zone_milestones[peer_id]
+		for i in range(milestones.size() - 1, -1, -1):
+			if avatar.global_position.y < milestones[i]:
+				milestones.remove_at(i)
+				Game.add_score(250, Vector2.INF, Color.WHITE, peer_id)
+				if peer_id == Game.local_peer_id:
+					var level := clampi(
+						int((max_depth - avatar.global_position.y) / profile.level_height) + 1,
+						1, profile.level_count)
+					show_notification("LEVEL %d / %d" % [level, profile.level_count])
+					Audio.play(&"zone")
+				break
 
 
 func _check_victory() -> void:
@@ -272,8 +288,9 @@ func _stats_text(new_record: bool) -> String:
 	var depth_now := 0
 	if is_instance_valid(player):
 		depth_now = int(player.global_position.y)
+	var run := Game.local_run()
 	var text := "SCORE %d\nKILLS %d      MAX COMBO x%d\nDEPTH %d      TIME %s\n" % [
-		Game.score, Game.kills, Game.max_combo, depth_now, Game.run_time_text(),
+		run.score, run.kills, run.max_combo, depth_now, Game.run_time_text(),
 	]
 	if new_record:
 		text += "NEW RECORD!\n"
@@ -298,12 +315,27 @@ func _show_victory() -> void:
 
 # ── Player ──────────────────────────────────────────────────────────────────
 func _spawn_player() -> void:
-	player = PLAYER_SCENE.instantiate()
-	player.global_position = Vector2(
-		profile.world_width / 2.0, max_depth - profile.player_spawn_height)
-	add_child(player)
+	player = _spawn_avatar(Game.local_peer_id)
 	player.player_died.connect(_on_player_died)
 	player.player_damaged.connect(_on_player_damaged)
+
+
+## One avatar, its identity and its personal milestone ladders. Multiplayer
+## calls this once per peer; solo calls it once.
+func _spawn_avatar(peer_id: int) -> CharacterBody2D:
+	var avatar: CharacterBody2D = PLAYER_SCENE.instantiate()
+	avatar.peer_id = peer_id
+	avatar.global_position = Vector2(
+		profile.world_width / 2.0, max_depth - profile.player_spawn_height)
+	add_child(avatar)
+	players[peer_id] = avatar
+
+	var upgrades: Array[float] = []
+	for fraction in profile.upgrade_fractions:
+		upgrades.append(max_depth * fraction)
+	_upgrade_milestones[peer_id] = upgrades
+	_zone_milestones[peer_id] = profile.divider_ys()
+	return avatar
 
 
 func _on_player_died() -> void:

@@ -79,7 +79,11 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 	fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
 
 
-func on_score_changed(score: int, combo: int) -> void:
+## Connected to Game.score_changed, which reports every peer; the HUD only
+## ever shows the local player's run.
+func on_score_changed(peer_id: int, score: int, combo: int) -> void:
+	if peer_id != Game.local_peer_id:
+		return
 	score_label.text = "SCORE %06d" % score
 	if combo >= 2:
 		combo_label.visible = true

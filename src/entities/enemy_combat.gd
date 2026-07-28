@@ -74,13 +74,14 @@ func _resolve_contacts() -> void:
 		return
 
 	# 1. Strike or shockwave. Both add their hitbox to the "strike" group, so
-	#    neither this component nor any enemy knows those scenes exist.
+	#    neither this component nor any enemy knows those scenes exist. The
+	#    hitbox carries its owner's peer id as metadata for kill credit.
 	var areas: Array[Area2D] = stomp_area.get_overlapping_areas()
 	if damage_area:
 		areas.append_array(damage_area.get_overlapping_areas())
 	for area in areas:
 		if area.is_in_group(&"strike"):
-			_kill(true)
+			_kill(true, area.get_meta(&"owner_peer", 0))
 			return
 
 	# 2. Stomp from above.
@@ -95,7 +96,7 @@ func _resolve_contacts() -> void:
 		body.dashing_down = false
 		if stats.stomp_sound != &"":
 			Audio.play(stats.stomp_sound)
-		_kill(false)
+		_kill(false, body.get("peer_id"))
 		return
 
 	# 3. Contact damage.
@@ -117,7 +118,8 @@ func _resolve_contacts() -> void:
 		return
 
 
-func _kill(by_strike: bool) -> void:
+func _kill(by_strike: bool, killer_peer: Variant = 0) -> void:
 	is_dead = true
-	Game.enemy_killed(_owner_2d.global_position, stats.score, stats.score_color)
+	Game.enemy_killed(_owner_2d.global_position, stats.score, stats.score_color,
+		killer_peer if killer_peer is int else 0)
 	killed.emit(by_strike)

@@ -27,6 +27,9 @@ func setup(player: Node2D) -> void:
 func _ready() -> void:
 	# Important: enemies detect strikes via `area.is_in_group("strike")`.
 	_hit_area.add_to_group("strike")
+	# …and credit the kill to whoever owns the hitbox.
+	_hit_area.set_meta(&"owner_peer",
+		_player.get("peer_id") if is_instance_valid(_player) else 0)
 	# Start with a zero-radius hit shape so the wave grows from the player.
 	var circ := _hit_shape.shape as CircleShape2D
 	if circ:
