@@ -1,0 +1,197 @@
+[gd_scene load_steps=5 format=3 uid="uid://cuihud01"]
+
+[ext_resource type="Script" path="res://src/ui/hud.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+
+[sub_resource type="Gradient" id="Gradient_vignette"]
+offsets = PackedFloat32Array(0, 0.6, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.45)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_vignette"]
+gradient = SubResource("Gradient_vignette")
+width = 512
+height = 512
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
+
+[node name="HUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="Vignette" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("GradientTexture2D_vignette")
+
+[node name="HPBar" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 220.0
+offset_bottom = 44.0
+theme_override_constants/separation = 8
+
+[node name="ScoreLabel" type="Label" parent="."]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 64.0
+offset_right = 260.0
+offset_bottom = 96.0
+theme_override_font_sizes/font_size = 26
+text = "SCORE 000000"
+
+[node name="ComboLabel" type="Label" parent="."]
+visible = false
+layout_mode = 0
+offset_left = 20.0
+offset_top = 96.0
+offset_right = 220.0
+offset_bottom = 130.0
+pivot_offset = Vector2(0, 17)
+theme_override_font_sizes/font_size = 28
+
+[node name="DepthLabel" type="Label" parent="."]
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -250.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 50.0
+theme_override_font_sizes/font_size = 26
+text = "DEPTH: 0"
+horizontal_alignment = 2
+
+[node name="FPSLabel" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -250.0
+offset_top = 52.0
+offset_right = -20.0
+offset_bottom = 78.0
+theme_override_font_sizes/font_size = 18
+horizontal_alignment = 2
+
+[node name="SkillsLabel" type="Label" parent="."]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 136.0
+offset_right = 400.0
+offset_bottom = 166.0
+theme_override_font_sizes/font_size = 20
+text = "Skills: "
+
+[node name="FlightLabel" type="Label" parent="."]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 80.0
+offset_right = 120.0
+offset_bottom = 110.0
+theme_override_colors/font_color = Color(0.5, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+
+[node name="NotificationLabel" type="Label" parent="."]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 120.0
+offset_right = 200.0
+offset_bottom = 150.0
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 34
+horizontal_alignment = 1
+
+[node name="AscentBar" type="ProgressBar" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -44.0
+offset_top = -300.0
+offset_right = -26.0
+offset_bottom = 300.0
+fill_mode = 3
+show_percentage = false
+
+[node name="SurfaceLabel" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -110.0
+offset_top = -336.0
+offset_right = -10.0
+offset_bottom = -308.0
+theme_override_colors/font_color = Color(0.95, 0.72, 0.35, 1)
+theme_override_font_sizes/font_size = 18
+text = "SURFACE"
+horizontal_alignment = 2
+
+[node name="AbilityIcons" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -92.0
+offset_right = 320.0
+offset_bottom = -20.0
+theme_override_constants/separation = 12
+
+[node name="StrikeIcon" type="Panel" parent="AbilityIcons"]
+visible = false
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+theme_type_variation = &"AbilityIcon"
+
+[node name="KeyLabel" type="Label" parent="AbilityIcons/StrikeIcon"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 34
+text = "Z"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShockwaveIcon" type="Panel" parent="AbilityIcons"]
+visible = false
+custom_minimum_size = Vector2(72, 72)
+layout_mode = 2
+theme_type_variation = &"AbilityIcon"
+
+[node name="KeyLabel" type="Label" parent="AbilityIcons/ShockwaveIcon"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 34
+text = "C"
+horizontal_alignment = 1
+vertical_alignment = 1

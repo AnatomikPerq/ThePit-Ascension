@@ -1,6 +1,12 @@
-[gd_scene format=3 uid="uid://cmainmenu01"]
+[gd_scene load_steps=4 format=3 uid="uid://cmainmenu01"]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="3_embers"]
+
+[sub_resource type="Gradient" id="Gradient_menu_embers"]
+offsets = PackedFloat32Array(0, 0.15, 0.75, 1)
+colors = PackedColorArray(1, 0.6, 0.25, 0, 1, 0.6, 0.25, 0.5, 0.9, 0.3, 0.15, 0.3, 0.9, 0.3, 0.15, 0)
 
 [node name="MainMenu" type="Control"]
 layout_mode = 3
@@ -9,4 +15,93 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("2_theme")
 script = ExtResource("1_script")
+
+[node name="Embers" parent="." instance=ExtResource("3_embers")]
+position = Vector2(960, 1120)
+amount = 90
+lifetime = 10.0
+preprocess = 10.0
+local_coords = true
+emission_rect_extents = Vector2(1000, 40)
+spread = 15.0
+gravity = Vector2(0, -30)
+initial_velocity_min = 50.0
+initial_velocity_max = 140.0
+scale_amount_min = 2.0
+scale_amount_max = 5.0
+color_ramp = SubResource("Gradient_menu_embers")
+
+[node name="UI" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -320.0
+offset_top = -330.0
+offset_right = 320.0
+offset_bottom = 330.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.35, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0.25, 0.05, 0.02, 1)
+theme_override_constants/outline_size = 16
+theme_override_font_sizes/font_size = 130
+text = "THE PIT"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 40
+text = "A S C E N S I O N"
+horizontal_alignment = 1
+
+[node name="BestScore" type="Label" parent="UI"]
+visible = false
+modulate = Color(1, 1, 1, 0.8)
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="UI"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+
+[node name="StartBtn" type="Button" parent="UI"]
+custom_minimum_size = Vector2(360, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "START  (SPACE)"
+
+[node name="QuitBtn" type="Button" parent="UI"]
+custom_minimum_size = Vector2(360, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "QUIT  (ESC)"
+
+[node name="Spacer2" type="Control" parent="UI"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+
+[node name="Help" type="Label" parent="UI"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "A/D — move      SPACE — jump      S — dash down
+Z — strike      C — shockwave      M — music"
+horizontal_alignment = 1
+
+[node name="Flavor" type="Label" parent="UI"]
+modulate = Color(1, 1, 1, 0.35)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "You start at depth 8000. The surface does not expect you."
+horizontal_alignment = 1
