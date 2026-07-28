@@ -59,7 +59,7 @@ func _die_and_transform() -> void:
 	_is_dead = true
 	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	Fx.dust(global_position, 14)
-	Sfx.play("thud", -8.0, randf_range(0.9, 1.1))
+	Audio.play(&"thud")
 	call_deferred("_deferred_transform")
 
 

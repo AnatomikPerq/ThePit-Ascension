@@ -145,9 +145,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_ESCAPE:
 				get_tree().quit()
 			KEY_M:
-				Sfx.toggle_music()
+				Audio.toggle_music()
 
 
 func _start_game() -> void:
-	Sfx.play("click", -6.0)
+	Audio.play(&"ui_confirm")
 	get_tree().change_scene_to_file("res://scenes/World.tscn")

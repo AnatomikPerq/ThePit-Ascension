@@ -69,7 +69,7 @@ func enemy_killed(pos: Vector2, base_points: int, color: Color) -> void:
 	Fx.popup(pos + Vector2(0, -50), text, color)
 	Fx.burst(pos, color, 14 + mini(combo * 2, 16))
 	Fx.hitstop(0.045, 0.12)
-	Sfx.play("kill", -6.0, clampf(0.9 + combo * 0.07, 0.9, 1.7))
+	Audio.play(&"kill", clampf(0.9 + combo * 0.07, 0.9, 1.7))
 
 
 ## Flat score without combo (projectiles, milestones).

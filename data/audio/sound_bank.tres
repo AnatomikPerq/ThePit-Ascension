@@ -1,0 +1,169 @@
+[gd_resource type="Resource" script_class="SoundBank" format=3]
+
+[ext_resource type="AudioStream" path="res://assets/audio/music/pit_ambience.ogg" id="1_7kifr"]
+[ext_resource type="Script" path="res://src/audio/sound_bank.gd" id="2_gg4jp"]
+[ext_resource type="Script" path="res://src/audio/sound_def.gd" id="3_ii3yv"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/jump.ogg" id="4_r7xlo"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/double_jump.ogg" id="5_lqsaf"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/land.ogg" id="6_uw11l"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/stomp.ogg" id="7_7ru6g"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/kill.ogg" id="8_rbjxk"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/hurt.ogg" id="9_2sadd"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/crush.ogg" id="10_gdxse"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/strike.ogg" id="11_j8m74"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/shockwave.ogg" id="12_mv3sf"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/bounce.ogg" id="13_n46y7"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/thud.ogg" id="14_sei3t"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/upgrade.ogg" id="15_da57c"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/heal.ogg" id="16_46htt"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/die.ogg" id="17_8pmpq"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/win.ogg" id="18_f5jwi"]
+[ext_resource type="AudioStream" path="res://assets/audio/sfx/click.ogg" id="19_vim1x"]
+
+[sub_resource type="Resource" id="Resource_4usny"]
+resource_name = "jump"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("4_r7xlo")
+volume_db = -12.0
+pitch_min = 0.95
+pitch_max = 1.05
+
+[sub_resource type="Resource" id="Resource_xfp70"]
+resource_name = "double_jump"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("5_lqsaf")
+volume_db = -12.0
+pitch_min = 0.95
+pitch_max = 1.05
+
+[sub_resource type="Resource" id="Resource_8c2j0"]
+resource_name = "land"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("6_uw11l")
+volume_db = -10.0
+pitch_min = 0.95
+pitch_max = 1.05
+
+[sub_resource type="Resource" id="Resource_7h2cj"]
+resource_name = "stomp"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("7_7ru6g")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_nkhbh"]
+resource_name = "kill"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("8_rbjxk")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_gul8s"]
+resource_name = "hurt"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("9_2sadd")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_fr0a0"]
+resource_name = "crush"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("10_gdxse")
+volume_db = -4.0
+
+[sub_resource type="Resource" id="Resource_tqfst"]
+resource_name = "strike"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("11_j8m74")
+volume_db = -10.0
+pitch_min = 0.9
+pitch_max = 1.1
+
+[sub_resource type="Resource" id="Resource_1s214"]
+resource_name = "shockwave"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("12_mv3sf")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_jk2hk"]
+resource_name = "bounce"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("13_n46y7")
+volume_db = -8.0
+pitch_min = 0.9
+pitch_max = 1.1
+
+[sub_resource type="Resource" id="Resource_hp3oj"]
+resource_name = "thud"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("14_sei3t")
+volume_db = -8.0
+pitch_min = 0.9
+pitch_max = 1.1
+
+[sub_resource type="Resource" id="Resource_vg1ug"]
+resource_name = "upgrade"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("15_da57c")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_bc1vq"]
+resource_name = "heal"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("16_46htt")
+volume_db = -6.0
+
+[sub_resource type="Resource" id="Resource_u7lm5"]
+resource_name = "die"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("17_8pmpq")
+volume_db = -4.0
+
+[sub_resource type="Resource" id="Resource_jja0c"]
+resource_name = "win"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("18_f5jwi")
+volume_db = -4.0
+
+[sub_resource type="Resource" id="Resource_0iqra"]
+resource_name = "ui_click"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("19_vim1x")
+volume_db = -8.0
+bus = &"UI"
+
+[sub_resource type="Resource" id="Resource_m2paq"]
+resource_name = "ui_confirm"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("19_vim1x")
+volume_db = -6.0
+bus = &"UI"
+
+[sub_resource type="Resource" id="Resource_f4igh"]
+resource_name = "zone"
+script = ExtResource("3_ii3yv")
+stream = ExtResource("19_vim1x")
+volume_db = -8.0
+pitch_min = 1.2
+pitch_max = 1.2
+
+[resource]
+script = ExtResource("2_gg4jp")
+sounds = Dictionary[StringName, ExtResource("3_ii3yv")]({
+&"bounce": SubResource("Resource_jk2hk"),
+&"crush": SubResource("Resource_fr0a0"),
+&"die": SubResource("Resource_u7lm5"),
+&"double_jump": SubResource("Resource_xfp70"),
+&"heal": SubResource("Resource_bc1vq"),
+&"hurt": SubResource("Resource_gul8s"),
+&"jump": SubResource("Resource_4usny"),
+&"kill": SubResource("Resource_nkhbh"),
+&"land": SubResource("Resource_8c2j0"),
+&"shockwave": SubResource("Resource_1s214"),
+&"stomp": SubResource("Resource_7h2cj"),
+&"strike": SubResource("Resource_tqfst"),
+&"thud": SubResource("Resource_hp3oj"),
+&"ui_click": SubResource("Resource_0iqra"),
+&"ui_confirm": SubResource("Resource_m2paq"),
+&"upgrade": SubResource("Resource_vg1ug"),
+&"win": SubResource("Resource_jja0c"),
+&"zone": SubResource("Resource_f4igh")
+})
+music = ExtResource("1_7kifr")

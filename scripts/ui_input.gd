@@ -14,7 +14,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed:
 		# Music toggle
 		if event.physical_keycode == KEY_M:
-			var enabled: bool = Sfx.toggle_music()
+			var enabled: bool = Audio.toggle_music()
 			if world.state == world.GameState.PLAYING:
 				world._show_notification("MUSIC ON" if enabled else "MUSIC OFF")
 			get_viewport().set_input_as_handled()

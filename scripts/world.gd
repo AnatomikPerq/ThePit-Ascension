@@ -511,7 +511,7 @@ func _check_zones() -> void:
 			var level := clampi(int((max_depth - player.global_position.y) / level_height) + 1, 1, level_count)
 			_show_notification("LEVEL %d / %d" % [level, level_count])
 			Game.add_score(250)
-			Sfx.play("click", -8.0, 1.2)
+			Audio.play(&"zone")
 			break
 
 
@@ -538,7 +538,7 @@ func _show_upgrade_menu() -> void:
 	state = GameState.UPGRADE_MENU
 	get_tree().paused = true
 	upgrade_menu.visible = true
-	Sfx.play("upgrade", -6.0)
+	Audio.play(&"upgrade")
 
 
 func _on_double_jump_chosen() -> void:
@@ -575,7 +575,7 @@ func _on_heal_chosen() -> void:
 	player.max_health += 1
 	player.health = player.max_health
 	_build_hp_bar()
-	Sfx.play("heal", -6.0)
+	Audio.play(&"heal")
 	_show_notification("MAX HP +1, FULLY HEALED")
 	_close_upgrade_menu()
 
@@ -584,7 +584,7 @@ func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
 	state = GameState.PLAYING
 	get_tree().paused = false
-	Sfx.play("click", -8.0)
+	Audio.play(&"ui_click")
 
 
 func _show_notification(text: String) -> void:
@@ -716,7 +716,7 @@ func _show_victory() -> void:
 	Game.add_score(2000)
 	victory_screen.visible = true
 	victory_screen.get_node("Stats").text = _stats_text(Game.finish_run())
-	Sfx.play("win", -4.0)
+	Audio.play(&"win")
 	# Confetti around the player.
 	for i in 10:
 		var t := get_tree().create_timer(0.15 * i)

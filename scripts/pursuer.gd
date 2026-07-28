@@ -148,7 +148,7 @@ func _check_collisions() -> void:
 			if body.dashing_down:
 				body.velocity.y = -900.0 # dash-kill rebound
 				body.dashing_down = false
-				Sfx.play("stomp", -6.0)
+				Audio.play(&"stomp")
 				_die()
 				return
 			else:

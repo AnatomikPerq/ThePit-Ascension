@@ -30,5 +30,5 @@ func _on_body_entered(body: Node2D) -> void:
 			body.velocity.y = -2760.0 # -23 * 60 * 2
 			body.jump_count = 0
 			body.dashing_down = false
-			Sfx.play("boing", -8.0, randf_range(0.9, 1.1))
+			Audio.play(&"bounce")
 			Fx.burst(global_position + Vector2(0, -10), Color(0.35, 0.9, 0.4, 0.9), 10, 240.0, 0.45, 400.0)

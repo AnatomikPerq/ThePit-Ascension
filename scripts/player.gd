@@ -114,7 +114,7 @@ func _physics_process(delta: float) -> void:
 	# Landing feedback: dust + thud + squash after a serious fall.
 	if not was_on_floor and now_on_floor and fall_speed > HARD_LANDING_SPEED:
 		Fx.dust(global_position + Vector2(0, 30), 12)
-		Sfx.play("land", -10.0, randf_range(0.95, 1.05))
+		Audio.play(&"land")
 		_squash(Vector2(2.5, 1.5))
 
 	# Cancel dash if moving upwards (e.g. trampolines, bounces)
@@ -242,14 +242,14 @@ func _try_jump() -> void:
 		coyote_timer.stop()
 		dashing_down = false
 		Fx.dust(global_position + Vector2(0, 30), 8)
-		Sfx.play("jump", -12.0, randf_range(0.95, 1.05))
+		Audio.play(&"jump")
 		_squash(Vector2(1.6, 2.4))
 	elif has_double_jump and jump_count < 2:
 		velocity.y = JUMP_FORCE * 0.9
 		jump_count = 2
 		dashing_down = false
 		Fx.burst(global_position + Vector2(0, 20), Color(0.6, 0.85, 1.0, 0.9), 12, 200.0, 0.4, 250.0)
-		Sfx.play("djump", -12.0, randf_range(0.95, 1.05))
+		Audio.play(&"double_jump")
 		_squash(Vector2(1.6, 2.4))
 
 
@@ -258,7 +258,7 @@ func _try_strike() -> void:
 	if not strike_cd_timer.is_stopped():
 		return
 	strike_cd_timer.start()
-	Sfx.play("strike", -10.0, randf_range(0.9, 1.1))
+	Audio.play(&"strike")
 	var s := STRIKE_SCENE.instantiate()
 	s.setup(self, facing_right)
 	get_parent().add_child(s)
@@ -280,7 +280,7 @@ func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
 		return
 	shockwave_cd_timer.start()
-	Sfx.play("shock", -6.0)
+	Audio.play(&"shockwave")
 	Fx.shake(0.45)
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.setup(self)
@@ -296,7 +296,7 @@ func take_damage() -> bool:
 	invincible = true
 	inv_timer.start()
 	velocity.y = KNOCKBACK_FORCE
-	Sfx.play("hurt", -6.0)
+	Audio.play(&"hurt")
 	Fx.shake(0.35)
 	Fx.flash(sprite)
 	Fx.burst(global_position, Color(0.9, 0.2, 0.2), 12, 260.0, 0.4)
@@ -316,7 +316,7 @@ func _handle_crush() -> void:
 	health -= 1
 	invincible = true
 	inv_timer.start()
-	Sfx.play("crush", -4.0)
+	Audio.play(&"crush")
 	Fx.shake(0.55)
 	Fx.flash(sprite)
 	player_damaged.emit(health)
@@ -346,7 +346,7 @@ func _die() -> void:
 	set_collision_mask_value(2, false)
 	set_collision_mask_value(3, false)
 	set_collision_mask_value(4, false)
-	Sfx.play("die", -4.0)
+	Audio.play(&"die")
 	Fx.shake(0.7)
 	Fx.burst(global_position, Color(0.9, 0.15, 0.15), 26, 420.0, 0.8)
 
