@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cpursuer01"]
 
 [ext_resource type="Script" uid="uid://j5v5rxnfclk7" path="res://scripts/pursuer.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://bbtu1vlwcv5l0" path="res://assets/sprites/pursuer_1.png" id="2_tex"]
+[ext_resource type="SpriteFrames" path="res://data/animations/pursuer_frames.tres" id="2_frames"]
 
 [sub_resource type="RectangleShape2D" id="Shape_Body"]
 size = Vector2(56, 77)
@@ -17,9 +17,11 @@ collision_layer = 16
 collision_mask = 17
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=245950240]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=245950240]
 scale = Vector2(2, 2)
-texture = ExtResource("2_tex")
+sprite_frames = ExtResource("2_frames")
+animation = &"walk"
+autoplay = "walk"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1497124397]
 position = Vector2(0, 1.5)

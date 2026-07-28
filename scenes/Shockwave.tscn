@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cshockwave01"]
 
 [ext_resource type="Script" path="res://scripts/shockwave.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/shockwave_ring.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="Shape_Hit"]
 radius = 0.0
@@ -9,7 +10,9 @@ radius = 0.0
 script = ExtResource("1_script")
 
 [node name="Visual" type="Sprite2D" parent="."]
+modulate = Color(0.45, 0.85, 1, 0.95)
 scale = Vector2(0.01, 0.01)
+texture = ExtResource("2_tex")
 
 [node name="HitArea" type="Area2D" parent="."]
 collision_layer = 8

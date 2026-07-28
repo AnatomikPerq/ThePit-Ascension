@@ -67,8 +67,8 @@ var combo_label: Label
 var progress_bar: ProgressBar
 var ability_icons: Dictionary = {} # name -> Panel
 var pause_overlay: ColorRect
-var heart_full_tex: ImageTexture
-var heart_empty_tex: ImageTexture
+const HEART_FULL_TEX: Texture2D = preload("res://assets/sprites/heart_full.png")
+const HEART_EMPTY_TEX: Texture2D = preload("res://assets/sprites/heart_empty.png")
 var _combo_tween: Tween
 
 
@@ -85,7 +85,6 @@ func _ready() -> void:
 
 	_generate_map()
 	_spawn_player()
-	_build_heart_textures()
 	_build_hp_bar()
 	_build_hud_extras()
 	_style_screens()
@@ -207,31 +206,6 @@ func _build_embers() -> void:
 
 
 # ── HUD ─────────────────────────────────────────────────────────────────────
-func _build_heart_textures() -> void:
-	var pattern: Array[String] = [
-		".XX.XX.",
-		"XXXXXXX",
-		"XXXXXXX",
-		".XXXXX.",
-		"..XXX..",
-		"...X...",
-	]
-	heart_full_tex = _texture_from_pattern(pattern, Color(0.92, 0.22, 0.3))
-	heart_empty_tex = _texture_from_pattern(pattern, Color(0.24, 0.07, 0.10))
-
-
-func _texture_from_pattern(pattern: Array[String], color: Color) -> ImageTexture:
-	var h := pattern.size()
-	var w := pattern[0].length()
-	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for y in h:
-		for x in w:
-			if pattern[y][x] == "X":
-				img.set_pixel(x, y, color)
-	return ImageTexture.create_from_image(img)
-
-
 func _build_hp_bar() -> void:
 	for child in hp_bar.get_children():
 		hp_bar.remove_child(child)
@@ -242,14 +216,14 @@ func _build_hp_bar() -> void:
 		heart.custom_minimum_size = Vector2(42, 36)
 		heart.stretch_mode = TextureRect.STRETCH_SCALE
 		heart.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		heart.texture = heart_full_tex if i < player.health else heart_empty_tex
+		heart.texture = HEART_FULL_TEX if i < player.health else HEART_EMPTY_TEX
 		hp_bar.add_child(heart)
 
 
 func _update_hp_display() -> void:
 	var hearts := hp_bar.get_children()
 	for i in range(hearts.size()):
-		hearts[i].texture = heart_full_tex if i < player.health else heart_empty_tex
+		hearts[i].texture = HEART_FULL_TEX if i < player.health else HEART_EMPTY_TEX
 
 
 func _build_hud_extras() -> void:

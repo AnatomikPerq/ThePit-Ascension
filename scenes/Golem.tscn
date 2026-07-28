@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cgolem01"]
 
 [ext_resource type="Script" uid="uid://3fiq5vux6ie4" path="res://scripts/golem.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://cwtsaeeltqr84" path="res://assets/sprites/golem_falling.png" id="2_tex"]
+[ext_resource type="SpriteFrames" path="res://data/animations/golem_frames.tres" id="2_frames"]
 
 [sub_resource type="RectangleShape2D" id="Shape_Damage"]
 size = Vector2(56, 20)
@@ -15,9 +15,10 @@ size = Vector2(54, 38)
 [node name="Golem" type="Node2D" unique_id=2072041543 groups=["enemy"]]
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1706269271]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1706269271]
 scale = Vector2(2, 2)
-texture = ExtResource("2_tex")
+sprite_frames = ExtResource("2_frames")
+animation = &"falling"
 
 [node name="CrushBody" type="AnimatableBody2D" parent="." unique_id=883112233]
 collision_layer = 1

@@ -7,13 +7,10 @@ const FALL_SPEED: float = 360.0 # term_vel 3 * 60 * 2
 const SCORE: int = 50
 const SCORE_COLOR := Color(0.75, 0.72, 0.62)
 
-var _active_texture: Texture2D
 var _player: CharacterBody2D
 var _is_dead: bool = false
 
-
-func _ready() -> void:
-	_active_texture = preload("res://assets/sprites/golem_active.png")
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -65,9 +62,7 @@ func _die_and_transform() -> void:
 
 func _deferred_transform() -> void:
 	set_physics_process(false)
-	var sprite: Sprite2D = get_node_or_null("Sprite2D")
-	if sprite:
-		sprite.texture = _active_texture
+	sprite.play(&"petrified")
 	
 	if has_node("DamageArea"):
 		$DamageArea.queue_free()

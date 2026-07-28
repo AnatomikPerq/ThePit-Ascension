@@ -15,13 +15,24 @@ const HARD_LANDING_SPEED: float = 900.0 # fall speed that kicks up dust
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
 
-# ── Sprites ─────────────────────────────────────────────────────────────────
-var sprite_frames: Dictionary = {}
-
 # ── State ───────────────────────────────────────────────────────────────────
 var health: int = 5
 var max_health: int = 5
-var invincible: bool = false
+
+## Invincibility drives the blink animation directly, so nothing has to poll it
+## every frame.
+var invincible: bool = false:
+	set(value):
+		if invincible == value:
+			return
+		invincible = value
+		if not is_node_ready():
+			return
+		if value:
+			anim_player.play(&"blink")
+		else:
+			anim_player.stop()
+			sprite.visible = true
 
 var jump_count: int = 0
 var has_double_jump: bool = false
@@ -32,9 +43,6 @@ var flying: bool = false
 var is_crushed: bool = false
 
 var facing_right: bool = true
-var animation_state: String = "standing"
-var animation_frame: int = 0
-var animation_timer: float = 0.0
 
 var current_strike: Node = null
 var current_shockwave: Node = null
@@ -44,20 +52,12 @@ var _trail_timer: float = 0.0
 var _squash_tween: Tween
 
 # ── Node References ─────────────────────────────────────────────────────────
-@onready var sprite: Sprite2D = $Sprite2D
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var anim_player: AnimationPlayer = $AnimationPlayer
 @onready var inv_timer: Timer = $InvincibilityTimer
 @onready var coyote_timer: Timer = $CoyoteTimer
 @onready var strike_cd_timer: Timer = $StrikeCooldownTimer
 @onready var shockwave_cd_timer: Timer = $ShockwaveCooldownTimer
-
-# ── Animation delays (ms) ──────────────────────────────────────────────────
-const ANIM_DELAYS: Dictionary = {
-	"standing": 300.0,
-	"running": 150.0,
-	"jumping": 100.0,
-	"falling": 100.0,
-	"attacking": 100.0,
-}
 
 # ── Signals ─────────────────────────────────────────────────────────────────
 signal player_damaged(new_health: int)
@@ -66,24 +66,6 @@ signal player_died
 
 func _ready() -> void:
 	inv_timer.timeout.connect(_on_invincibility_timeout)
-	_load_sprites()
-	_update_sprite()
-
-
-func _load_sprites() -> void:
-	sprite_frames = {
-		"standing": [
-			preload("res://assets/sprites/player_standing_1.png"),
-			preload("res://assets/sprites/player_standing_2.png"),
-		],
-		"running": [
-			preload("res://assets/sprites/player_running_1.png"),
-			preload("res://assets/sprites/player_running_2.png"),
-		],
-		"jumping": [preload("res://assets/sprites/player_jumping.png")],
-		"falling": [preload("res://assets/sprites/player_falling.png")],
-		"attacking": [preload("res://assets/sprites/player_attacking.png")],
-	}
 
 
 func _physics_process(delta: float) -> void:
@@ -140,16 +122,10 @@ func _physics_process(delta: float) -> void:
 		if stuck_h or stuck_v or embedded:
 			_handle_crush()
 
-	_update_animation(delta)
+	_update_animation()
 
 	if current_strike:
 		_snap_strike()
-
-	# Blinking while invincible
-	if invincible:
-		sprite.visible = fmod(Time.get_ticks_msec(), 100.0) > 50.0
-	else:
-		sprite.visible = true
 
 
 # ── Gravity ─────────────────────────────────────────────────────────────────
@@ -374,36 +350,17 @@ func _squash(target: Vector2) -> void:
 
 
 # ── Animation ───────────────────────────────────────────────────────────────
-func _update_animation(delta: float) -> void:
-	animation_timer += delta * 1000.0
-
-	var new_state := "standing"
+## Picks which clip should be playing. Frame timing lives in the SpriteFrames
+## resource (data/animations/player_frames.tres), not here.
+func _update_animation() -> void:
+	var wanted := &"standing"
 	if current_strike:
-		new_state = "attacking"
+		wanted = &"attacking"
 	elif not is_on_floor() and not flying:
-		new_state = "jumping" if velocity.y < 0 else "falling"
-	elif abs(velocity.x) > 0.1:
-		new_state = "running"
+		wanted = &"jumping" if velocity.y < 0 else &"falling"
+	elif absf(velocity.x) > 0.1:
+		wanted = &"running"
 
-	if new_state != animation_state:
-		animation_state = new_state
-		animation_frame = 0
-		animation_timer = 0.0
-
-	var delay: float = ANIM_DELAYS.get(animation_state, 100.0)
-	if animation_timer >= delay:
-		animation_timer = 0.0
-		var frames_arr: Array = sprite_frames.get(animation_state, [])
-		if frames_arr.size() > 0:
-			animation_frame = (animation_frame + 1) % frames_arr.size()
-
-	_update_sprite()
-
-
-func _update_sprite() -> void:
-	var frames_arr: Array = sprite_frames.get(animation_state, [])
-	if frames_arr.size() == 0:
-		return
-	var idx := mini(animation_frame, frames_arr.size() - 1)
-	sprite.texture = frames_arr[idx]
+	if sprite.animation != wanted:
+		sprite.play(wanted)
 	sprite.flip_h = not facing_right

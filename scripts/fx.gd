@@ -110,13 +110,18 @@ func popup(pos: Vector2, text: String, color: Color = Color.WHITE, font_size: in
 
 # ── Ghost trail ─────────────────────────────────────────────────────────────
 ## Fading afterimage copy of a sprite (dash trails).
-func ghost(src: Sprite2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4), fade: float = 0.25) -> void:
+## Accepts either a Sprite2D or an AnimatedSprite2D — the ghost only ever needs
+## the texture that is on screen right now.
+func ghost(src: Node2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4), fade: float = 0.25) -> void:
 	var root := get_tree().current_scene
 	if root == null or src == null:
 		return
+	var tex := _current_texture(src)
+	if tex == null:
+		return
 	var g := Sprite2D.new()
-	g.texture = src.texture
-	g.flip_h = src.flip_h
+	g.texture = tex
+	g.flip_h = src.get("flip_h")
 	g.modulate = tint
 	g.z_index = -1
 	root.add_child(g)
@@ -124,6 +129,19 @@ func ghost(src: Sprite2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4), fade: float =
 	var tw := g.create_tween()
 	tw.tween_property(g, "modulate:a", 0.0, fade)
 	tw.tween_callback(g.queue_free)
+
+
+## The texture a sprite node is currently showing, whichever kind it is.
+func _current_texture(src: Node2D) -> Texture2D:
+	var still := src as Sprite2D
+	if still:
+		return still.texture
+	var animated := src as AnimatedSprite2D
+	if animated and animated.sprite_frames:
+		var anim := animated.animation
+		if animated.sprite_frames.has_animation(anim):
+			return animated.sprite_frames.get_frame_texture(anim, animated.frame)
+	return null
 
 
 # ── Flash ───────────────────────────────────────────────────────────────────

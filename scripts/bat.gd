@@ -4,7 +4,7 @@ extends Node2D
 ## DamageArea: hurts the player on contact.
 ## StompArea: stomping from above (with dash_down) OR a Strike kills it.
 ##
-## Body is drawn procedurally (a dark bat silhouette), so no new art is required.
+## Texture lives on the scene's Sprite2D (assets/sprites/bat.png).
 
 const HOMING_SPEED: float = 320.0
 const ACCELERATION: float = 900.0
@@ -21,10 +21,6 @@ var _velocity: Vector2 = Vector2.ZERO
 var _facing_right: bool = true
 
 @onready var sprite: Sprite2D = $Sprite2D
-
-
-func _ready() -> void:
-	sprite.texture = _make_bat_texture()
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -102,37 +98,3 @@ func _die() -> void:
 	_is_dead = true
 	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	queue_free()
-
-
-func _make_bat_texture() -> ImageTexture:
-	# 32×32 dark bat: round body, two triangular wings, red eyes.
-	var size := 32
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(16, 16)
-	var body_color := Color(0.12, 0.05, 0.18, 1.0)
-	var wing_color := Color(0.05, 0.02, 0.10, 1.0)
-	var eye_color := Color(1.0, 0.25, 0.25, 1.0)
-	for y in range(size):
-		for x in range(size):
-			var p := Vector2(x, y)
-			var d := p.distance_to(center)
-			if d <= 6.0:
-				img.set_pixel(x, y, body_color)
-			elif d <= 9.0 and p.y < 12.0:
-				# Ears
-				img.set_pixel(x, y, body_color)
-			# Wings: stretched triangles either side of the body.
-			elif p.y >= 12.0 and p.y <= 22.0:
-				if x < 16:
-					var span: float = (15.0 - float(x)) / 15.0
-					if span > 0.0 and abs(p.y - 17.0) < (span * 9.0) and span > 0.25:
-						img.set_pixel(x, y, wing_color)
-				else:
-					var span2: float = (float(x) - 16.0) / 15.0
-					if span2 > 0.0 and abs(p.y - 17.0) < (span2 * 9.0) and span2 > 0.25:
-						img.set_pixel(x, y, wing_color)
-			# Eyes
-			if (p - Vector2(13.0, 14.0)).length() <= 1.3 or (p - Vector2(19.0, 14.0)).length() <= 1.3:
-				img.set_pixel(x, y, eye_color)
-	return ImageTexture.create_from_image(img)

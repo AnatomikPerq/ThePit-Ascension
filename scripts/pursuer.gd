@@ -18,21 +18,9 @@ var _stuck_timer: float = 0.0
 var _facing_right: bool = true
 var _is_dead: bool = false
 
-# Animation
-var _frames: Array[Texture2D] = []
-var _anim_timer: float = 0.0
-var _anim_idx: int = 0
-
-@onready var sprite: Sprite2D = $Sprite2D
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var edge_ray: RayCast2D = $EdgeDetector
 @onready var wall_ray: RayCast2D = $WallDetector
-
-
-func _ready() -> void:
-	_frames = [
-		preload("res://assets/sprites/pursuer_1.png"),
-		preload("res://assets/sprites/pursuer_2.png"),
-	]
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -51,7 +39,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_update_ai(delta)
-	_update_animation(delta)
+	sprite.flip_h = not _facing_right
 	_check_collisions()
 
 
@@ -119,16 +107,6 @@ func _update_ai(delta: float) -> void:
 		if should_jump:
 			velocity.y = JUMP_POWER
 			_jump_timer = JUMP_COOLDOWN
-
-
-func _update_animation(delta: float) -> void:
-	_anim_timer += delta
-	if _anim_timer >= 0.2:
-		_anim_timer = 0.0
-		_anim_idx = (_anim_idx + 1) % _frames.size()
-
-	sprite.texture = _frames[_anim_idx]
-	sprite.flip_h = not _facing_right
 
 
 func _check_collisions() -> void:

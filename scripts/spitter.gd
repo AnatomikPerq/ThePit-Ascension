@@ -5,7 +5,7 @@ extends CharacterBody2D
 ## DamageArea: contact hurts the player.
 ## StompArea: stomp from above (with dash_down) or a Strike kills it.
 ##
-## Body is drawn procedurally so no new art asset is required.
+## Texture lives on the scene's Sprite2D (assets/sprites/spitter.png).
 
 const GRAVITY: float = 4500.0
 const TERMINAL_VEL: float = 1800.0
@@ -22,10 +22,6 @@ var _facing_right: bool = true
 var _charge: float = 0.0 # ramps while aiming for a telegraph glow
 
 @onready var sprite: Sprite2D = $Sprite2D
-
-
-func _ready() -> void:
-	sprite.texture = _make_spitter_texture()
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
@@ -119,35 +115,3 @@ func _die() -> void:
 	_is_dead = true
 	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
 	queue_free()
-
-
-func _make_spitter_texture() -> ImageTexture:
-	# 32×32 bulbous plant-spitter: green base, gaping mouth, fang.
-	var size := 32
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(16, 22)
-	var body_color := Color(0.20, 0.45, 0.16, 1.0)
-	var dark_color := Color(0.10, 0.30, 0.10, 1.0)
-	var mouth_color := Color(0.10, 0.05, 0.05, 1.0)
-	var fang_color := Color(0.9, 0.9, 0.8, 1.0)
-	for y in range(size):
-		for x in range(size):
-			var p := Vector2(x, y)
-			var d := p.distance_to(center)
-			# Bulb body
-			if d <= 11.0:
-				img.set_pixel(x, y, body_color)
-			elif d <= 13.0:
-				img.set_pixel(x, y, dark_color)
-			# Mouth: dark oval near the top center
-			var mouth_d := p.distance_to(Vector2(16, 14))
-			if mouth_d <= 5.0:
-				img.set_pixel(x, y, mouth_color)
-			# Fangs
-			if (p - Vector2(13.0, 17.0)).length() <= 1.4 or (p - Vector2(19.0, 17.0)).length() <= 1.4:
-				img.set_pixel(x, y, fang_color)
-			# Stem base shading
-			if p.y >= 28 and abs(p.x - 16) < 4:
-				img.set_pixel(x, y, dark_color)
-	return ImageTexture.create_from_image(img)

@@ -25,7 +25,6 @@ func setup(origin: Vector2, target: Vector2, player: CharacterBody2D) -> void:
 
 
 func _ready() -> void:
-	sprite.texture = _make_blob_texture()
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 
@@ -45,8 +44,6 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(_player):
 		if global_position.y > _player.global_position.y + 1400.0 or global_position.distance_to(_player.global_position) > 2200.0:
 			queue_free()
-
-
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		body.take_damage()
@@ -62,15 +59,3 @@ func _on_area_entered(area: Area2D) -> void:
 		queue_free()
 
 
-func _make_blob_texture() -> ImageTexture:
-	var size := 16
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(8, 8)
-	for y in range(size):
-		for x in range(size):
-			var d := Vector2(x, y).distance_to(center)
-			if d <= 6.0:
-				var edge := smoothstep(4.0, 6.0, d)
-				img.set_pixel(x, y, Color(0.45, 0.95, 0.3, 1.0 - edge * 0.4))
-	return ImageTexture.create_from_image(img)

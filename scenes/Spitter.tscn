@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cspitter01"]
 
 [ext_resource type="Script" path="res://scripts/spitter.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/spitter.png" id="2_tex"]
 
 [sub_resource type="RectangleShape2D" id="Shape_Body"]
 size = Vector2(44, 52)
@@ -18,6 +19,7 @@ script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 2)

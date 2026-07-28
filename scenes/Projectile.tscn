@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://cprojectile01"]
 
 [ext_resource type="Script" path="res://scripts/projectile.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectile_blob.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="Shape_Blob"]
 radius = 14.0
@@ -12,6 +13,7 @@ script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Shape_Blob")
