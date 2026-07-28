@@ -112,15 +112,6 @@ func _ready() -> void:
 	# Set background
 	RenderingServer.set_default_clear_color(bg_by_ascent[0])
 
-	# Load and attach UI input handler script manually
-	var ui_script: Script = load("res://scripts/ui_input.gd")
-	if ui_script:
-		var input_node := Node.new()
-		input_node.name = "UIInputHandler"
-		input_node.set_script(ui_script)
-		input_node.process_mode = Node.PROCESS_MODE_ALWAYS
-		$CanvasLayer.add_child(input_node)
-
 
 func _process(delta: float) -> void:
 	bg_time += delta
@@ -128,7 +119,7 @@ func _process(delta: float) -> void:
 
 	if state == GameState.GAME_OVER:
 		if Input.is_action_just_pressed("jump"):
-			_restart()
+			restart()
 		return
 
 	if not is_instance_valid(player):
@@ -457,16 +448,39 @@ func _on_score_changed(score: int, combo: int) -> void:
 		combo_label.visible = false
 
 
-# ── Input / state transitions ───────────────────────────────────────────────
-func _unhandled_input(event: InputEvent) -> void:
-	# Reset on R
-	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_R:
-		_restart()
+# ── Public API (used by UIInputHandler and the UI scenes) ───────────────────
+## ESC. What it means depends on the state, and every state has an answer.
+func cancel_pressed() -> void:
+	match state:
+		GameState.PLAYING:
+			_pause_game()
+		GameState.PAUSED:
+			_resume_game()
+		GameState.GAME_OVER, GameState.VICTORY:
+			go_to_menu()
 
-	# Toggle Debug Hitboxes on U
-	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_U:
-		show_debug = not show_debug
-		queue_redraw()
+
+func toggle_debug() -> void:
+	show_debug = not show_debug
+	queue_redraw()
+
+
+func is_choosing_upgrade() -> bool:
+	return state == GameState.UPGRADE_MENU
+
+
+## Index into the upgrade menu's four buttons, left to right.
+func choose_upgrade(index: int) -> void:
+	match index:
+		0: _on_double_jump_chosen()
+		1: _on_strike_chosen()
+		2: _on_shockwave_chosen()
+		3: _on_heal_chosen()
+
+
+func show_notification(text: String) -> void:
+	notif_label.text = text
+	notification_timer = 3.0
 
 
 func _check_milestones() -> void:
@@ -483,7 +497,7 @@ func _check_zones() -> void:
 		if player.global_position.y < zone_milestones[i]:
 			zone_milestones.remove_at(i)
 			var level := clampi(int((max_depth - player.global_position.y) / level_height) + 1, 1, level_count)
-			_show_notification("LEVEL %d / %d" % [level, level_count])
+			show_notification("LEVEL %d / %d" % [level, level_count])
 			Game.add_score(250)
 			Audio.play(&"zone")
 			break
@@ -518,9 +532,9 @@ func _show_upgrade_menu() -> void:
 func _on_double_jump_chosen() -> void:
 	if not player.has_double_jump:
 		player.has_double_jump = true
-		_show_notification("UNLOCKED: DOUBLE JUMP")
+		show_notification("UNLOCKED: DOUBLE JUMP")
 	else:
-		_show_notification("ALREADY OWNED (XP BONUS)")
+		show_notification("ALREADY OWNED (XP BONUS)")
 		Game.add_score(300)
 	_close_upgrade_menu()
 
@@ -528,9 +542,9 @@ func _on_double_jump_chosen() -> void:
 func _on_strike_chosen() -> void:
 	if not player.has_strike:
 		player.has_strike = true
-		_show_notification("UNLOCKED: SIDEWAYS STRIKE")
+		show_notification("UNLOCKED: SIDEWAYS STRIKE")
 	else:
-		_show_notification("ALREADY OWNED (XP BONUS)")
+		show_notification("ALREADY OWNED (XP BONUS)")
 		Game.add_score(300)
 	_close_upgrade_menu()
 
@@ -538,9 +552,9 @@ func _on_strike_chosen() -> void:
 func _on_shockwave_chosen() -> void:
 	if not player.has_shockwave:
 		player.has_shockwave = true
-		_show_notification("UNLOCKED: SHOCKWAVE BLAST")
+		show_notification("UNLOCKED: SHOCKWAVE BLAST")
 	else:
-		_show_notification("ALREADY OWNED (XP BONUS)")
+		show_notification("ALREADY OWNED (XP BONUS)")
 		Game.add_score(300)
 	_close_upgrade_menu()
 
@@ -550,7 +564,7 @@ func _on_heal_chosen() -> void:
 	player.health = player.max_health
 	_build_hp_bar()
 	Audio.play(&"heal")
-	_show_notification("MAX HP +1, FULLY HEALED")
+	show_notification("MAX HP +1, FULLY HEALED")
 	_close_upgrade_menu()
 
 
@@ -559,11 +573,6 @@ func _close_upgrade_menu() -> void:
 	state = GameState.PLAYING
 	get_tree().paused = false
 	Audio.play(&"ui_click")
-
-
-func _show_notification(text: String) -> void:
-	notif_label.text = text
-	notification_timer = 3.0
 
 
 # ── Menus & screens styling ─────────────────────────────────────────────────
@@ -720,14 +729,12 @@ func _on_player_damaged(_new_health: int) -> void:
 	_update_hp_display()
 
 
-func _restart() -> void:
-	Engine.time_scale = 1.0
+func restart() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 
 func go_to_menu() -> void:
-	Engine.time_scale = 1.0
 	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
 

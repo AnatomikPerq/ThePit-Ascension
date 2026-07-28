@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" path="res://assets/sprites/shockwave_ring.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="Shape_Hit"]
+resource_local_to_scene = true
 radius = 0.0
 
 [node name="Shockwave" type="Node2D"]

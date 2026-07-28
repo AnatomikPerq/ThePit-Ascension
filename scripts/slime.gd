@@ -70,6 +70,11 @@ func _die_and_spawn() -> void:
 
 func _deferred_spawn_trampoline() -> void:
 	var t := TRAMPOLINE_SCENE.instantiate()
+	# Our parent is the Enemies container, so the old get_parent().add_child()
+	# left World.tscn's Trampolines node empty for its whole existence.
+	var container := get_tree().get_first_node_in_group(&"trampoline_container")
+	if container == null:
+		container = get_parent()
+	container.add_child(t)
 	t.global_position = global_position
-	get_parent().add_child(t)
 	queue_free()

@@ -37,16 +37,6 @@ func get_shake_offset() -> Vector2:
 	) * SHAKE_MAX_OFFSET * strength
 
 
-# ── Hitstop ─────────────────────────────────────────────────────────────────
-## Brief global slowdown for impact frames. Real-time timer restores scale.
-func hitstop(duration: float = 0.05, time_scale: float = 0.1) -> void:
-	if Engine.time_scale < 1.0:
-		return # already in a hitstop, don't stack
-	Engine.time_scale = time_scale
-	var t := get_tree().create_timer(duration, true, false, true)
-	t.timeout.connect(func() -> void: Engine.time_scale = 1.0)
-
-
 # ── Particles ───────────────────────────────────────────────────────────────
 ## One-shot radial burst of colored particles at a world position.
 func burst(pos: Vector2, color: Color, count: int = 16, speed: float = 320.0,

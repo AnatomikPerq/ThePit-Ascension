@@ -48,7 +48,10 @@ func _physics_process(delta: float) -> void:
 			var perp := Vector2(-dir.y, dir.x)
 			var wobble := perp * sin(_bob_timer * BOB_FREQUENCY) * BOB_AMPLITUDE
 			target_vel = dir * HOMING_SPEED + wobble
-			if abs(dir.x) > 4.0:
+			# `dir` is normalized, so this used to read `abs(dir.x) > 4.0` and could
+			# never be true: every bat faced right for its whole life. The deadzone
+			# keeps a bat directly above or below the player from flickering.
+			if absf(dir.x) > 0.05:
 				_facing_right = dir.x > 0.0
 
 		_velocity = _velocity.move_toward(target_vel, ACCELERATION * delta)

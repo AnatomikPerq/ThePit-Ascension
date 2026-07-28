@@ -60,3 +60,7 @@ one_shot = true
 [node name="ShockwaveCooldownTimer" type="Timer" parent="."]
 wait_time = 3.0
 one_shot = true
+
+[node name="CrushRecoveryTimer" type="Timer" parent="."]
+wait_time = 2.0
+one_shot = true

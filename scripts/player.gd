@@ -55,6 +55,7 @@ var _squash_tween: Tween
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var anim_player: AnimationPlayer = $AnimationPlayer
 @onready var inv_timer: Timer = $InvincibilityTimer
+@onready var crush_timer: Timer = $CrushRecoveryTimer
 @onready var coyote_timer: Timer = $CoyoteTimer
 @onready var strike_cd_timer: Timer = $StrikeCooldownTimer
 @onready var shockwave_cd_timer: Timer = $ShockwaveCooldownTimer
@@ -66,6 +67,7 @@ signal player_died
 
 func _ready() -> void:
 	inv_timer.timeout.connect(_on_invincibility_timeout)
+	crush_timer.timeout.connect(_end_crush)
 
 
 func _physics_process(delta: float) -> void:
@@ -300,9 +302,10 @@ func _handle_crush() -> void:
 	if health <= 0:
 		_die()
 	else:
-		# Recover from crush
-		var t := get_tree().create_timer(2.0)
-		t.timeout.connect(_end_crush)
+		# A SceneTreeTimer keeps counting while the tree is paused, so pausing used
+		# to serve the crush penalty for free. A Timer node pauses with the game,
+		# the way InvincibilityTimer always did.
+		crush_timer.start()
 
 
 func _end_crush() -> void:
