@@ -43,7 +43,7 @@ func _check_autoloads() -> void:
 	print("autoloads")
 	# Running with -s replaces the main loop, so autoloads are never instantiated
 	# here. Check that they are configured and that their scripts still parse.
-	for autoload_name: String in ["Fx", "Audio", "Game"]:
+	for autoload_name: String in ["Fx", "Audio", "Game", "Router"]:
 		var setting := "autoload/" + autoload_name
 		if not ProjectSettings.has_setting(setting):
 			_fail("autoload not configured: " + autoload_name)

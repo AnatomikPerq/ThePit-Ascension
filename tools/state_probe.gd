@@ -36,8 +36,8 @@ func _expect(condition: bool, what: String) -> void:
 
 
 func _run() -> void:
-	# Install World as the current scene so reload_current_scene() has something
-	# to reload, while this probe survives as a plain child of root.
+	# Install World as the current scene so the Router's restart swap has
+	# something to replace, while this probe survives as a plain child of root.
 	var packed: PackedScene = load("res://scenes/World.tscn")
 	_world = packed.instantiate()
 	get_tree().root.add_child(_world)

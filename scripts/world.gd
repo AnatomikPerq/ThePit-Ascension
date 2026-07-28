@@ -316,13 +316,11 @@ func _on_player_damaged(new_health: int) -> void:
 
 
 func restart() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	Router.restart_run()
 
 
 func go_to_menu() -> void:
-	get_tree().paused = false
-	get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
+	Router.to_menu()
 
 
 # ── Enemy Spawning ──────────────────────────────────────────────────────────

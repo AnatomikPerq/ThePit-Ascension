@@ -47,4 +47,4 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _start_game() -> void:
 	Audio.play(&"ui_confirm")
-	get_tree().change_scene_to_file("res://scenes/World.tscn")
+	Router.start_run()

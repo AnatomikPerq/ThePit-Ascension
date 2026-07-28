@@ -26,6 +26,7 @@ buses/default_bus_layout="res://default_bus_layout.tres"
 Fx="*res://scripts/fx.gd"
 Audio="*res://src/audio/audio_manager.gd"
 Game="*res://scripts/game_state.gd"
+Router="*res://src/core/router.gd"
 
 [display]
 
