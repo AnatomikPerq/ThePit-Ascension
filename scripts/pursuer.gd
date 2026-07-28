@@ -137,6 +137,14 @@ func _check_collisions() -> void:
 	if has_node("DamageArea"):
 		for body in $DamageArea.get_overlapping_bodies():
 			if body.is_in_group("player"):
+				# A player who is dashing down from above is mid-stomp. Without this
+				# guard the outcome depends on which Area2D the engine happens to
+				# report first: DamageArea covers the whole body while StompArea is a
+				# thin strip on top, so a legitimate dash-kill was frequently turned
+				# into the player taking a hit, then knocked upward so that the stomp
+				# check failed its `velocity.y >= 0` guard a frame later.
+				if body.get("dashing_down") == true and body.global_position.y < global_position.y:
+					continue
 				body.take_damage()
 
 

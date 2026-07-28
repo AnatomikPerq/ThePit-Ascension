@@ -32,7 +32,7 @@ drag_bottom_margin = 0.25
 
 [node name="Floor" type="StaticBody2D" parent="Platforms" unique_id=1652976067]
 position = Vector2(1000, 7968)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Floor" unique_id=1048427714]
 scale = Vector2(2, 2)
@@ -43,7 +43,7 @@ shape = SubResource("Shape_Floor")
 
 [node name="Divider_2000_Left" type="StaticBody2D" parent="Platforms" unique_id=1965441000]
 position = Vector2(300, 2000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Left" unique_id=1974734129]
 texture_repeat = 2
@@ -57,7 +57,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_2000_Right" type="StaticBody2D" parent="Platforms" unique_id=2121559842]
 position = Vector2(1700, 2000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Right" unique_id=1287076559]
 texture_repeat = 2
@@ -71,7 +71,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_4000_Left" type="StaticBody2D" parent="Platforms" unique_id=1060849920]
 position = Vector2(300, 4000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Left" unique_id=787782494]
 texture_repeat = 2
@@ -85,7 +85,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_4000_Right" type="StaticBody2D" parent="Platforms" unique_id=393336379]
 position = Vector2(1700, 4000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Right" unique_id=1268527016]
 texture_repeat = 2
@@ -99,7 +99,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_6000_Left" type="StaticBody2D" parent="Platforms" unique_id=679755185]
 position = Vector2(300, 6000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Left" unique_id=1094084178]
 texture_repeat = 2
@@ -113,7 +113,7 @@ shape = SubResource("Shape_Divider")
 
 [node name="Divider_6000_Right" type="StaticBody2D" parent="Platforms" unique_id=1536394383]
 position = Vector2(1700, 6000)
-collision_layer = 33
+collision_layer = 1
 
 [node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Right" unique_id=1153613536]
 texture_repeat = 2

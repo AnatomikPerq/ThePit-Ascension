@@ -830,7 +830,8 @@ func _generate_map() -> void:
 func _create_wall(pos: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
 	body.position = pos + size / 2.0
-	body.collision_layer = 33
+	# Was 33 (bits 1 and 6). Nothing in the project ever masked bit 6.
+	body.collision_layer = Layers.WORLD
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = size
@@ -852,7 +853,7 @@ func _create_wall(pos: Vector2, size: Vector2) -> void:
 func _create_static_platform(pos: Vector2, size: Vector2) -> void:
 	var body := StaticBody2D.new()
 	body.position = pos + size / 2.0
-	body.collision_layer = 1
+	body.collision_layer = Layers.WORLD
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = size

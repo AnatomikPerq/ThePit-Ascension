@@ -84,15 +84,38 @@ origin of the numbers is traceable. They are not part of the build.
 
 ## 5. Verifying a change
 
-Nothing here needs a running editor.
+Nothing here needs a running editor. One command runs everything:
 
 ```bash
-godot --headless --path . -s tools/smoke_test.gd          # autoloads, buses, sound bank, every scene
-godot --headless --path . -s tools/world_fingerprint.gd   # same seed => same geometry hash
-godot --headless --path . -s tools/contact_matrix.gd      # how each enemy resolves each contact
-godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # deterministic sprite gallery
-bash tools/check_conventions.sh                           # grep gates
+bash tools/run_tests.sh
 ```
+
+Individually:
+
+```bash
+# GdUnit4 suite in test/ — sound bank, world generation, enemy contact matrix.
+# --ignoreHeadlessMode is required: GdUnit refuses headless by default because
+# its own scene-runner input simulation does not work there. No suite uses it.
+godot --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
+      --ignoreHeadlessMode --add res://test
+
+godot --headless --path . -s tools/smoke_test.gd        # autoloads, buses, bank, every scene
+godot --headless --path . tools/state_probe.tscn        # pause, input reachability, restart
+godot --headless --path . tools/world_fingerprint.tscn  # same seed => same geometry hash
+godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
+bash tools/check_conventions.sh                         # grep gates for the rules above
+```
+
+**Write tests against physics frames, never wall-clock.** Two harnesses in this
+repo have already been wrong in exactly that way. `await await_millis(50)` looked
+fine until the first case in a run spent its budget loading scenes off disk and
+saw fewer physics steps than the rest, failing at random. Use
+`for i in N: await get_tree().physics_frame`.
+
+**Free what a test spawns, immediately.** The contact suite originally reused the
+tree between cases, and a golem petrified in one case became a StaticBody2D at
+the same coordinates in the next — so the player landed on it, `is_on_floor()`
+cleared `dashing_down`, and three enemies "mysteriously" stopped dying.
 
 `visual_check` freezes every entity to `PROCESS_MODE_DISABLED` after `_ready()` and runs
 at a fixed frame rate. That discipline is not optional: an earlier version left entities
@@ -116,6 +139,13 @@ Fixed on the owner's instruction (do not "restore" them):
   1.0, so the branch was unreachable.
 - `slime.gd` parented new trampolines to `get_parent()`, which is `Enemies`, so the
   `Trampolines` container in `World.tscn` had been empty since it was created.
+- Dash-stomping a Pursuer usually hurt you instead of killing it. Its `DamageArea`
+  spans the whole body while `StompArea` is a 4 px strip on top, so a descending
+  player entered both at once — and the engine reported the damage overlap one
+  frame earlier. By the time the stomp check ran, `take_damage()` had already
+  knocked the player upward and its `velocity.y >= 0` guard failed. The damage
+  path now skips a player who is dashing down from above. Found by
+  `test/enemy_contact_test.gd`, not by reading the code.
 - World generation re-created the wall segment already authored in `World.tscn`, leaving
   two identical colliders at the same position.
 - `Shockwave.tscn` shared one `CircleShape2D` across every instance while writing its

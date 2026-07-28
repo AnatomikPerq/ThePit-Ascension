@@ -6,3 +6,6 @@ export_presets.cfg
 .vscode
 output.md
 .py
+
+# GdUnit4 test reports
+reports/

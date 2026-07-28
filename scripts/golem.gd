@@ -73,7 +73,7 @@ func _deferred_transform() -> void:
 		$CrushBody.queue_free()
 		
 	var body := StaticBody2D.new()
-	body.collision_layer = 1
+	body.collision_layer = Layers.WORLD
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
 	rect.size = Vector2(64, 64)
