@@ -52,6 +52,6 @@ func _physics_process(delta: float) -> void:
 	position += _velocity * delta
 
 	sprite.flip_h = not _facing_right
-	# Wing-flap squash. The scene renders at 2x, hence the divisor.
-	var flap: float = 1.0 + sin(_bob_timer * BOB_FREQUENCY * 2.0) * 0.08
-	sprite.scale = Vector2(flap, 2.0 / flap)
+	# The wing flap is an autoplaying AnimationPlayer clip on the scene. It used
+	# to be sprite.scale written from a sine every physics tick, which meant the
+	# flap rate could not be retimed without editing this file.

@@ -138,14 +138,22 @@ func _pulse_title() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed:
-		match event.physical_keycode:
-			KEY_SPACE, KEY_ENTER:
-				_start_game()
-			KEY_ESCAPE:
-				get_tree().quit()
-			KEY_M:
-				Audio.toggle_music()
+	# Named actions, not raw physical keycodes. The menu used to match
+	# event.physical_keycode directly, which meant these keys could not be
+	# rebound and could not be driven by anything outside a real keyboard —
+	# the end-to-end suite could boot the menu and then had no way to leave it.
+	# ui_accept and ui_cancel are Godot's built-ins, so a gamepad works too.
+	if event.is_echo():
+		return
+	if event.is_action_pressed(&"ui_accept"):
+		_start_game()
+	elif event.is_action_pressed(&"ui_cancel"):
+		get_tree().quit()
+	elif event.is_action_pressed(&"music_toggle"):
+		Audio.toggle_music()
+	else:
+		return
+	get_viewport().set_input_as_handled()
 
 
 func _start_game() -> void:

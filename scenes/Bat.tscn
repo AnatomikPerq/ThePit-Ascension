@@ -5,6 +5,28 @@
 
 [ext_resource type="Script" path="res://src/entities/enemy_combat.gd" id="3_combat"]
 [ext_resource type="Resource" path="res://data/enemies/bat.tres" id="4_stats"]
+[sub_resource type="Animation" id="Animation_flap"]
+resource_name = "flap"
+length = 0.5236
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:scale")
+tracks/0/interp = 2
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.1309, 0.2618, 0.3927),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [Vector2(1, 2), Vector2(1.08, 1.8519), Vector2(1, 2), Vector2(0.92, 2.1739)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_bat"]
+_data = {
+&"flap": SubResource("Animation_flap")
+}
+
 [sub_resource type="RectangleShape2D" id="Shape_Damage"]
 size = Vector2(40, 28)
 
@@ -17,6 +39,12 @@ script = ExtResource("1_script")
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(2, 2)
 texture = ExtResource("2_tex")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_bat")
+}
+autoplay = "flap"
 
 [node name="DamageArea" type="Area2D" parent="."]
 position = Vector2(0, 0)
