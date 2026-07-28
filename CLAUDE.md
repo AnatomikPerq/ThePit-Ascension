@@ -55,9 +55,11 @@ widget, that widget belongs in a `.tscn`.
 
 ```
 src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/)
-data/      .tres resources — the tuning surface (audio/, animations/, enemies/, worlds/)
-scenes/    .tscn by category
+scripts/   entity controllers and the older autoloads (Fx, Game, world, player, enemies)
+data/      .tres resources — the tuning surface (audio/, animations/, enemies/, fx/, worlds/)
+scenes/    .tscn by category (fx/, ui/, entities at the top level)
 assets/    sprites/, audio/ (+ CREDITS.md), ui/
+test/      GdUnit4 suites
 tools/     headless probes, one-shot generators, the test harness
 docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
 ```
@@ -102,7 +104,9 @@ godot --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
 godot --headless --path . -s tools/smoke_test.gd        # autoloads, buses, bank, every scene
 godot --headless --path . tools/state_probe.tscn        # pause, input reachability, restart
 godot --headless --path . tools/world_fingerprint.tscn  # same seed => same geometry hash
+bash tools/run_net_probe.sh                             # real host+client over a localhost socket
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
+godot --path . tools/ui_check.tscn -- out_dir           # every UI surface, for eyeballing (advisory)
 bash tools/check_conventions.sh                         # grep gates for the rules above
 ```
 
