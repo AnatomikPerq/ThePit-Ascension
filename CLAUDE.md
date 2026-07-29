@@ -102,7 +102,7 @@ godot --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
       --ignoreHeadlessMode --add res://test
 
 godot --headless --path . -s tools/smoke_test.gd        # autoloads, buses, bank, every scene
-godot --headless --path . tools/state_probe.tscn        # pause, input reachability, restart
+godot --headless --path . tools/state_probe.tscn        # pause, input, restart, shake, exit to menu
 godot --headless --path . tools/world_fingerprint.tscn  # same seed => same geometry hash
 bash tools/run_net_probe.sh                             # real host+client over a localhost socket
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
@@ -120,6 +120,15 @@ saw fewer physics steps than the rest, failing at random. Use
 tree between cases, and a golem petrified in one case became a StaticBody2D at
 the same coordinates in the next — so the player landed on it, `is_on_floor()`
 cleared `dashing_down`, and three enemies "mysteriously" stopped dying.
+
+**Do not hash a clock, and sample a random effect more than once.** The net
+probe's world hash folds moving platforms back to their authored position:
+their live position is a function of ticks-since-ready, so hashing the live
+picture compares when two peers entered the world rather than what they built —
+it reported "the restarted worlds differ" for two identical worlds. And screen
+shake is a fresh random offset each frame inside a decaying envelope, so a
+single read lands near zero often enough to fail one run in twenty; assert the
+peak over a handful of frames.
 
 `visual_check` freezes every entity to `PROCESS_MODE_DISABLED` after `_ready()` and runs
 at a fixed frame rate. That discipline is not optional: an earlier version left entities
@@ -139,6 +148,35 @@ Fixed on the owner's instruction (do not "restore" them):
   attack key; it is `X`.
 - Crush recovery used `get_tree().create_timer(2.0)`, which counts down while the tree is
   paused, so pausing skipped the penalty. It is a `Timer` node now.
+- Pursuers, bats and spitters never disappeared when killed. Collapsing the five contact
+  ladders into `EnemyCombat` left the death *reaction* with each owner, and those three
+  had none — their sprites sat frozen where they died for the rest of the run. The
+  component frees the corpse by default now (`frees_on_death`); golem and slime turn it
+  off in their scenes because their corpse is the point.
+- Killing something did not shake the screen, and every other shake was ±3.7 px for
+  150 ms — invisible. §4 has claimed since the hitstop was removed that kill feedback is
+  "screen shake, particles, the score popup and the sound"; the shake was the one nobody
+  wired up, and the amplitude was too small to see anyway.
+- The crush penalty was two seconds of drifting down at a fifth of gravity with the
+  controls dead, which read as the game having broken rather than having hit you. It is a
+  heart, a pop clear of the squeeze, and half a second of falling through the level at
+  normal speed — and recovery waits for the geometry as well as the clock, because
+  handing collision back inside the same squeeze is just another heart.
+- `R` did nothing at all in a session, so a second round meant everyone rejoining. The
+  host restarts the run for everyone now; clients are told it is not theirs to do.
+- A run could only be left by dying. Pause offers RESUME / RESTART / MAIN MENU, and both
+  end screens offer the same, in every mode.
+- **Race mode is player-versus-player, on the owner's instruction.** Rivals are solid to
+  each other and Strike, Shockwave and dash-stomp all land. Co-op and solo are untouched:
+  the single predicate is `Net.is_versus()`.
+- A host restart handed every client that had climbed past 75% a free upgrade at the
+  bottom of the new pit — and would have ended the fresh run outright for anyone near the
+  surface. An avatar's node path is identical in every run, so for a few frames the host
+  was still receiving where that player had been in the run that just ended, and reading
+  it as progress. Every avatar now reports `run_seed` in the same replicated packet as its
+  position, and `World._reports_this_run()` gates every award and every ending. Riding
+  along with the position is the point: a stale position arrives labelled stale, with no
+  assumption about packet ordering.
 - Bats never turned around: `abs(dir.x) > 4.0` tested a normalized vector whose maximum is
   1.0, so the branch was unreachable.
 - `slime.gd` parented new trampolines to `get_parent()`, which is `Enemies`, so the

@@ -47,6 +47,27 @@ Sprite sources live in `assets/sprites/src/*.aseprite`; exported PNGs in
 Landing on a dash-required enemy without dashing hurts you instead. The
 full contact matrix is enforced by `test/enemy_contact_test.gd`.
 
+A dead enemy leaves the screen. The two exceptions are the point of those
+enemies: the golem's corpse *is* the platform, and the slime is replaced by
+its trampoline. That is one flag, `frees_on_death` on the Combat component,
+turned off in those two scenes.
+
+### Other players
+
+In **race** mode the other climbers are solid — you can stand on a head — and
+your Strike, Shockwave and dash-stomp all land on them for one heart. In
+**co-op** they are neither solid nor hittable: teammates pass through each
+other. Solo is unaffected in every respect. See
+[NETWORKING.md](NETWORKING.md#race-players-against-each-other).
+
+### Getting crushed
+
+Squeezed between two pieces of level geometry costs one heart, pops you clear
+and lets you fall through the level for half a second before you become solid
+again — and not while you are still inside the squeeze, because that is just
+another heart. Rivals are not part of it: a race is fought with attacks, not
+by standing on somebody until the ceiling logic notices.
+
 ## Where the numbers live
 
 Code defines behaviour; `.tres` files define numbers. If you are tuning,
@@ -62,9 +83,11 @@ you should be in the inspector, not a script.
 | Every sound: stream, volume, pitch range, bus | `data/audio/sound_bank.tres` (SoundBank) |
 | Sprite animations (frame timing) | `data/animations/*_frames.tres` (SpriteFrames) |
 | UI look | `assets/ui/pit_theme.tres` (Theme) |
+| Crush recovery window | `CrushRecoveryTimer.wait_time` on `Player.tscn` |
 
 Player movement constants are still literals in `player.gd` — they are the
-game feel, changed rarely and reviewed hard. Everything else is data.
+game feel, changed rarely and reviewed hard. So are the two screen-shake
+numbers in `fx.gd`. Everything else is data.
 
 ## Audio
 

@@ -35,6 +35,17 @@ signal despawned
 ## The body volume that hurts the player on contact. Optional.
 @export var damage_area_path: NodePath = NodePath("../DamageArea")
 
+## Whether a dead enemy removes itself. True for everything that simply dies;
+## the two enemies that leave something behind — the golem petrifies into a
+## platform, the slime is replaced by a trampoline — turn it off in their scene
+## and dispose of themselves from `killed`.
+##
+## It defaults to ON because "the corpse disappears" is what an enemy does
+## unless it is special, and the three that are not special (pursuer, bat,
+## spitter) had no `killed` handler at all: their sprites stayed in the world
+## forever, frozen where they died.
+@export var frees_on_death: bool = true
+
 ## Set through the owner's set_player_ref(). Kept here so the shared despawn and
 ## contact logic does not have to reach back into the owner.
 var player: CharacterBody2D
@@ -183,3 +194,10 @@ func _kill_everywhere(by_strike: bool, killer_peer: int) -> void:
 	if Net.is_sim_authority():
 		Game.enemy_killed(_owner_2d.global_position, stats.score, stats.score_color, killer_peer)
 	killed.emit(by_strike)
+	# The owner may have disposed of itself already (the slime becomes a
+	# trampoline). Only the sim authority frees: the MultiplayerSpawner mirrors
+	# the removal to every client, and a client that frees the node itself
+	# leaves the spawner despawning something that is no longer there.
+	if frees_on_death and Net.is_sim_authority() \
+			and is_instance_valid(_owner_2d) and not _owner_2d.is_queued_for_deletion():
+		_owner_2d.queue_free()

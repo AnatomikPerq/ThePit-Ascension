@@ -66,6 +66,44 @@ func test_popup_fills_its_label_and_frees_itself() -> void:
 		.is_false()
 
 
+## Shake is the only feedback a kill has left since the hitstop was removed, so
+## it has to actually reach the screen — and be big enough to see. The old
+## amplitude put a hit at ±3.7 px, which is what "the camera shake is gone"
+## turned out to mean.
+func test_shake_produces_a_visible_offset_and_decays_to_nothing() -> void:
+	Fx.shake(1.0)
+	# Each read is a fresh random sample inside the trauma envelope, so a
+	# single one can land near zero. The amplitude is what is being asserted.
+	var peak := 0.0
+	for i in 10:
+		peak = maxf(peak, Fx.get_shake_offset().length())
+	assert_float(peak) \
+		.override_failure_message("full trauma shifted the camera by %.1f px at most" % peak) \
+		.is_greater(20.0)
+
+	# Trauma bleeds off in _process, and the offset with it.
+	for i in 300:
+		await get_tree().process_frame
+		if Fx.get_shake_offset() == Vector2.ZERO:
+			break
+	assert_vector(Fx.get_shake_offset()) \
+		.override_failure_message("shake never settled back to zero").is_equal(Vector2.ZERO)
+
+
+func test_a_kill_shakes_the_camera() -> void:
+	Game.new_run()
+	# Trauma is global state; start from rest whatever ran before this.
+	for i in 300:
+		if Fx.get_shake_offset() == Vector2.ZERO:
+			break
+		await get_tree().process_frame
+	assert_vector(Fx.get_shake_offset()).is_equal(Vector2.ZERO)
+	Game.enemy_killed(Vector2(100, 100), 100, Color.WHITE)
+	assert_vector(Fx.get_shake_offset()) \
+		.override_failure_message("killing something did not move the camera at all") \
+		.is_not_equal(Vector2.ZERO)
+
+
 func test_the_pool_dies_with_its_root_and_recovers() -> void:
 	var preset: BurstPreset = load("res://data/fx/dust.tres")
 	Fx.burst(Vector2.ZERO, preset)

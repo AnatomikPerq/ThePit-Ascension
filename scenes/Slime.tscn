@@ -47,6 +47,7 @@ shape = SubResource("Shape_Stomp")
 [node name="Combat" type="Node" parent="."]
 script = ExtResource("3_combat")
 stats = ExtResource("4_stats")
+frees_on_death = false
 
 [node name="Sync" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SRC_enemy")

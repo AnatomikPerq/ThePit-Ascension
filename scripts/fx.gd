@@ -11,8 +11,15 @@ extends Node
 var _trauma: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
-const SHAKE_DECAY: float = 2.4
-const SHAKE_MAX_OFFSET: float = 30.0
+## Trauma per second bled off, and the offset trauma 1.0 is worth.
+##
+## These were 2.4 / 30.0, which put a hit at 0.35 trauma on screen as ±3.7 px
+## for 150 ms — sub-pixel noise on a 1920-wide viewport. Nobody could see it,
+## and once the kill hitstop was removed there was nothing else selling an
+## impact, so the shake read as gone. Same curve, amplitude and dwell that
+## actually land.
+const SHAKE_DECAY: float = 1.8
+const SHAKE_MAX_OFFSET: float = 80.0
 
 ## Where world-space effects live. Set by the active scene, cleared on its
 ## exit. Bursts are pooled per root: the pool dies with the scene it served.

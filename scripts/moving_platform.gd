@@ -22,6 +22,14 @@ func _ready() -> void:
 	_start_pos = global_position
 
 
+## Where the platform was authored: the point its travel oscillates around, and
+## the only thing about its position that is the same on every peer at every
+## moment. Anything hashing or comparing world layout wants this, not the live
+## position, which depends on how many ticks that machine has run.
+func start_position() -> Vector2:
+	return _start_pos
+
+
 func _physics_process(_delta: float) -> void:
 	_ticks += 1
 	if _ticks <= move_delay:

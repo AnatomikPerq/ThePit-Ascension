@@ -71,6 +71,14 @@ func is_sim_authority() -> bool:
 	return not active or multiplayer.is_server()
 
 
+## True only inside a running RACE. Rivals are solid to each other and their
+## attacks land; in co-op players share a goal, so they pass through each other
+## and cannot do each other harm. Solo is never versus — one predicate keeps
+## the two modes from leaking into each other anywhere else.
+func is_versus() -> bool:
+	return active and mode == Mode.RACE
+
+
 ## Everyone connected right now (the lobby view): this machine plus the rest.
 func lobby_peers() -> Array[int]:
 	if not active:
@@ -91,6 +99,19 @@ func start_session(run_mode: Mode, world_seed: int) -> void:
 		ids.append(p)
 	ids.sort()
 	_begin_run.rpc(run_mode, world_seed, ids)
+
+
+## Host only: same mode, fresh layout, everyone at the bottom again. It goes
+## through start_session, so a restart is not a special case — the roster is
+## re-locked from whoever is still connected and every machine enters the new
+## run the same way it entered the first one.
+func restart_session() -> void:
+	if not is_host():
+		return
+	var fresh_seed := 0
+	while fresh_seed == 0:
+		fresh_seed = randi()
+	start_session(mode as Mode, fresh_seed)
 
 
 @rpc("authority", "call_local", "reliable")

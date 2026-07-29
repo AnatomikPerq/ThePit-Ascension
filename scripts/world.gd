@@ -49,7 +49,7 @@ var _session_over: bool = false
 @onready var trampolines_node: Node2D = $Trampolines
 @onready var hud: RunHud = $CanvasLayer/HUD
 @onready var upgrade_menu: UpgradeMenu = $CanvasLayer/UpgradeMenu
-@onready var pause_overlay: ColorRect = $CanvasLayer/PauseOverlay
+@onready var pause_overlay: PauseOverlay = $CanvasLayer/PauseOverlay
 @onready var game_over_screen: EndScreen = $CanvasLayer/GameOverScreen
 @onready var victory_screen: EndScreen = $CanvasLayer/VictoryScreen
 
@@ -61,11 +61,20 @@ func _ready() -> void:
 	Game.new_run(Net.session_peers)
 	Game.score_changed.connect(hud.on_score_changed)
 	upgrade_menu.chosen.connect(choose_upgrade)
+	# Every way out of a run, from every screen that offers one, lands on the
+	# same three methods.
+	pause_overlay.resume_pressed.connect(_resume_game)
+	pause_overlay.restart_pressed.connect(restart)
+	pause_overlay.menu_pressed.connect(go_to_menu)
+	for screen: EndScreen in [game_over_screen, victory_screen]:
+		screen.restart_pressed.connect(restart)
+		screen.menu_pressed.connect(go_to_menu)
 	if Net.active:
 		Net.peers_changed.connect(_prune_disconnected)
 		Net.session_closed.connect(_on_session_closed)
-		# The session has one shared run; a personal restart makes no sense.
-		game_over_screen.get_node(^"SubTitle").text = "ESC — leave session"
+		# "Press SPACE to Restart" is a solo promise; in a session the end
+		# screen's own hint line says who may do what.
+		game_over_screen.get_node(^"SubTitle").text = ""
 
 	# World-space effects (bursts, popups, ghosts) spawn under this scene
 	# and die with it.
@@ -198,10 +207,18 @@ func show_notification(text: String) -> void:
 	hud.show_notification(text)
 
 
+## Is this avatar's position something to judge progress by? A puppet reports
+## where it is from its own machine, and its node path is the same in every run,
+## so right after a restart the host can still be hearing about the run that
+## just ended. Anything that awards or ends must ask this first.
+func _reports_this_run(avatar: CharacterBody2D) -> bool:
+	return is_instance_valid(avatar) and avatar.run_seed == world_seed
+
+
 func _check_milestones() -> void:
 	for peer_id in players:
 		var avatar := players[peer_id]
-		if not is_instance_valid(avatar):
+		if not _reports_this_run(avatar):
 			continue
 		var milestones: Array = _upgrade_milestones[peer_id]
 		for i in range(milestones.size() - 1, -1, -1):
@@ -225,7 +242,7 @@ func _offer_upgrade() -> void:
 func _check_zones() -> void:
 	for peer_id in players:
 		var avatar := players[peer_id]
-		if not is_instance_valid(avatar):
+		if not _reports_this_run(avatar):
 			continue
 		var milestones: Array = _zone_milestones[peer_id]
 		for i in range(milestones.size() - 1, -1, -1):
@@ -252,7 +269,7 @@ func _check_victory() -> void:
 	if Net.active:
 		for peer_id in players:
 			var avatar := players[peer_id]
-			if is_instance_valid(avatar) and avatar.global_position.y < profile.victory_y:
+			if _reports_this_run(avatar) and avatar.global_position.y < profile.victory_y:
 				# Host-authoritative: the surface bonus lands before the
 				# broadcast so every end screen shows the final number.
 				Game.add_score(2000, Vector2.INF, Color.WHITE, peer_id)
@@ -376,10 +393,12 @@ func _stats_text(new_record: bool) -> String:
 		run.score, run.kills, run.max_combo, depth_now, Game.run_time_text(),
 	]
 	if new_record:
-		text += "NEW RECORD!\n"
+		text += "NEW RECORD!"
 	else:
-		text += "BEST %d\n" % Game.best_score
-	return text + "\nESC — main menu"
+		text += "BEST %d" % Game.best_score
+	# The way out used to be spelled out here; the end screen's own buttons and
+	# hint line carry it now, for every mode.
+	return text
 
 
 func _show_victory() -> void:
@@ -424,6 +443,10 @@ func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	avatar.name = "Avatar%d" % peer_id
 	avatar.peer_id = peer_id
 	avatar.set_multiplayer_authority(peer_id)
+	# Only for the avatar this machine steers. A puppet keeps -1 until its owner
+	# says which run it is reporting from — see Player.run_seed.
+	if peer_id == Game.local_peer_id:
+		avatar.run_seed = world_seed
 	avatar.global_position = Vector2(
 		profile.world_width / 2.0 + slot_offset * 90.0,
 		max_depth - profile.player_spawn_height)
@@ -464,10 +487,18 @@ func _on_player_damaged(new_health: int) -> void:
 	hud.update_hp(new_health)
 
 
+## R, the pause menu button and the end screens all end here. In a session
+## there is one shared run, so a restart is the host putting everyone back at
+## the bottom of a fresh pit — it used to be silently ignored, which left
+## rejoining as the only way to play a second round.
 func restart() -> void:
-	if Net.active:
-		return # the session has one shared run; leave via ESC instead
-	Router.restart_run()
+	if not Net.active:
+		Router.restart_run()
+		return
+	if Net.is_host():
+		Net.restart_session()
+	else:
+		show_notification("ONLY THE HOST CAN RESTART")
 
 
 func go_to_menu() -> void:

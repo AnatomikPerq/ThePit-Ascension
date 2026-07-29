@@ -86,6 +86,35 @@ func _run() -> void:
 	print("no global time scale left behind")
 	_expect(is_equal_approx(Engine.time_scale, 1.0), "Engine.time_scale is 1.0")
 
+	print("screen shake reaches the camera")
+	# Fx.shake() only raises a number; the world is what has to spend it on the
+	# camera every frame. Nothing else in the harness looks at the far end.
+	var base_offset: Vector2 = _world.CAMERA_BASE_OFFSET
+	_expect(_world.camera.offset == base_offset, "the camera rests at its base offset")
+	Fx.shake(1.0)
+	# The offset is a fresh random sample each frame, so a single frame can
+	# land near zero by chance. What matters is the amplitude over the shake.
+	var kick := 0.0
+	for i in 10:
+		await get_tree().process_frame
+		kick = maxf(kick, (_world.camera.offset - base_offset).length())
+	_expect(kick > 20.0, "full trauma moves the camera (%.1f px)" % kick)
+	await _idle(120) # trauma decays in about 0.55 s
+	_expect(_world.camera.offset == base_offset, "the camera settles back")
+
+	print("leaving a run for the main menu")
+	await _press(&"pause")
+	_expect(_world.pause_overlay.visible, "the pause overlay is up")
+	_expect(_world.pause_overlay.restart_btn.visible, "solo: the restart button is offered")
+	# The button, not the method: this is the wiring the player actually uses,
+	# and mid-run there is no other way to the menu.
+	_world.pause_overlay.menu_btn.pressed.emit()
+	await _idle(10)
+	var scene := get_tree().current_scene
+	_expect(is_instance_valid(scene) and scene.name == "MainMenu",
+		"MAIN MENU leaves the run for the menu")
+	_expect(not get_tree().paused, "and does not leave the tree paused")
+
 	_finish()
 
 

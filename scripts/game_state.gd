@@ -7,6 +7,13 @@ signal score_changed(peer_id: int, score: int, combo: int)
 
 const COMBO_WINDOW: float = 3.0
 const SAVE_PATH := "user://thepit_save.cfg"
+## Camera kick on a kill, and what each further step of the combo adds.
+## CLAUDE.md §4 has said since the hitstop was removed that kill feedback is
+## "screen shake, particles, the score popup and the sound" — the shake was
+## the one of the four nobody actually wired up.
+const KILL_SHAKE: float = 0.3
+const KILL_SHAKE_PER_COMBO: float = 0.05
+const KILL_SHAKE_MAX: float = 0.6
 
 ## Per-player run state for the current run, keyed by peer id.
 var runs: Dictionary[int, PlayerRun] = {}
@@ -116,6 +123,7 @@ func _kill_feedback(pos: Vector2, gained: int, combo: int, color: Color) -> void
 		text += "  x%d" % combo
 	Fx.popup(pos + Vector2(0, -50), text, color)
 	Fx.burst(pos, _kill_burst, color, 14 + mini(combo * 2, 16))
+	Fx.shake(minf(KILL_SHAKE + combo * KILL_SHAKE_PER_COMBO, KILL_SHAKE_MAX))
 	Audio.play(&"kill", clampf(0.9 + combo * 0.07, 0.9, 1.7))
 
 

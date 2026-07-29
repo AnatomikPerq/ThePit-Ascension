@@ -14,6 +14,12 @@ const MENU_SCENE := "res://scenes/MainMenu.tscn"
 const WORLD_SCENE := "res://scenes/World.tscn"
 const LOBBY_SCENE := "res://scenes/Lobby.tscn"
 
+## A swap is built now and applied on the next idle frame, so two requests in
+## the same frame — a button press and the key bound to the same thing, or the
+## host's restart arriving while its own local call is still pending — would
+## build two scenes and immediately free one of them. First request wins.
+var _pending: bool = false
+
 
 func to_menu() -> void:
 	_swap((load(MENU_SCENE) as PackedScene).instantiate())
@@ -36,12 +42,17 @@ func restart_run() -> void:
 
 
 func _swap(next: Node) -> void:
+	if _pending:
+		next.free()
+		return
+	_pending = true
 	# Deferred, like change_scene_to_file: the caller is usually deep inside
 	# input handling or a signal from the scene about to be freed.
 	_apply_swap.call_deferred(next)
 
 
 func _apply_swap(next: Node) -> void:
+	_pending = false
 	get_tree().paused = false
 	var old := get_tree().current_scene
 	if is_instance_valid(old):

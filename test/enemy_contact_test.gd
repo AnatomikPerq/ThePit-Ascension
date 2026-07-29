@@ -22,23 +22,24 @@ extends GdUnitTestSuite
 const CASES := {
 	"golem": {
 		"scene": "res://scenes/Golem.tscn",
-		"needs_dash": false, "rebound": -600.0, "score": 50, "leaves": "",
+		"needs_dash": false, "rebound": -600.0, "score": 50, "leaves": "", "vanishes": false,
 	},
 	"slime": {
 		"scene": "res://scenes/Slime.tscn",
-		"needs_dash": false, "rebound": -700.0, "score": 75, "leaves": "Trampoline.tscn",
+		"needs_dash": false, "rebound": -700.0, "score": 75,
+		"leaves": "Trampoline.tscn", "vanishes": true,
 	},
 	"pursuer": {
 		"scene": "res://scenes/Pursuer.tscn",
-		"needs_dash": true, "rebound": -900.0, "score": 150, "leaves": "",
+		"needs_dash": true, "rebound": -900.0, "score": 150, "leaves": "", "vanishes": true,
 	},
 	"bat": {
 		"scene": "res://scenes/Bat.tscn",
-		"needs_dash": true, "rebound": -900.0, "score": 125, "leaves": "",
+		"needs_dash": true, "rebound": -900.0, "score": 125, "leaves": "", "vanishes": true,
 	},
 	"spitter": {
 		"scene": "res://scenes/Spitter.tscn",
-		"needs_dash": true, "rebound": -900.0, "score": 150, "leaves": "",
+		"needs_dash": true, "rebound": -900.0, "score": 150, "leaves": "", "vanishes": true,
 	},
 }
 
@@ -184,6 +185,29 @@ func test_conversions_leave_the_right_thing_behind() -> void:
 		assert_array(r.spawned) \
 			.override_failure_message("%s should leave a %s, spawned: %s" % [key, leaves, str(r.spawned)]) \
 			.contains([leaves])
+
+
+## A dead enemy leaves the screen. Only the golem is exempt, because its corpse
+## IS the platform. Pursuer, bat and spitter had no `killed` handler at all
+## after the contact ladder moved into EnemyCombat, so their sprites sat frozen
+## in mid-air where they died, for the rest of the run.
+func test_the_corpse_disappears_unless_it_is_scenery() -> void:
+	for key in CASES:
+		var vanishes: bool = CASES[key]["vanishes"]
+		var r := await _run_contact(key, true, false)
+		assert_bool(r.enemy_freed) \
+			.override_failure_message("%s: corpse freed=%s, expected %s" \
+				% [key, r.enemy_freed, vanishes]) \
+			.is_equal(vanishes)
+
+
+func test_strike_also_removes_the_corpse() -> void:
+	for key in CASES:
+		if not CASES[key]["vanishes"]:
+			continue
+		var r := await _run_contact(key, false, true)
+		assert_bool(r.enemy_freed) \
+			.override_failure_message("%s survived its own death by strike" % key).is_true()
 
 
 func test_golem_stays_in_the_tree_as_a_platform() -> void:
