@@ -1,34 +1,77 @@
-# The PIT: Ascension 🌋
+<div align="center">
 
-A fast-paced procedural vertical 2D platformer for **Godot 4.7**, played solo
-or over the network. You are Cyn, a broken drone at the bottom of a trash pit
-— depth 8000. The Absolute Solver is active. Climb out.
+![The PIT: Ascension](docs/images/menu.png)
 
-A fan project inspired by *Murder Drones* (GLITCH), episode 5. Open source,
-non-commercial. See [docs/CONTENT.md](docs/CONTENT.md) for the theme and the
-full content inventory.
+**A seeded vertical platformer for Godot 4.7. You start at depth 8000.
+The surface does not expect you.**
 
-![Gameplay Preview](preview.png)
+Solo · Co-op · Race — plain ENet, no accounts, no services.
 
-## Features
+</div>
 
-- **Seeded procedural generation** — the whole pit is a deterministic
-  function of one seed: platform rows, moving platforms, walls, level
-  dividers. Same seed, same world, on every machine.
-- **Five enemies** — Golem (petrifies into a platform when killed), Slime
-  (leaves a trampoline), Pursuer, Bat, Spitter. One shared combat component;
-  each enemy's numbers live in a resource, not in code.
-- **Upgrades** — milestones at 75/50/25% depth offer Double Jump, Sideways
-  Strike, Shockwave Blast, or +1 Max HP with a full heal.
-- **Score & combos** — chained kills within 3 s multiply the reward. Best
-  score persists between sessions.
-- **Multiplayer** — one player hosts on an open port, the rest join by
-  address. **Co-op** (first to the surface wins for the team) or **race**
-  (exactly one winner). No accounts, no services, plain ENet.
-  See [docs/NETWORKING.md](docs/NETWORKING.md).
-- **Juice** — screen shake, squash & stretch, dash ghost trails, particle
-  bursts, floating score popups; ember-lit backdrop shifting from molten
-  depths to pre-dawn sky as you ascend.
+---
+
+You are **Cyn**, at the bottom of a trash pit where broken worker drones are
+dumped. The Absolute Solver is active. Their heads are falling past you on the
+way down. Climb out.
+
+A fan project inspired by ***Murder Drones*** (GLITCH), episode 5. Open source,
+non-commercial, unaffiliated. The theme and the full content inventory are in
+[docs/CONTENT.md](docs/CONTENT.md).
+
+## The cast
+
+![Cyn and the five enemies of the pit](docs/images/cast.png)
+
+| | Who | What it does | How it dies | What it leaves |
+| :-- | :--- | :--- | :--- | :--- |
+| 1 | **Cyn** | you | falling, mostly | — |
+| 2 | **Golem** | a broken drone head, falling straight down | any stomp, or a strike | a petrified platform |
+| 3 | **Slime** | falls while drifting sideways | any stomp, or a strike | a trampoline |
+| 4 | **Pursuer** | chases along the ground, jumps walls and gaps | **dash** stomp, or a strike | — |
+| 5 | **Bat** | flies at you with a sine wobble | **dash** stomp, or a strike | — |
+| 6 | **Spitter** | sits on a platform and lobs acid | **dash** stomp, or a strike | — |
+| 7 | **Trampoline** | what a stomped slime becomes | — | altitude |
+
+Landing on one of the last three *without* dashing costs you a heart instead.
+A golem you turned into a platform is a step; a slime you turned into a
+trampoline is a shortcut. The whole point of the pit is that it is built out of
+the things that were trying to kill you.
+
+## The climb
+
+![Climbing out of the pit](docs/images/gameplay.png)
+
+Every pit is a deterministic function of one seed — platform rows, moving
+platforms, walls, level dividers, enemy pacing. The same seed builds the same
+world on every machine, which is what lets multiplayer send a number instead
+of a level.
+
+At 75%, 50% and 25% of the way up, the climb pays out:
+
+![Choosing an upgrade](docs/images/upgrades.png)
+
+Double Jump, Sideways Strike, Shockwave Blast — or +1 max HP with a full heal
+if you would rather survive than show off. Chained kills within three seconds
+multiply the score, and the best run persists between sessions.
+
+## Multiplayer
+
+![The multiplayer lobby](docs/images/lobby.png)
+
+One player forwards a UDP port (default **24565**) and hosts; everyone else
+joins by address. The host picks the mode and starts the climb for all of them.
+
+- **Co-op** — the first to the surface wins it for the team.
+- **Race** — exactly one winner, and the other climbers are in your way for
+  real: rivals are solid, so you can stand on a head, and Strike, Shockwave and
+  dash-stomp all land on them.
+
+The host can restart the run for everyone at any time. Anyone can leave for the
+main menu at any time. **Single-player never opens a socket.**
+
+Which parts of the game are simulated where — element by element, with the
+rules the model stands on — is [docs/NETWORKING.md](docs/NETWORKING.md).
 
 ## Controls
 
@@ -41,33 +84,32 @@ full content inventory.
 | Shockwave (when unlocked) | `C` |
 | Upgrade menu picks | `Z / X / C / V` |
 | Pause / back | `ESC` |
-| Restart (solo) | `R` |
+| Restart | `R` (in a session, host only — restarts for everyone) |
 | Music on/off | `M` |
 | Debug hitboxes | `U` |
 | Flight (cheat) | `F` |
 
-Movement keys are bound to physical positions (WASD works on any keyboard
-layout); menu keys are bound to the letters printed on screen.
+Movement keys are bound to physical positions, so WASD works on any keyboard
+layout; menu keys are bound to the letters printed on screen. Pausing offers
+**RESUME / RESTART / MAIN MENU** as buttons, in every mode — a run can be left
+whenever you like, not only after dying.
 
-## Running
+## Running it
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/AnatomikPerq/ThePit-Ascension.git
-   ```
-2. Open **Godot 4.7** (or a compatible 4.x), import `project.godot`, press `F5`.
+```bash
+git clone https://github.com/AnatomikPerq/ThePit-Ascension.git
+```
+
+Open **Godot 4.7** (or a compatible 4.x), import `project.godot`, press `F5`.
 
 ### Multiplayer quickstart
 
-1. The host opens (forwards) a UDP port — default **24565** — and clicks
-   **MULTIPLAYER → HOST**.
-2. Everyone else enters the host's address and port and clicks **JOIN**.
-3. The host picks **CO-OP** or **RACE** and starts the climb. The roster
-   locks at that moment; there is no join-in-progress.
+1. Host: forward the UDP port, then **MULTIPLAYER → HOST**.
+2. Everyone else: enter the host's address and port, **JOIN**.
+3. Host: pick **CO-OP** or **RACE** and start. The roster locks at that moment
+   — there is no join-in-progress.
 
-Single-player never opens a socket.
-
-## Project structure
+## How it is put together
 
 ```
 src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/)
@@ -80,23 +122,37 @@ docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
 test/      GdUnit4 suites
 ```
 
+Code defines behaviour; `.tres` files define numbers. If you are tuning
+something, you should be in the inspector and not in a script — enemy stats,
+world layout, spawn weights, particle shapes and every sound all live in
+`data/`. Layout lives in scenes, not in `Label.new()`.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) names the seam for each thing the
+project is meant to grow into next.
+
 ## Verifying a change
 
 ```bash
 bash tools/run_tests.sh
 ```
 
-runs everything headless: the GdUnit4 suites, a 50-check smoke test, an
-input/state probe, the world-generation fingerprint, a two-instance
-multiplayer probe over a localhost socket, and the convention gates.
+Everything headless, one command: the GdUnit4 suites, a 50-check smoke test, an
+input/state probe driving real key events, the world-generation fingerprint, a
+two-instance multiplayer probe over a localhost socket — including a host
+restart and a race hit landing across machines — and the convention gates.
 See [docs/TESTING.md](docs/TESTING.md).
+
+The images in this README are generated by
+`tools/build_readme_shots.tscn`: the project's own scenes, its own renderer, a
+fixed seed. Re-running it overwrites them.
 
 ## Credits
 
-All audio is CC0 (Kenney + OpenGameArt) — see
+All audio is CC0 (Kenney + OpenGameArt) — full provenance in
 [assets/audio/CREDITS.md](assets/audio/CREDITS.md). *Murder Drones* and its
 characters belong to GLITCH; this is an unaffiliated, non-commercial fan work.
 
 ---
-*Originally a Python-to-Godot port; since rebuilt around data-driven
-resources, authored scenes and a host-authoritative network model.*
+
+*Originally a Python-to-Godot port; since rebuilt around data-driven resources,
+authored scenes and a host-authoritative network model.*
