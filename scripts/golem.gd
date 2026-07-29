@@ -1,87 +1,60 @@
 extends Node2D
-## Golem — falls down, converts to Platform when stomped/struck.
-## DamageArea (bottom): hurts the player.
-## StompArea (top): player contact → spawn Platform.
+## Golem — a broken drone head falling out of the pit's upper reaches.
+## Struck or landed on, it petrifies into a solid platform instead of vanishing,
+## which is what makes it the game's improvised staircase.
+##
+## Contact resolution lives in the Combat child (EnemyCombat); this script keeps
+## only the fall and the petrification.
 
 const FALL_SPEED: float = 360.0 # term_vel 3 * 60 * 2
-const SCORE: int = 50
-const SCORE_COLOR := Color(0.75, 0.72, 0.62)
+const PLATFORM_SIZE := Vector2(64, 64)
 
-var _active_texture: Texture2D
-var _player: CharacterBody2D
-var _is_dead: bool = false
+@onready var combat: EnemyCombat = $Combat
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
 
 
 func _ready() -> void:
-	_active_texture = preload("res://assets/sprites/golem_active.png")
+	combat.killed.connect(_on_killed)
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
-	_player = player
+	# $Combat, not the @onready reference: the spawner calls this before
+	# the enemy is added to the tree, when @onready values are still null.
+	($Combat as EnemyCombat).player = player
 
 
 func _physics_process(delta: float) -> void:
-	if _is_dead:
+	if not Net.is_sim_authority():
+		return # movement is mirrored from the host
+	if combat.is_dead:
 		return
-
 	position.y += FALL_SPEED * delta
 
-	if is_instance_valid(_player) and position.y > _player.global_position.y + 1500.0:
-		queue_free()
-		return
 
-	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
-	if has_node("DamageArea"):
-		areas.append_array($DamageArea.get_overlapping_areas())
-
-	# Priority 1: Strike
-	for area in areas:
-		if area.is_in_group("strike"):
-			_die_and_transform()
-			return
-
-	# Priority 2: Stomp
-	for body in $StompArea.get_overlapping_bodies():
-		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			body.velocity.y = -600.0 # satisfying rebound
-			body.dashing_down = false
-			_die_and_transform()
-			return
-
-	# Priority 3: Damage
-	if has_node("DamageArea"):
-		for body in $DamageArea.get_overlapping_bodies():
-			if body.is_in_group("player"):
-				body.take_damage()
-
-
-func _die_and_transform() -> void:
-	_is_dead = true
-	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
+func _on_killed(_by_strike: bool) -> void:
 	Fx.dust(global_position, 14)
-	Sfx.play("thud", -8.0, randf_range(0.9, 1.1))
-	call_deferred("_deferred_transform")
+	Audio.play(&"thud")
+	_petrify.call_deferred()
 
 
-func _deferred_transform() -> void:
-	set_physics_process(false)
-	var sprite: Sprite2D = get_node_or_null("Sprite2D")
-	if sprite:
-		sprite.texture = _active_texture
-	
-	if has_node("DamageArea"):
-		$DamageArea.queue_free()
-	if has_node("StompArea"):
-		$StompArea.queue_free()
-		
-	if has_node("CrushBody"):
-		$CrushBody.queue_free()
-		
+## Becomes scenery: sheds every hitbox and grows a solid body to stand on.
+## Deferred because it restructures the node while the physics server is
+## iterating it.
+func _petrify() -> void:
+	sprite.play(&"petrified")
+	# The Combat component stays: it already returns early once is_dead is set,
+	# and _physics_process below still reads that flag every frame. Freeing it
+	# left this script talking to a deleted object.
+	for node in [get_node_or_null("DamageArea"), get_node_or_null("StompArea"),
+			get_node_or_null("CrushBody")]:
+		if node:
+			node.queue_free()
+
 	var body := StaticBody2D.new()
-	body.collision_layer = 1
+	body.collision_layer = Layers.WORLD
 	var shape := CollisionShape2D.new()
 	var rect := RectangleShape2D.new()
-	rect.size = Vector2(64, 64)
+	rect.size = PLATFORM_SIZE
 	shape.shape = rect
 	body.add_child(shape)
 	add_child(body)

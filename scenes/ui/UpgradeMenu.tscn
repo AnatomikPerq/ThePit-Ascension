@@ -1,0 +1,92 @@
+[gd_scene load_steps=3 format=3 uid="uid://cuiupgrade01"]
+
+[ext_resource type="Script" path="res://src/ui/upgrade_menu.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+
+[node name="UpgradeMenu" type="Panel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -570.0
+offset_top = -200.0
+offset_right = 570.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 20.0
+offset_right = 200.0
+offset_bottom = 70.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 40
+text = "CHOOSE UPGRADE"
+horizontal_alignment = 1
+
+[node name="DoubleJumpBtn" type="Button" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 110.0
+offset_right = 290.0
+offset_bottom = 310.0
+theme_override_font_sizes/font_size = 22
+text = "DOUBLE JUMP
+(Z)"
+
+[node name="StrikeBtn" type="Button" parent="."]
+layout_mode = 0
+offset_left = 310.0
+offset_top = 110.0
+offset_right = 560.0
+offset_bottom = 310.0
+theme_override_font_sizes/font_size = 22
+text = "SIDEWAYS STRIKE
+(X)"
+
+[node name="ShockwaveBtn" type="Button" parent="."]
+layout_mode = 0
+offset_left = 580.0
+offset_top = 110.0
+offset_right = 830.0
+offset_bottom = 310.0
+theme_override_font_sizes/font_size = 22
+text = "SHOCKWAVE BLAST
+(C)"
+
+[node name="HealBtn" type="Button" parent="."]
+layout_mode = 0
+offset_left = 850.0
+offset_top = 110.0
+offset_right = 1100.0
+offset_bottom = 310.0
+theme_override_font_sizes/font_size = 22
+text = "+1 MAX HP
+FULL HEAL
+(V)"
+
+[node name="HelpLabel" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.65)
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -200.0
+offset_top = -40.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "Click to select or press Z, X, C, V"
+horizontal_alignment = 1

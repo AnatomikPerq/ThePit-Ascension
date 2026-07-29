@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="EnemyStats" format=3]
+
+[ext_resource type="Script" path="res://src/defs/enemy_stats.gd" id="1_ottvu"]
+
+[resource]
+resource_name = "slime"
+script = ExtResource("1_ottvu")
+score = 75
+score_color = Color(0.35, 0.9, 0.4, 1)
+stomp_rebound = -700.0

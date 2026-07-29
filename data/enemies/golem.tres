@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="EnemyStats" format=3]
+
+[ext_resource type="Script" path="res://src/defs/enemy_stats.gd" id="1_bi346"]
+
+[resource]
+resource_name = "golem"
+script = ExtResource("1_bi346")
+score_color = Color(0.75, 0.72, 0.62, 1)

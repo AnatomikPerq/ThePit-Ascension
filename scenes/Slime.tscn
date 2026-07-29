@@ -1,13 +1,23 @@
-[gd_scene format=3 uid="uid://cslime01"]
+[gd_scene load_steps=8 format=3 uid="uid://cslime01"]
 
 [ext_resource type="Script" uid="uid://cyafnn114fsq6" path="res://scripts/slime.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dbxdigit1inet" path="res://assets/sprites/slime_falling.png" id="2_tex"]
 
+[ext_resource type="Script" path="res://src/entities/enemy_combat.gd" id="3_combat"]
+[ext_resource type="Resource" path="res://data/enemies/slime.tres" id="4_stats"]
 [sub_resource type="RectangleShape2D" id="Shape_Damage"]
 size = Vector2(60, 38)
 
 [sub_resource type="RectangleShape2D" id="Shape_Stomp"]
 size = Vector2(58, 7)
+
+[sub_resource type="SceneReplicationConfig" id="SRC_enemy"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath("Sprite2D:visible")
+properties/1/spawn = false
+properties/1/replication_mode = 2
 
 [node name="Slime" type="Node2D" unique_id=1937036269 groups=["enemy"]]
 script = ExtResource("1_script")
@@ -33,3 +43,11 @@ collision_mask = 10
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea" unique_id=500225563]
 position = Vector2(0, -3.5)
 shape = SubResource("Shape_Stomp")
+
+[node name="Combat" type="Node" parent="."]
+script = ExtResource("3_combat")
+stats = ExtResource("4_stats")
+frees_on_death = false
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_enemy")

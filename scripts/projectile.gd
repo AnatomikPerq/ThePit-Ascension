@@ -5,6 +5,8 @@ extends Area2D
 
 const LIFETIME: float = 4.0
 const SPEED: float = 700.0
+const HIT_BURST: BurstPreset = preload("res://data/fx/projectile_hit.tres")
+const FIZZLE_BURST: BurstPreset = preload("res://data/fx/projectile_fizzle.tres")
 
 var _velocity: Vector2 = Vector2.ZERO
 var _life: float = LIFETIME
@@ -25,12 +27,15 @@ func setup(origin: Vector2, target: Vector2, player: CharacterBody2D) -> void:
 
 
 func _ready() -> void:
-	sprite.texture = _make_blob_texture()
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
 
 
 func _physics_process(delta: float) -> void:
+	sprite.rotation += delta * 12.0 # cosmetic spin, every machine
+	if not Net.is_sim_authority():
+		return # motion is mirrored from the host
+
 	_life -= delta
 	if _life <= 0.0:
 		queue_free()
@@ -39,7 +44,6 @@ func _physics_process(delta: float) -> void:
 	# Gravity for the lob arc.
 	_velocity.y += 900.0 * delta
 	position += _velocity * delta
-	sprite.rotation += delta * 12.0
 
 	# Despawn far away from the player.
 	if is_instance_valid(_player):
@@ -49,28 +53,24 @@ func _physics_process(delta: float) -> void:
 
 func _on_body_entered(body: Node2D) -> void:
 	if body.is_in_group("player"):
-		body.take_damage()
-		Fx.burst(global_position, Color(0.45, 0.95, 0.3), 8, 180.0, 0.35)
-		queue_free()
+		# Each machine hurts only its own avatar; the host owns the free, so a
+		# blob the host saw miss cannot hurt anyone.
+		if body.get("peer_id") == Game.local_peer_id:
+			body.take_damage()
+			Fx.burst(global_position, HIT_BURST)
+		if Net.is_sim_authority():
+			queue_free()
 
 
 func _on_area_entered(area: Area2D) -> void:
-	# Destroyed by the player's Strike or Shockwave.
+	# Destroyed by the player's Strike or Shockwave. Scoring is the sim
+	# authority's call; the strike hitboxes exist there too.
+	if not Net.is_sim_authority():
+		return
 	if area.is_in_group("strike"):
-		Fx.burst(global_position, Color(0.45, 0.95, 0.3), 10, 220.0, 0.4)
-		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3))
+		Fx.burst(global_position, FIZZLE_BURST)
+		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3),
+			area.get_meta(&"owner_peer", 0))
 		queue_free()
 
 
-func _make_blob_texture() -> ImageTexture:
-	var size := 16
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(8, 8)
-	for y in range(size):
-		for x in range(size):
-			var d := Vector2(x, y).distance_to(center)
-			if d <= 6.0:
-				var edge := smoothstep(4.0, 6.0, d)
-				img.set_pixel(x, y, Color(0.45, 0.95, 0.3, 1.0 - edge * 0.4))
-	return ImageTexture.create_from_image(img)

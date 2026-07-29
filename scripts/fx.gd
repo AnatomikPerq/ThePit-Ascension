@@ -1,19 +1,49 @@
 extends Node
-## Fx — autoload with global "juice" helpers:
-## screen shake, hitstop, one-shot particle bursts, floating score popups,
-## ghost trails and damage flashes. Everything is spawned into the current
-## scene so no per-entity setup is required.
+## Fx — autoload with global "juice" helpers: screen shake, particle bursts,
+## floating score popups, ghost trails and damage flashes.
+##
+## Everything world-space spawns under `effects_root`, which the active scene
+## registers (World does in _ready). There is NO fallback to
+## get_tree().current_scene: a scene that wants effects opts in, and its
+## effects die with it. Cosmetics stay local — in a networked session these
+## are triggered by replicated events, never replicated as state.
 
 var _trauma: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
-const SHAKE_DECAY: float = 2.4
-const SHAKE_MAX_OFFSET: float = 30.0
+## Trauma per second bled off, and the offset trauma 1.0 is worth.
+##
+## These were 2.4 / 30.0, which put a hit at 0.35 trauma on screen as ±3.7 px
+## for 150 ms — sub-pixel noise on a 1920-wide viewport. Nobody could see it,
+## and once the kill hitstop was removed there was nothing else selling an
+## impact, so the shake read as gone. Same curve, amplitude and dwell that
+## actually land.
+const SHAKE_DECAY: float = 1.8
+const SHAKE_MAX_OFFSET: float = 80.0
+
+## Where world-space effects live. Set by the active scene, cleared on its
+## exit. Bursts are pooled per root: the pool dies with the scene it served.
+var effects_root: Node2D = null:
+	set(value):
+		effects_root = value
+		_burst_pool.clear()
+
+var _burst_scene: PackedScene
+var _popup_scene: PackedScene
+var _ghost_scene: PackedScene
+var _dust_preset: BurstPreset
+var _burst_pool: Array[FxBurst] = []
 
 
 func _ready() -> void:
 	# Shake must decay even while the tree is paused (menus).
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Loaded here, not preloaded as consts: an autoload's preloads pin
+	# resources past shutdown (same lesson as the sound bank).
+	_burst_scene = load("res://scenes/fx/Burst.tscn")
+	_popup_scene = load("res://scenes/fx/Popup.tscn")
+	_ghost_scene = load("res://scenes/fx/Ghost.tscn")
+	_dust_preset = load("res://data/fx/dust.tres")
 
 
 func _process(delta: float) -> void:
@@ -37,93 +67,77 @@ func get_shake_offset() -> Vector2:
 	) * SHAKE_MAX_OFFSET * strength
 
 
-# ── Hitstop ─────────────────────────────────────────────────────────────────
-## Brief global slowdown for impact frames. Real-time timer restores scale.
-func hitstop(duration: float = 0.05, time_scale: float = 0.1) -> void:
-	if Engine.time_scale < 1.0:
-		return # already in a hitstop, don't stack
-	Engine.time_scale = time_scale
-	var t := get_tree().create_timer(duration, true, false, true)
-	t.timeout.connect(func() -> void: Engine.time_scale = 1.0)
-
-
 # ── Particles ───────────────────────────────────────────────────────────────
-## One-shot radial burst of colored particles at a world position.
-func burst(pos: Vector2, color: Color, count: int = 16, speed: float = 320.0,
-		life: float = 0.55, gravity: float = 800.0) -> void:
-	var root := get_tree().current_scene
-	if root == null:
+## One-shot burst shaped by a BurstPreset from data/fx/. `tint` multiplies the
+## preset color (kill bursts pass the enemy's color over a white preset);
+## `count` overrides the preset amount when > 0 (combo-scaled kills).
+## Bursts are pooled and returned on their `finished` signal.
+func burst(pos: Vector2, preset: BurstPreset, tint: Color = Color.WHITE, count: int = 0) -> void:
+	if preset == null or not is_instance_valid(effects_root):
 		return
-	var p := CPUParticles2D.new()
-	p.one_shot = true
-	p.emitting = false
-	p.amount = count
-	p.lifetime = life
-	p.explosiveness = 1.0
-	p.direction = Vector2.UP
-	p.spread = 180.0
-	p.gravity = Vector2(0.0, gravity)
-	p.initial_velocity_min = speed * 0.35
-	p.initial_velocity_max = speed
-	p.scale_amount_min = 2.0
-	p.scale_amount_max = 5.0
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(color, 1.0))
-	ramp.set_color(1, Color(color, 0.0))
-	p.color_ramp = ramp
-	p.z_index = 50
-	root.add_child(p)
-	p.global_position = pos
-	p.emitting = true
-	get_tree().create_timer(life + 0.4).timeout.connect(p.queue_free)
+	var b := _acquire_burst()
+	b.global_position = pos
+	b.fire(preset, tint, count)
 
 
 ## Soft dust puff (landing, golem petrification).
-func dust(pos: Vector2, count: int = 10) -> void:
-	burst(pos, Color(0.75, 0.68, 0.58, 0.8), count, 140.0, 0.45, 150.0)
+func dust(pos: Vector2, count: int = 0) -> void:
+	burst(pos, _dust_preset, Color.WHITE, count)
+
+
+func _acquire_burst() -> FxBurst:
+	while not _burst_pool.is_empty():
+		var pooled := _burst_pool.pop_back() as FxBurst
+		if is_instance_valid(pooled):
+			return pooled
+	var b: FxBurst = _burst_scene.instantiate()
+	b.finished.connect(_on_burst_finished.bind(b))
+	effects_root.add_child(b)
+	return b
+
+
+func _on_burst_finished(b: FxBurst) -> void:
+	if is_instance_valid(b):
+		_burst_pool.append(b)
 
 
 # ── Floating popups ─────────────────────────────────────────────────────────
 ## Floating text in world space ("+300 x3"). Rises and fades out.
 func popup(pos: Vector2, text: String, color: Color = Color.WHITE, font_size: int = 30) -> void:
-	var root := get_tree().current_scene
-	if root == null:
+	if not is_instance_valid(effects_root):
 		return
-	var l := Label.new()
-	l.text = text
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", font_size)
-	l.add_theme_color_override("font_color", color)
-	l.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.9))
-	l.add_theme_constant_override("outline_size", 8)
-	l.z_index = 100
-	l.size = Vector2(240, 40)
-	root.add_child(l)
-	l.position = pos - Vector2(120, 20)
-	var tw := l.create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(l, "position:y", l.position.y - 90.0, 0.8)\
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(l, "modulate:a", 0.0, 0.8).set_delay(0.25)
-	tw.chain().tween_callback(l.queue_free)
+	var p: Node2D = _popup_scene.instantiate()
+	effects_root.add_child(p)
+	p.global_position = pos
+	p.setup(text, color, font_size)
 
 
 # ── Ghost trail ─────────────────────────────────────────────────────────────
 ## Fading afterimage copy of a sprite (dash trails).
-func ghost(src: Sprite2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4), fade: float = 0.25) -> void:
-	var root := get_tree().current_scene
-	if root == null or src == null:
+## Accepts either a Sprite2D or an AnimatedSprite2D — the ghost only ever needs
+## the texture that is on screen right now.
+func ghost(src: Node2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4)) -> void:
+	if not is_instance_valid(effects_root) or src == null:
 		return
-	var g := Sprite2D.new()
-	g.texture = src.texture
-	g.flip_h = src.flip_h
-	g.modulate = tint
-	g.z_index = -1
-	root.add_child(g)
-	g.global_transform = src.global_transform
-	var tw := g.create_tween()
-	tw.tween_property(g, "modulate:a", 0.0, fade)
-	tw.tween_callback(g.queue_free)
+	var tex := _current_texture(src)
+	if tex == null:
+		return
+	var g: Node2D = _ghost_scene.instantiate()
+	effects_root.add_child(g)
+	g.setup(tex, src.get("flip_h") == true, src.global_transform, tint)
+
+
+## The texture a sprite node is currently showing, whichever kind it is.
+func _current_texture(src: Node2D) -> Texture2D:
+	var still := src as Sprite2D
+	if still:
+		return still.texture
+	var animated := src as AnimatedSprite2D
+	if animated and animated.sprite_frames:
+		var anim := animated.animation
+		if animated.sprite_frames.has_animation(anim):
+			return animated.sprite_frames.get_frame_texture(anim, animated.frame)
+	return null
 
 
 # ── Flash ───────────────────────────────────────────────────────────────────

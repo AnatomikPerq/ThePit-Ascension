@@ -1,27 +1,19 @@
-[gd_scene format=3 uid="uid://cworld01"]
+[gd_scene load_steps=9 format=3 uid="uid://cworld01"]
 
 [ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://dmf6ayjhdxyp0" path="res://assets/sprites/level_floor.png" id="tex_divider"]
-[ext_resource type="Texture2D" uid="uid://dgiqdrgpiwhob" path="res://assets/sprites/floor_map.png" id="tex_floor"]
-[ext_resource type="Texture2D" uid="uid://cms0xiuwxuw3j" path="res://assets/sprites/wall_map.png" id="tex_wall"]
-
-[sub_resource type="RectangleShape2D" id="Shape_Floor"]
-size = Vector2(2000, 64)
-
-[sub_resource type="RectangleShape2D" id="Shape_Wall"]
-size = Vector2(128, 512)
-
-[sub_resource type="RectangleShape2D" id="Shape_Divider"]
-size = Vector2(600, 64)
+[ext_resource type="Script" path="res://scripts/ui_input.gd" id="2_uiinput"]
+[ext_resource type="Resource" path="res://data/worlds/pit.tres" id="3_profile"]
+[ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="4_embers"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="5_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/UpgradeMenu.tscn" id="6_upgrade"]
+[ext_resource type="PackedScene" path="res://scenes/ui/PauseOverlay.tscn" id="7_pause"]
+[ext_resource type="PackedScene" path="res://scenes/ui/EndScreen.tscn" id="8_end"]
 
 [node name="World" type="Node2D" unique_id=1323789333]
 script = ExtResource("1_script")
+profile = ExtResource("3_profile")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1636867807]
-limit_left = -128
-limit_top = -384
-limit_right = 2128
-limit_bottom = 8000
 position_smoothing_enabled = true
 position_smoothing_speed = 8.0
 drag_horizontal_enabled = true
@@ -31,324 +23,54 @@ drag_top_margin = 0.25
 drag_right_margin = 0.3
 drag_bottom_margin = 0.25
 
+[node name="Embers" parent="Camera2D" instance=ExtResource("4_embers")]
+
 [node name="Platforms" type="Node2D" parent="." unique_id=1146815044]
-
-[node name="Floor" type="StaticBody2D" parent="Platforms" unique_id=1652976067]
-position = Vector2(1000, 7968)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Floor" unique_id=1048427714]
-scale = Vector2(2, 2)
-texture = ExtResource("tex_floor")
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Floor" unique_id=1301705835]
-shape = SubResource("Shape_Floor")
-
-[node name="WallLeft" type="StaticBody2D" parent="Platforms" unique_id=1530588920]
-position = Vector2(-64, 7744)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/WallLeft" unique_id=1620247046]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_wall")
-region_enabled = true
-region_rect = Rect2(0, 0, 64, 256)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/WallLeft" unique_id=543570062]
-shape = SubResource("Shape_Wall")
-
-[node name="WallRight" type="StaticBody2D" parent="Platforms" unique_id=1561791550]
-position = Vector2(2064, 7744)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/WallRight" unique_id=4846389]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_wall")
-region_enabled = true
-region_rect = Rect2(0, 0, 64, 256)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/WallRight" unique_id=1113953762]
-shape = SubResource("Shape_Wall")
-
-[node name="Divider_2000_Left" type="StaticBody2D" parent="Platforms" unique_id=1965441000]
-position = Vector2(300, 2000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Left" unique_id=1974734129]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_2000_Left" unique_id=478412520]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_2000_Right" type="StaticBody2D" parent="Platforms" unique_id=2121559842]
-position = Vector2(1700, 2000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_2000_Right" unique_id=1287076559]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_2000_Right" unique_id=1517268956]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_4000_Left" type="StaticBody2D" parent="Platforms" unique_id=1060849920]
-position = Vector2(300, 4000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Left" unique_id=787782494]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_4000_Left" unique_id=126369975]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_4000_Right" type="StaticBody2D" parent="Platforms" unique_id=393336379]
-position = Vector2(1700, 4000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_4000_Right" unique_id=1268527016]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_4000_Right" unique_id=646414034]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_6000_Left" type="StaticBody2D" parent="Platforms" unique_id=679755185]
-position = Vector2(300, 6000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Left" unique_id=1094084178]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_6000_Left" unique_id=165366873]
-shape = SubResource("Shape_Divider")
-
-[node name="Divider_6000_Right" type="StaticBody2D" parent="Platforms" unique_id=1536394383]
-position = Vector2(1700, 6000)
-collision_layer = 33
-
-[node name="Sprite2D" type="Sprite2D" parent="Platforms/Divider_6000_Right" unique_id=1153613536]
-texture_repeat = 2
-scale = Vector2(2, 2)
-texture = ExtResource("tex_divider")
-region_enabled = true
-region_rect = Rect2(0, 0, 300, 32)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Platforms/Divider_6000_Right" unique_id=1253623906]
-shape = SubResource("Shape_Divider")
 
 [node name="Enemies" type="Node2D" parent="." unique_id=83102023]
 
-[node name="Trampolines" type="Node2D" parent="." unique_id=1972712193]
+[node name="Trampolines" type="Node2D" parent="." unique_id=1972712193 groups=["trampoline_container"]]
+
+[node name="EnemySpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://scenes/Golem.tscn", "res://scenes/Slime.tscn", "res://scenes/Pursuer.tscn", "res://scenes/Bat.tscn", "res://scenes/Spitter.tscn", "res://scenes/Projectile.tscn")
+spawn_path = NodePath("../Enemies")
+
+[node name="TrampolineSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://scenes/Trampoline.tscn")
+spawn_path = NodePath("../Trampolines")
 
 [node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=127504935]
+process_mode = 3
 
-[node name="HUD" type="Control" parent="CanvasLayer" unique_id=2066808600]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
+[node name="UIInputHandler" type="Node" parent="CanvasLayer"]
+process_mode = 3
+script = ExtResource("2_uiinput")
+world_path = NodePath("../..")
 
-[node name="HPBar" type="HBoxContainer" parent="CanvasLayer/HUD" unique_id=1093280727]
-layout_mode = 0
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 220.0
-offset_bottom = 44.0
+[node name="HUD" parent="CanvasLayer" instance=ExtResource("5_hud")]
 
-[node name="DepthLabel" type="Label" parent="CanvasLayer/HUD" unique_id=1896122252]
-layout_mode = 0
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -250.0
-offset_top = 20.0
-offset_right = -20.0
-offset_bottom = 50.0
-text = "DEPTH: 0"
-
-[node name="SkillsLabel" type="Label" parent="CanvasLayer/HUD" unique_id=1667471483]
-layout_mode = 0
-offset_left = 20.0
-offset_top = 50.0
-offset_right = 400.0
-offset_bottom = 80.0
-text = "Skills: "
-
-[node name="FlightLabel" type="Label" parent="CanvasLayer/HUD" unique_id=989907726]
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -120.0
-offset_top = 80.0
-offset_right = 120.0
-offset_bottom = 110.0
-horizontal_alignment = 1
-
-[node name="NotificationLabel" type="Label" parent="CanvasLayer/HUD" unique_id=440184339]
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -200.0
-offset_top = 120.0
-offset_right = 200.0
-offset_bottom = 150.0
-horizontal_alignment = 1
-
-[node name="UpgradeMenu" type="Panel" parent="CanvasLayer" unique_id=400262836]
+[node name="UpgradeMenu" parent="CanvasLayer" instance=ExtResource("6_upgrade")]
 visible = false
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -400.0
-offset_top = -200.0
-offset_right = 400.0
-offset_bottom = 200.0
 
-[node name="Title" type="Label" parent="CanvasLayer/UpgradeMenu" unique_id=2124233291]
-layout_mode = 1
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -150.0
-offset_top = 20.0
-offset_right = 150.0
-offset_bottom = 60.0
-grow_horizontal = 2
-text = "CHOOSE UPGRADE"
-horizontal_alignment = 1
-
-[node name="DoubleJumpBtn" type="Button" parent="CanvasLayer/UpgradeMenu" unique_id=1619679511]
-layout_mode = 1
-offset_left = 60.0
-offset_top = 100.0
-offset_right = 280.0
-offset_bottom = 300.0
-text = "DOUBLE JUMP
-(W or Z)"
-
-[node name="StrikeBtn" type="Button" parent="CanvasLayer/UpgradeMenu" unique_id=1967959022]
-layout_mode = 1
-offset_left = 300.0
-offset_top = 100.0
-offset_right = 520.0
-offset_bottom = 300.0
-text = "SIDEWAYS STRIKE
-(Z)"
-
-[node name="ShockwaveBtn" type="Button" parent="CanvasLayer/UpgradeMenu"]
-layout_mode = 1
-offset_left = 540.0
-offset_top = 100.0
-offset_right = 760.0
-offset_bottom = 300.0
-text = "SHOCKWAVE BLAST
-(C)"
-
-[node name="HelpLabel" type="Label" parent="CanvasLayer/UpgradeMenu" unique_id=1639181015]
-layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -200.0
-offset_top = -40.0
-offset_right = 200.0
-offset_bottom = -10.0
-grow_horizontal = 2
-grow_vertical = 0
-text = "Click to select
-or Press Z, X or C"
-horizontal_alignment = 1
-
-[node name="GameOverScreen" type="ColorRect" parent="CanvasLayer" unique_id=463421471]
+[node name="PauseOverlay" parent="CanvasLayer" instance=ExtResource("7_pause")]
 visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
+
+[node name="GameOverScreen" parent="CanvasLayer" instance=ExtResource("8_end")]
+visible = false
 color = Color(0.2, 0, 0, 0.8)
 
-[node name="Title" type="Label" parent="CanvasLayer/GameOverScreen" unique_id=1032319243]
-layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -50.0
-offset_right = 200.0
+[node name="Title" parent="CanvasLayer/GameOverScreen" index="0"]
+theme_override_colors/font_color = Color(0.95, 0.25, 0.25, 1)
 text = "YOU DIED"
-horizontal_alignment = 1
 
-[node name="SubTitle" type="Label" parent="CanvasLayer/GameOverScreen" unique_id=690198992]
-layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = 20.0
-offset_right = 200.0
-offset_bottom = 50.0
+[node name="SubTitle" parent="CanvasLayer/GameOverScreen" index="1"]
 text = "Press SPACE to Restart"
-horizontal_alignment = 1
 
-[node name="VictoryScreen" type="ColorRect" parent="CanvasLayer" unique_id=962885390]
+[node name="VictoryScreen" parent="CanvasLayer" instance=ExtResource("8_end")]
 visible = false
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-color = Color(0, 0, 0, 1)
 
-[node name="GG" type="Label" parent="CanvasLayer/VictoryScreen" unique_id=733842474]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -100.0
-offset_top = -80.0
-offset_right = 100.0
-offset_bottom = -20.0
-grow_horizontal = 2
-grow_vertical = 2
-text = "GG"
-horizontal_alignment = 1
+[node name="Title" parent="CanvasLayer/VictoryScreen" index="0"]
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
 
-[node name="SubTitle" type="Label" parent="CanvasLayer/VictoryScreen" unique_id=58780942]
-layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = 20.0
-offset_right = 150.0
-offset_bottom = 50.0
+[node name="SubTitle" parent="CanvasLayer/VictoryScreen" index="1"]
 text = "It's solver time"
-horizontal_alignment = 1

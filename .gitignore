@@ -6,3 +6,10 @@ export_presets.cfg
 .vscode
 output.md
 .py
+
+# GdUnit4 test reports
+reports/
+
+# PlayGodot bytecode cache
+tests_e2e/__pycache__/
+.pytest_cache/

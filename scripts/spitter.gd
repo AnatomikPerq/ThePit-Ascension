@@ -1,153 +1,68 @@
 extends CharacterBody2D
-## Spitter — stationary ranged enemy. Stands on platforms and lobs acid blobs
-## at the player when they are roughly horizontal and within range.
+## Spitter — stationary ranged enemy. Rests on a platform and lobs acid at the
+## player when they are roughly level and in range. Only a dash-down kills it.
 ##
-## DamageArea: contact hurts the player.
-## StompArea: stomp from above (with dash_down) or a Strike kills it.
-##
-## Body is drawn procedurally so no new art asset is required.
+## Contact resolution lives in the Combat child (EnemyCombat). The wind-up
+## telegraph and the shot itself live in the `telegraph` AnimationPlayer clip:
+## it tints the sprite red over 0.25s and fires from a method track at the end.
+## Previously the tint was a float accumulator written to modulate every physics
+## tick, and the projectile was spawned from inside a function named _shoot that
+## usually did not shoot.
 
 const GRAVITY: float = 4500.0
 const TERMINAL_VEL: float = 1800.0
 const SHOOT_RANGE: float = 1100.0
+const SHOOT_VERTICAL_RANGE: float = 700.0
 const SHOOT_COOLDOWN: float = 2.2
-const SCORE: int = 150
-const SCORE_COLOR := Color(0.5, 0.95, 0.3)
 const PROJECTILE_SCENE: PackedScene = preload("res://scenes/Projectile.tscn")
 
-var _player: CharacterBody2D
-var _is_dead: bool = false
-var _shoot_timer: float = SHOOT_COOLDOWN
 var _facing_right: bool = true
-var _charge: float = 0.0 # ramps while aiming for a telegraph glow
 
+@onready var combat: EnemyCombat = $Combat
 @onready var sprite: Sprite2D = $Sprite2D
-
-
-func _ready() -> void:
-	sprite.texture = _make_spitter_texture()
+@onready var anim: AnimationPlayer = $AnimationPlayer
+@onready var cooldown: Timer = $ShootCooldown
 
 
 func set_player_ref(player: CharacterBody2D) -> void:
-	_player = player
+	# $Combat, not the @onready reference: the spawner calls this before the
+	# enemy is added to the tree, when @onready values are still null.
+	($Combat as EnemyCombat).player = player
+
+
+func _ready() -> void:
+	cooldown.start()
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(_player):
+	if not Net.is_sim_authority():
+		return # movement and the telegraph are mirrored from the host
+	if combat.is_dead or not is_instance_valid(combat.player):
 		return
 
-	if global_position.y > _player.global_position.y + 1500.0:
-		queue_free()
-		return
-
-	if _is_dead:
-		return
-
-	# Gravity so it rests on platforms like the Pursuer.
-	velocity.y += GRAVITY * delta
-	if velocity.y > TERMINAL_VEL:
-		velocity.y = TERMINAL_VEL
+	# Gravity, so it settles onto whatever platform it spawned above.
+	velocity.y = minf(velocity.y + GRAVITY * delta, TERMINAL_VEL)
 	move_and_slide()
 
-	# Aim at the player.
-	var dist_x: float = _player.global_position.x - global_position.x
-	var dist_y: float = _player.global_position.y - global_position.y
-	var within_range: bool = abs(dist_x) < SHOOT_RANGE and abs(dist_y) < 700.0
-	_facing_right = dist_x > 0.0
+	var to_player: Vector2 = combat.player.global_position - global_position
+	_facing_right = to_player.x > 0.0
 	sprite.flip_h = not _facing_right
 
-	_shoot_timer -= delta
-	if within_range and _shoot_timer <= 0.0:
-		_shoot(delta)
-	else:
-		# Fade the charge glow out when not firing.
-		_charge = move_toward(_charge, 0.0, delta * 2.0)
-
-	# Reddish tint ramps up as a telegraph right before/at firing.
-	sprite.modulate = Color(1.0, 1.0 - _charge * 0.5, 1.0 - _charge * 0.5)
-
-	_check_collisions()
+	var in_range := absf(to_player.x) < SHOOT_RANGE and absf(to_player.y) < SHOOT_VERTICAL_RANGE
+	if in_range and cooldown.is_stopped() and not anim.is_playing():
+		anim.play(&"telegraph")
+	elif not in_range and anim.is_playing():
+		# Player left the window mid-wind-up: unwind at half speed, which is the
+		# 0.5s fade the old accumulator decayed over.
+		anim.play(&"telegraph", -1.0, -0.5, true)
 
 
-func _shoot(delta: float) -> void:
-	# Small wind-up telegraph before the shot fires.
-	_charge += delta * 4.0
-	if _charge < 1.0:
-		return
-	_charge = 0.0
-	_shoot_timer = SHOOT_COOLDOWN
-
+## Called from the telegraph clip's method track, at the moment the tell peaks.
+func fire() -> void:
+	cooldown.start()
+	sprite.modulate = Color.WHITE
 	var proj: Area2D = PROJECTILE_SCENE.instantiate()
 	var muzzle: Vector2 = global_position + Vector2(28.0 if _facing_right else -28.0, -10.0)
-	proj.setup(muzzle, _player.global_position, _player)
-	get_parent().add_child(proj)
-
-
-func _check_collisions() -> void:
-	var areas: Array[Area2D] = $StompArea.get_overlapping_areas()
-	if has_node("DamageArea"):
-		areas.append_array($DamageArea.get_overlapping_areas())
-
-	# Priority 1: Strike / Shockwave
-	for area in areas:
-		if area.is_in_group("strike"):
-			_die()
-			return
-
-	# Priority 2: Stomp — require a downward dash (like the Pursuer).
-	for body in $StompArea.get_overlapping_bodies():
-		if body.is_in_group("player") and body.velocity.y >= 0.0:
-			if body.get("dashing_down") == true:
-				body.velocity.y = -900.0 # dash-kill rebound
-				body.dashing_down = false
-				Sfx.play("stomp", -6.0)
-				_die()
-				return
-			else:
-				body.take_damage()
-				return
-
-	# Priority 3: Contact damage
-	if has_node("DamageArea"):
-		for body in $DamageArea.get_overlapping_bodies():
-			if body.is_in_group("player"):
-				body.take_damage()
-				return
-
-
-func _die() -> void:
-	_is_dead = true
-	Game.enemy_killed(global_position, SCORE, SCORE_COLOR)
-	queue_free()
-
-
-func _make_spitter_texture() -> ImageTexture:
-	# 32×32 bulbous plant-spitter: green base, gaping mouth, fang.
-	var size := 32
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(16, 22)
-	var body_color := Color(0.20, 0.45, 0.16, 1.0)
-	var dark_color := Color(0.10, 0.30, 0.10, 1.0)
-	var mouth_color := Color(0.10, 0.05, 0.05, 1.0)
-	var fang_color := Color(0.9, 0.9, 0.8, 1.0)
-	for y in range(size):
-		for x in range(size):
-			var p := Vector2(x, y)
-			var d := p.distance_to(center)
-			# Bulb body
-			if d <= 11.0:
-				img.set_pixel(x, y, body_color)
-			elif d <= 13.0:
-				img.set_pixel(x, y, dark_color)
-			# Mouth: dark oval near the top center
-			var mouth_d := p.distance_to(Vector2(16, 14))
-			if mouth_d <= 5.0:
-				img.set_pixel(x, y, mouth_color)
-			# Fangs
-			if (p - Vector2(13.0, 17.0)).length() <= 1.4 or (p - Vector2(19.0, 17.0)).length() <= 1.4:
-				img.set_pixel(x, y, fang_color)
-			# Stem base shading
-			if p.y >= 28 and abs(p.x - 16) < 4:
-				img.set_pixel(x, y, dark_color)
-	return ImageTexture.create_from_image(img)
+	proj.setup(muzzle, combat.player.global_position, combat.player)
+	# add_child(_, true): readable names let the MultiplayerSpawner mirror it.
+	get_parent().add_child(proj, true)

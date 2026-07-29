@@ -1,0 +1,135 @@
+[gd_scene load_steps=3 format=3 uid="uid://cuilobby01"]
+
+[ext_resource type="Script" path="res://src/net/lobby.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="UI" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -420.0
+offset_top = -400.0
+offset_right = 420.0
+offset_bottom = 400.0
+grow_horizontal = 2
+grow_vertical = 2
+alignment = 1
+theme_override_constants/separation = 18
+
+[node name="Title" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 64
+text = "MULTIPLAYER"
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="UI"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "One player hosts on an open port; the rest join by address.
+The host picks the mode and starts the climb for everyone."
+horizontal_alignment = 1
+
+[node name="Spacer1" type="Control" parent="UI"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="HostRow" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="PortLabel" type="Label" parent="UI/HostRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "PORT"
+
+[node name="PortEdit" type="LineEdit" parent="UI/HostRow"]
+custom_minimum_size = Vector2(140, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "24565"
+
+[node name="HostBtn" type="Button" parent="UI/HostRow"]
+custom_minimum_size = Vector2(220, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "HOST"
+
+[node name="JoinRow" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="AddressEdit" type="LineEdit" parent="UI/JoinRow"]
+custom_minimum_size = Vector2(320, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "127.0.0.1"
+
+[node name="PortEdit" type="LineEdit" parent="UI/JoinRow"]
+custom_minimum_size = Vector2(140, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "24565"
+
+[node name="JoinBtn" type="Button" parent="UI/JoinRow"]
+custom_minimum_size = Vector2(220, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "JOIN"
+
+[node name="Spacer2" type="Control" parent="UI"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.72, 0.35, 1)
+theme_override_font_sizes/font_size = 22
+horizontal_alignment = 1
+
+[node name="PeersLabel" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+
+[node name="Spacer3" type="Control" parent="UI"]
+custom_minimum_size = Vector2(0, 12)
+layout_mode = 2
+
+[node name="StartRow" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="ModeSelect" type="OptionButton" parent="UI/StartRow"]
+custom_minimum_size = Vector2(220, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+
+[node name="StartBtn" type="Button" parent="UI/StartRow"]
+custom_minimum_size = Vector2(300, 60)
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "START CLIMB"
+
+[node name="BackBtn" type="Button" parent="UI"]
+custom_minimum_size = Vector2(240, 52)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 22
+text = "BACK  (ESC)"

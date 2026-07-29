@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WorldTheme" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/world/world_theme.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/wall_map.png" id="2_wall"]
+[ext_resource type="Texture2D" path="res://assets/sprites/floor_map.png" id="3_floor"]
+[ext_resource type="Texture2D" path="res://assets/sprites/level_floor.png" id="4_divider"]
+[ext_resource type="Texture2D" path="res://assets/sprites/platform_part.png" id="5_platform"]
+
+[sub_resource type="Gradient" id="Gradient_bg"]
+offsets = PackedFloat32Array(0, 0.333333, 0.666667, 1)
+colors = PackedColorArray(0.14, 0.02, 0.02, 1, 0.1, 0.03, 0.1, 1, 0.04, 0.05, 0.13, 1, 0.08, 0.11, 0.2, 1)
+
+[resource]
+resource_name = "pit_theme"
+script = ExtResource("1_script")
+pixel_scale = 2.0
+wall_texture = ExtResource("2_wall")
+floor_texture = ExtResource("3_floor")
+divider_texture = ExtResource("4_divider")
+platform_texture = ExtResource("5_platform")
+background_by_ascent = SubResource("Gradient_bg")

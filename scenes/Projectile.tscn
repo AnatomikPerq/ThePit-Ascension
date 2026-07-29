@@ -1,9 +1,15 @@
-[gd_scene format=3 uid="uid://cprojectile01"]
+[gd_scene load_steps=5 format=3 uid="uid://cprojectile01"]
 
 [ext_resource type="Script" path="res://scripts/projectile.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/projectile_blob.png" id="2_tex"]
 
 [sub_resource type="CircleShape2D" id="Shape_Blob"]
 radius = 14.0
+
+[sub_resource type="SceneReplicationConfig" id="SRC_projectile"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
 
 [node name="Projectile" type="Area2D" groups=["enemy_projectile"]]
 collision_layer = 16
@@ -12,6 +18,10 @@ script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 scale = Vector2(2, 2)
+texture = ExtResource("2_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("Shape_Blob")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_projectile")

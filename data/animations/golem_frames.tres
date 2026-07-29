@@ -1,0 +1,23 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/golem_falling.png" id="1_crif0"]
+[ext_resource type="Texture2D" path="res://assets/sprites/golem_active.png" id="2_4dgr8"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_crif0")
+}],
+"loop": 1,
+"name": &"falling",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_4dgr8")
+}],
+"loop": 1,
+"name": &"petrified",
+"speed": 1.0
+}]

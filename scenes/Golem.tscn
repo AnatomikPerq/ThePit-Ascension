@@ -1,8 +1,10 @@
-[gd_scene format=3 uid="uid://cgolem01"]
+[gd_scene load_steps=9 format=3 uid="uid://cgolem01"]
 
 [ext_resource type="Script" uid="uid://3fiq5vux6ie4" path="res://scripts/golem.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://cwtsaeeltqr84" path="res://assets/sprites/golem_falling.png" id="2_tex"]
+[ext_resource type="SpriteFrames" path="res://data/animations/golem_frames.tres" id="2_frames"]
 
+[ext_resource type="Script" path="res://src/entities/enemy_combat.gd" id="3_combat"]
+[ext_resource type="Resource" path="res://data/enemies/golem.tres" id="4_stats"]
 [sub_resource type="RectangleShape2D" id="Shape_Damage"]
 size = Vector2(56, 20)
 
@@ -12,12 +14,18 @@ size = Vector2(58, 44)
 [sub_resource type="RectangleShape2D" id="Shape_Crush"]
 size = Vector2(54, 38)
 
+[sub_resource type="SceneReplicationConfig" id="SRC_enemy"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
 [node name="Golem" type="Node2D" unique_id=2072041543 groups=["enemy"]]
 script = ExtResource("1_script")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1706269271]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1706269271]
 scale = Vector2(2, 2)
-texture = ExtResource("2_tex")
+sprite_frames = ExtResource("2_frames")
+animation = &"falling"
 
 [node name="CrushBody" type="AnimatableBody2D" parent="." unique_id=883112233]
 collision_layer = 1
@@ -44,3 +52,11 @@ collision_mask = 10
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea" unique_id=998982542]
 position = Vector2(0, 14)
 shape = SubResource("Shape_Stomp")
+
+[node name="Combat" type="Node" parent="."]
+script = ExtResource("3_combat")
+stats = ExtResource("4_stats")
+frees_on_death = false
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SRC_enemy")

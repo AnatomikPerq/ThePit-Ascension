@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WorldProfile" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://src/world/world_profile.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/defs/spawn_entry.gd" id="2_entry"]
+[ext_resource type="Resource" path="res://data/worlds/pit_theme.tres" id="3_theme"]
+[ext_resource type="Resource" path="res://data/worlds/spawn/golem.tres" id="4_golem"]
+[ext_resource type="Resource" path="res://data/worlds/spawn/slime.tres" id="5_slime"]
+[ext_resource type="Resource" path="res://data/worlds/spawn/pursuer.tres" id="6_pursuer"]
+[ext_resource type="Resource" path="res://data/worlds/spawn/bat.tres" id="7_bat"]
+[ext_resource type="Resource" path="res://data/worlds/spawn/spitter.tres" id="8_spitter"]
+
+[resource]
+resource_name = "pit"
+script = ExtResource("1_script")
+theme = ExtResource("3_theme")
+spawn_table = Array[ExtResource("2_entry")]([ExtResource("4_golem"), ExtResource("5_slime"), ExtResource("6_pursuer"), ExtResource("7_bat"), ExtResource("8_spitter")])

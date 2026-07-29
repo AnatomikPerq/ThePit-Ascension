@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BurstPreset" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/burst_preset.gd" id="1_script"]
+
+[resource]
+resource_name = "kill"
+script = ExtResource("1_script")
+count = 14
+speed = 320.0
+life = 0.55
+gravity = 800.0

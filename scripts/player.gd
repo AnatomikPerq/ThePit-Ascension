@@ -11,17 +11,56 @@ const DASH_SPEED: float = 3600.0 # 30 * 60 * 2
 const FLIGHT_SPEED: float = 1000.0 # 500 * 2
 const KNOCKBACK_FORCE: float = -1200.0 # -10 * 60 * 2
 const HARD_LANDING_SPEED: float = 900.0 # fall speed that kicks up dust
+## Crush recovery: the pop that gets you out and the sideways shove a rival's
+## hit adds on top of the usual knockback. The phase-through window itself is
+## CrushRecoveryTimer's wait_time.
+const CRUSH_POP_FORCE: float = -900.0
+const PVP_KNOCKBACK: float = 700.0
+## Dash-stomping a rival in a race rebounds you exactly like a dash-killed
+## enemy does (see data/enemies/*.tres).
+const PVP_STOMP_REBOUND: float = -900.0
 
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
 
-# ── Sprites ─────────────────────────────────────────────────────────────────
-var sprite_frames: Dictionary = {}
+const DOUBLE_JUMP_BURST: BurstPreset = preload("res://data/fx/double_jump.tres")
+const HURT_BURST: BurstPreset = preload("res://data/fx/player_hurt.tres")
+const DEATH_BURST: BurstPreset = preload("res://data/fx/player_death.tres")
 
 # ── State ───────────────────────────────────────────────────────────────────
+## Which peer this avatar belongs to. 1 in solo; World assigns it on spawn.
+## Kills, score and milestones are credited through it.
+var peer_id: int = 1
+
+## The seed of the run this avatar is climbing. The owning machine stamps it on
+## spawn; a puppet holds -1 until its owner's first sync packet arrives.
+##
+## It is replicated ALWAYS, in the same packet as `position`, and that is the
+## whole point. An avatar's node path is identical in every run, so after a host
+## restart the previous run's position packets still land on the fresh puppet —
+## and read as progress they earned the client a free upgrade at the bottom of
+## the new pit, or would have ended the new run outright for anyone near the
+## surface. Riding along with the position means a stale position arrives
+## labelled stale, with no assumption about packet ordering.
+var run_seed: int = -1
+
 var health: int = 5
 var max_health: int = 5
-var invincible: bool = false
+
+## Invincibility drives the blink animation directly, so nothing has to poll it
+## every frame.
+var invincible: bool = false:
+	set(value):
+		if invincible == value:
+			return
+		invincible = value
+		if not is_node_ready():
+			return
+		if value:
+			anim_player.play(&"blink")
+		else:
+			anim_player.stop()
+			sprite.visible = true
 
 var jump_count: int = 0
 var has_double_jump: bool = false
@@ -32,9 +71,6 @@ var flying: bool = false
 var is_crushed: bool = false
 
 var facing_right: bool = true
-var animation_state: String = "standing"
-var animation_frame: int = 0
-var animation_timer: float = 0.0
 
 var current_strike: Node = null
 var current_shockwave: Node = null
@@ -42,22 +78,20 @@ var can_input: bool = true
 
 var _trail_timer: float = 0.0
 var _squash_tween: Tween
+var _puppet_anim: StringName = &""
 
 # ── Node References ─────────────────────────────────────────────────────────
-@onready var sprite: Sprite2D = $Sprite2D
+@onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var anim_player: AnimationPlayer = $AnimationPlayer
 @onready var inv_timer: Timer = $InvincibilityTimer
+@onready var crush_timer: Timer = $CrushRecoveryTimer
 @onready var coyote_timer: Timer = $CoyoteTimer
 @onready var strike_cd_timer: Timer = $StrikeCooldownTimer
 @onready var shockwave_cd_timer: Timer = $ShockwaveCooldownTimer
-
-# ── Animation delays (ms) ──────────────────────────────────────────────────
-const ANIM_DELAYS: Dictionary = {
-	"standing": 300.0,
-	"running": 150.0,
-	"jumping": 100.0,
-	"falling": 100.0,
-	"attacking": 100.0,
-}
+## Watches for hostile PLAYER_ATTACK hitboxes. It is on no layer at all, so
+## nothing can see it back, and it only monitors in a race — the mode is a
+## physical fact about the scene rather than an `if` in a hot path.
+@onready var hurt_box: Area2D = $HurtBox
 
 # ── Signals ─────────────────────────────────────────────────────────────────
 signal player_damaged(new_health: int)
@@ -66,42 +100,41 @@ signal player_died
 
 func _ready() -> void:
 	inv_timer.timeout.connect(_on_invincibility_timeout)
-	_load_sprites()
-	_update_sprite()
-
-
-func _load_sprites() -> void:
-	sprite_frames = {
-		"standing": [
-			preload("res://assets/sprites/player_standing_1.png"),
-			preload("res://assets/sprites/player_standing_2.png"),
-		],
-		"running": [
-			preload("res://assets/sprites/player_running_1.png"),
-			preload("res://assets/sprites/player_running_2.png"),
-		],
-		"jumping": [preload("res://assets/sprites/player_jumping.png")],
-		"falling": [preload("res://assets/sprites/player_falling.png")],
-		"attacking": [preload("res://assets/sprites/player_attacking.png")],
-	}
+	# Race: rivals are solid, so you can stand on a head — and their strikes
+	# reach you. Co-op and solo: nothing changes, players pass through each
+	# other and the hurt box never wakes up.
+	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus())
+	# Only the machine steering this avatar watches for incoming hits. Damage
+	# belongs to the victim; a puppet's overlap test here would be somebody
+	# else's opinion about our health.
+	hurt_box.monitoring = Net.is_versus() and is_multiplayer_authority()
+	hurt_box.area_entered.connect(_on_hostile_area)
 
 
 func _physics_process(delta: float) -> void:
+	if Net.active and not is_multiplayer_authority():
+		_puppet_process(delta)
+		return
+
 	if not can_input:
 		velocity.x = 0.0
 	else:
 		_handle_input()
 
-	if not flying and not is_crushed:
+	if not flying:
 		_apply_gravity(delta)
-	elif is_crushed:
-		_apply_crush_gravity(delta)
 
 	# Coyote time: if just walked off edge, start timer
 	var was_on_floor := is_on_floor()
+	var was_dashing := dashing_down
 	var fall_speed := velocity.y
 	move_and_slide()
 	var now_on_floor := is_on_floor()
+
+	# Before the landing bookkeeping below clears the dash: in a race, coming
+	# down on a rival's head is an attack, not a landing.
+	if was_dashing and Net.is_versus():
+		_resolve_versus_stomp()
 
 	if was_on_floor and not now_on_floor and velocity.y >= 0:
 		coyote_timer.start()
@@ -114,7 +147,7 @@ func _physics_process(delta: float) -> void:
 	# Landing feedback: dust + thud + squash after a serious fall.
 	if not was_on_floor and now_on_floor and fall_speed > HARD_LANDING_SPEED:
 		Fx.dust(global_position + Vector2(0, 30), 12)
-		Sfx.play("land", -10.0, randf_range(0.95, 1.05))
+		Audio.play(&"land")
 		_squash(Vector2(2.5, 1.5))
 
 	# Cancel dash if moving upwards (e.g. trampolines, bounces)
@@ -128,28 +161,28 @@ func _physics_process(delta: float) -> void:
 			_trail_timer = 0.0
 			Fx.ghost(sprite, Color(0.6, 0.85, 1.0, 0.45))
 
-	# Crush detection
-	# A player is crushed if they cannot move in opposite directions simultaneously
 	if can_input and not invincible and not is_crushed:
-		var stuck_h := test_move(global_transform, Vector2.RIGHT) and test_move(global_transform, Vector2.LEFT)
-		var stuck_v := test_move(global_transform, Vector2.UP) and test_move(global_transform, Vector2.DOWN)
-
-		# For diagonal squeezes, if we are overlapping in place
-		var embedded := test_move(global_transform, Vector2.ZERO)
-
-		if stuck_h or stuck_v or embedded:
+		if _crushed_by_geometry():
 			_handle_crush()
+	elif is_crushed:
+		_recover_from_crush()
 
-	_update_animation(delta)
+	_update_animation()
 
-	if current_strike:
-		_snap_strike()
 
-	# Blinking while invincible
-	if invincible:
-		sprite.visible = fmod(Time.get_ticks_msec(), 100.0) > 50.0
-	else:
-		sprite.visible = true
+## Remote avatar: position, velocity and state flags arrive from the owning
+## peer's machine through the MultiplayerSynchronizer. Only presentation runs
+## here — no input, no gravity, no collision response.
+func _puppet_process(delta: float) -> void:
+	sprite.flip_h = not facing_right
+	if sprite.animation != _puppet_anim:
+		_puppet_anim = sprite.animation
+		sprite.play(_puppet_anim)
+	if dashing_down:
+		_trail_timer += delta
+		if _trail_timer >= 0.03:
+			_trail_timer = 0.0
+			Fx.ghost(sprite, Color(0.6, 0.85, 1.0, 0.45))
 
 
 # ── Gravity ─────────────────────────────────────────────────────────────────
@@ -162,21 +195,21 @@ func _apply_gravity(delta: float) -> void:
 		velocity.y = TERMINAL_VELOCITY
 
 
-func _apply_crush_gravity(delta: float) -> void:
-	# Slow, smooth fall during crush to prevent zipping through the floor instantly
-	var crush_terminal := 400.0
-	velocity.y += (GRAVITY * 0.2) * delta
-	if velocity.y > crush_terminal:
-		velocity.y = crush_terminal
-
-	# Fall safe: don't fall below the map floor.
-	var world_node := get_parent()
-	var bottom_lim := 8000.0
-	if world_node and "max_depth" in world_node:
-		bottom_lim = world_node.max_depth - 100.0
-
-	if global_position.y >= bottom_lim:
-		_end_crush()
+## Is the player wedged in solid geometry right now?
+##
+## Probed against WORLD only. In a race rivals are solid bodies, and standing
+## on somebody's head would otherwise read as a ceiling and crush the player
+## underneath — a squeeze is a hazard of the level, not of the other climber.
+func _crushed_by_geometry() -> bool:
+	var saved := collision_mask
+	collision_mask = Layers.WORLD
+	# Cannot move in either direction along an axis, or already overlapping in
+	# place (the diagonal squeeze).
+	var stuck_h := test_move(global_transform, Vector2.RIGHT) and test_move(global_transform, Vector2.LEFT)
+	var stuck_v := test_move(global_transform, Vector2.UP) and test_move(global_transform, Vector2.DOWN)
+	var embedded := test_move(global_transform, Vector2.ZERO)
+	collision_mask = saved
+	return stuck_h or stuck_v or embedded
 
 
 # ── Input ───────────────────────────────────────────────────────────────────
@@ -242,37 +275,37 @@ func _try_jump() -> void:
 		coyote_timer.stop()
 		dashing_down = false
 		Fx.dust(global_position + Vector2(0, 30), 8)
-		Sfx.play("jump", -12.0, randf_range(0.95, 1.05))
+		Audio.play(&"jump")
 		_squash(Vector2(1.6, 2.4))
 	elif has_double_jump and jump_count < 2:
 		velocity.y = JUMP_FORCE * 0.9
 		jump_count = 2
 		dashing_down = false
-		Fx.burst(global_position + Vector2(0, 20), Color(0.6, 0.85, 1.0, 0.9), 12, 200.0, 0.4, 250.0)
-		Sfx.play("djump", -12.0, randf_range(0.95, 1.05))
+		Fx.burst(global_position + Vector2(0, 20), DOUBLE_JUMP_BURST)
+		Audio.play(&"double_jump")
 		_squash(Vector2(1.6, 2.4))
 
 
 # ── Strike ──────────────────────────────────────────────────────────────────
+## Attacks spawn on EVERY machine: the host needs the hitbox to resolve
+## kills, the others need the visual. The cooldown gates only the owner.
 func _try_strike() -> void:
 	if not strike_cd_timer.is_stopped():
 		return
 	strike_cd_timer.start()
-	Sfx.play("strike", -10.0, randf_range(0.9, 1.1))
+	if Net.active:
+		_spawn_strike.rpc()
+	else:
+		_spawn_strike()
+
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_strike() -> void:
+	Audio.play(&"strike")
 	var s := STRIKE_SCENE.instantiate()
 	s.setup(self, facing_right)
 	get_parent().add_child(s)
 	current_strike = s
-
-
-func _snap_strike() -> void:
-	if not is_instance_valid(current_strike):
-		current_strike = null
-		return
-	if facing_right:
-		current_strike.global_position = global_position + Vector2(52, 0)
-	else:
-		current_strike.global_position = global_position + Vector2(-52, 0)
 
 
 # ── Shockwave ────────────────────────────────────────────────────────────────
@@ -280,7 +313,15 @@ func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
 		return
 	shockwave_cd_timer.start()
-	Sfx.play("shock", -6.0)
+	if Net.active:
+		_spawn_shockwave.rpc()
+	else:
+		_spawn_shockwave()
+
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_shockwave() -> void:
+	Audio.play(&"shockwave")
 	Fx.shake(0.45)
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.setup(self)
@@ -288,74 +329,191 @@ func _try_shockwave() -> void:
 	current_shockwave = wave
 
 
+# ── Player versus player (race only) ────────────────────────────────────────
+## A rival's Strike or Shockwave hitbox has reached us. Only our own machine
+## ever gets here — the hurt box does not monitor on a puppet — so the rule
+## "the victim owns its damage" holds without a single extra check.
+func _on_hostile_area(area: Area2D) -> void:
+	if int(area.get_meta(&"owner_peer", 0)) == peer_id:
+		return # our own punch, passing through our own body
+	if not take_damage():
+		return
+	# Shoved away from whoever hit us, on top of take_damage()'s knockback.
+	var away := signf(global_position.x - area.global_position.x)
+	if away == 0.0:
+		away = 1.0 if facing_right else -1.0
+	velocity.x = away * PVP_KNOCKBACK
+
+
+## Coming down on a rival's head while dashing. The rebound is ours to apply;
+## the hit is theirs to resolve, so it goes to their machine as a request.
+func _resolve_versus_stomp() -> void:
+	for i in get_slide_collision_count():
+		var hit := get_slide_collision(i)
+		var other := hit.get_collider() as CharacterBody2D
+		if other == null or other == self or not other.is_in_group(&"player"):
+			continue
+		if hit.get_normal().y > -0.5:
+			continue # brushed their side, did not land on them
+		if int(other.get("health")) <= 0:
+			continue
+		velocity.y = PVP_STOMP_REBOUND
+		dashing_down = false
+		Audio.play(&"stomp")
+		Fx.shake(0.4)
+		other.rpc_id(other.get_multiplayer_authority(), &"remote_hurt")
+		return
+
+
 # ── Damage & Crush ──────────────────────────────────────────────────────────
 func take_damage() -> bool:
+	# Health belongs to the owning machine; puppets never take damage locally.
+	if Net.active and not is_multiplayer_authority():
+		return false
 	if invincible or flying or not can_input:
 		return false
 	health -= 1
 	invincible = true
 	inv_timer.start()
 	velocity.y = KNOCKBACK_FORCE
-	Sfx.play("hurt", -6.0)
+	Audio.play(&"hurt")
 	Fx.shake(0.35)
 	Fx.flash(sprite)
-	Fx.burst(global_position, Color(0.9, 0.2, 0.2), 12, 260.0, 0.4)
+	Fx.burst(global_position, HURT_BURST)
 	player_damaged.emit(health)
 	if health <= 0:
 		_die()
 	return true
 
 
+## Being squeezed costs a heart and spits you out. The old penalty was two
+## seconds of drifting downward at a fifth of gravity with the controls dead,
+## which felt like a bug rather than a hit; this is a pop clear of the squeeze
+## and a short intangible fall at normal speed.
 func _handle_crush() -> void:
 	is_crushed = true
 	can_input = false
 	velocity.x = 0.0
-	velocity.y = 0.0
-	set_collision_mask_value(1, false) # Fall through platforms
+	velocity.y = CRUSH_POP_FORCE
+	dashing_down = false
+	_set_phasing(true)
 
 	health -= 1
 	invincible = true
 	inv_timer.start()
-	Sfx.play("crush", -4.0)
+	Audio.play(&"crush")
 	Fx.shake(0.55)
 	Fx.flash(sprite)
+	Fx.dust(global_position, 10)
+	# Squashed flat, then springing back — the shape of what just happened.
+	_squash(Vector2(2.8, 1.2))
 	player_damaged.emit(health)
 
 	if health <= 0:
 		_die()
 	else:
-		# Recover from crush
-		var t := get_tree().create_timer(2.0)
-		t.timeout.connect(_end_crush)
+		# A SceneTreeTimer keeps counting while the tree is paused, so pausing used
+		# to serve the crush penalty for free. A Timer node pauses with the game,
+		# the way InvincibilityTimer always did.
+		crush_timer.start()
 
 
-func _end_crush() -> void:
-	if is_instance_valid(self) and health > 0 and is_crushed:
-		is_crushed = false
-		set_collision_mask_value(1, true)
-		can_input = true
+## Called every frame while crushed. CrushRecoveryTimer is read here rather
+## than listened to, because the clock is only half the answer: the timer says
+## when the penalty is served, the geometry says when it is safe to be solid.
+func _recover_from_crush() -> void:
+	# Fall safe: intangible means the floor is intangible too.
+	var floor_y := _floor_limit()
+	if global_position.y >= floor_y:
+		global_position.y = floor_y
+		velocity.y = 0.0
+		_end_crush(true)
+		return
+	if crush_timer.is_stopped():
+		_end_crush()
+
+
+## Hand collision back. Not while still inside a wall: that is an instant
+## re-crush and another heart, which is how a bad squeeze used to eat a whole
+## run. `force` is the fall-safe path, where staying intangible is worse.
+func _end_crush(force: bool = false) -> void:
+	if not is_crushed or health <= 0:
+		return
+	if not force and _crushed_by_geometry():
+		return # try again next frame
+	is_crushed = false
+	_set_phasing(false)
+	can_input = true
+
+
+## Intangible to everything you can be squeezed by or land on: level geometry,
+## and in a race the rival who may be standing right where you popped out.
+func _set_phasing(on: bool) -> void:
+	set_collision_mask_value(Layers.BIT_WORLD, not on)
+	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus() and not on)
+
+
+func _floor_limit() -> float:
+	var world_node := get_parent()
+	if world_node and "max_depth" in world_node:
+		return world_node.max_depth - 100.0
+	return 8000.0
 
 
 func _die() -> void:
+	if Net.active:
+		_die_everywhere.rpc()
+	else:
+		_die_everywhere()
+
+
+## Runs on every machine so the death is seen everywhere; only the owning
+## machine emits player_died (its world shows the end screen) and the shake
+## is scaled down for spectators.
+@rpc("authority", "call_local", "reliable")
+func _die_everywhere() -> void:
 	can_input = false
 	velocity.x = 0.0
 	velocity.y = -600.0
 	dashing_down = false
 	sprite.rotation_degrees = -90.0
-	set_collision_mask_value(1, false)
-	set_collision_mask_value(2, false)
-	set_collision_mask_value(3, false)
-	set_collision_mask_value(4, false)
-	Sfx.play("die", -4.0)
-	Fx.shake(0.7)
-	Fx.burst(global_position, Color(0.9, 0.15, 0.15), 26, 420.0, 0.8)
+	collision_mask = Layers.NONE
+	hurt_box.monitoring = false
+	var mine := not Net.active or is_multiplayer_authority()
+	Audio.play(&"die")
+	Fx.shake(0.7 if mine else 0.25)
+	Fx.burst(global_position, DEATH_BURST)
 
 	var tween := create_tween()
 	tween.tween_property(sprite, "modulate:a", 0.0, 1.0)
 	tween.tween_callback(func() -> void:
-		player_died.emit()
+		if mine:
+			player_died.emit()
 		queue_free()
 	)
+
+
+## Harm resolved elsewhere, applied here — the machine that steers this avatar
+## is the only one that may change its health.
+##
+## The host sends this for world hazards (a mistimed stomp onto an enemy). In a
+## race a rival sends it for a stomp on our head, which is why the sender is not
+## pinned to peer 1: peers in a session are trusted, the same assumption that
+## lets a client tell the host it moved.
+@rpc("any_peer", "call_remote", "reliable")
+func remote_hurt() -> void:
+	if not is_multiplayer_authority():
+		return
+	if multiplayer.get_remote_sender_id() == 1 or Net.is_versus():
+		take_damage()
+
+
+## Host-resolved stomp rebound for an avatar the host does not own.
+@rpc("any_peer", "call_remote", "reliable")
+func remote_stomp(rebound: float) -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
+		velocity.y = rebound
+		dashing_down = false
 
 
 func _on_invincibility_timeout() -> void:
@@ -374,36 +532,17 @@ func _squash(target: Vector2) -> void:
 
 
 # ── Animation ───────────────────────────────────────────────────────────────
-func _update_animation(delta: float) -> void:
-	animation_timer += delta * 1000.0
-
-	var new_state := "standing"
+## Picks which clip should be playing. Frame timing lives in the SpriteFrames
+## resource (data/animations/player_frames.tres), not here.
+func _update_animation() -> void:
+	var wanted := &"standing"
 	if current_strike:
-		new_state = "attacking"
+		wanted = &"attacking"
 	elif not is_on_floor() and not flying:
-		new_state = "jumping" if velocity.y < 0 else "falling"
-	elif abs(velocity.x) > 0.1:
-		new_state = "running"
+		wanted = &"jumping" if velocity.y < 0 else &"falling"
+	elif absf(velocity.x) > 0.1:
+		wanted = &"running"
 
-	if new_state != animation_state:
-		animation_state = new_state
-		animation_frame = 0
-		animation_timer = 0.0
-
-	var delay: float = ANIM_DELAYS.get(animation_state, 100.0)
-	if animation_timer >= delay:
-		animation_timer = 0.0
-		var frames_arr: Array = sprite_frames.get(animation_state, [])
-		if frames_arr.size() > 0:
-			animation_frame = (animation_frame + 1) % frames_arr.size()
-
-	_update_sprite()
-
-
-func _update_sprite() -> void:
-	var frames_arr: Array = sprite_frames.get(animation_state, [])
-	if frames_arr.size() == 0:
-		return
-	var idx := mini(animation_frame, frames_arr.size() - 1)
-	sprite.texture = frames_arr[idx]
+	if sprite.animation != wanted:
+		sprite.play(wanted)
 	sprite.flip_h = not facing_right

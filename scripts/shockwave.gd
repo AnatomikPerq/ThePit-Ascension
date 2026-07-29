@@ -5,7 +5,7 @@ extends Node2D
 ## (Golem / Slime / Pursuer / Bat / Spitter) reacts to it identically to a
 ## normal Strike — no per-enemy coupling required.
 ##
-## The ring visual is generated procedurally, so no new art asset is needed.
+## The ring texture and its tint live on the scene (assets/sprites/shockwave_ring.png).
 
 const EXPAND_SPEED: float = 4200.0 # px / second growth
 const MAX_RADIUS: float = 520.0
@@ -14,9 +14,6 @@ const LIFETIME: float = 0.45
 var _player: Node2D
 var _radius: float = 0.0
 var _life_timer: float = LIFETIME
-
-# Cached ring texture (regenerating a 128×128 image every cast is wasteful).
-static var _ring_tex: ImageTexture = null
 
 @onready var _visual: Sprite2D = $Visual
 @onready var _hit_area: Area2D = $HitArea
@@ -28,12 +25,11 @@ func setup(player: Node2D) -> void:
 
 
 func _ready() -> void:
-	if _ring_tex == null:
-		_ring_tex = _make_ring_texture(128)
-	_visual.texture = _ring_tex
-	_visual.modulate = Color(0.45, 0.85, 1.0, 0.95)
 	# Important: enemies detect strikes via `area.is_in_group("strike")`.
 	_hit_area.add_to_group("strike")
+	# …and credit the kill to whoever owns the hitbox.
+	_hit_area.set_meta(&"owner_peer",
+		_player.get("peer_id") if is_instance_valid(_player) else 0)
 	# Start with a zero-radius hit shape so the wave grows from the player.
 	var circ := _hit_shape.shape as CircleShape2D
 	if circ:
@@ -73,18 +69,3 @@ func _cleanup() -> void:
 	if is_instance_valid(_player) and _player.get("current_shockwave") == self:
 		_player.current_shockwave = null
 	queue_free()
-
-
-func _make_ring_texture(size: int) -> ImageTexture:
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	var center := Vector2(size / 2.0, size / 2.0)
-	var outer := size / 2.0
-	var thickness := 12.0
-	for y in range(size):
-		for x in range(size):
-			var d: float = Vector2(x, y).distance_to(center)
-			if d <= outer and d >= outer - thickness:
-				var edge: float = smoothstep(outer - thickness, outer, d)
-				img.set_pixel(x, y, Color(0.6, 0.9, 1.0, edge))
-	return ImageTexture.create_from_image(img)
