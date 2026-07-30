@@ -99,17 +99,8 @@ script = ExtResource("1_script")
 
 [node name="Fireball" type="TextureRect" parent="."]
 modulate = Color(1, 1, 1, 0)
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -1600.0
-offset_top = -1600.0
-offset_right = 1600.0
-offset_bottom = 1600.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_right = 3200.0
+offset_bottom = 3200.0
 pivot_offset = Vector2(1600, 1600)
 mouse_filter = 2
 texture = SubResource("GradientTexture2D_fireball")

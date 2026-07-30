@@ -247,3 +247,8 @@ Fixed on the owner's instruction (do not "restore" them):
 
 Russian. He is the sole developer and treats this repo as his. Ask before adding
 anything; report what actually happened, including what failed.
+
+**Commit and push straight to `main`.** He asked for this explicitly on 30 July
+2026 — there is no branch protection here and no second reviewer to wait for, so
+a feature branch is a step that only gets in his way. Still commit only when he
+asks for it, and still run `bash tools/run_tests.sh` green first.

@@ -384,25 +384,45 @@ func test_the_blast_spares_what_is_outside_its_radius() -> void:
 
 
 # ── Being thrown by a blast ─────────────────────────────────────────────────
-## Away from the epicentre along BOTH axes, not just sideways.
-##
-## Flight is switched on to take gravity out: over the handful of frames a test
-## can afford to wait, a fall swamps the vertical half of the push and the
-## assertion would be measuring g. The shove itself does not care about flight.
+## Away from the epicentre along BOTH axes, not just sideways. Read as velocity
+## one frame in, because the two halves get there by different routes: the upward
+## half goes straight into `velocity.y` when the blast lands, the sideways half is
+## carried and added on the next frame because input would have overwritten it.
 func test_a_blast_throws_the_player_along_both_axes() -> void:
 	var player := _player(Vector2.ZERO)
-	player.flying = true
 	var def: BlastDef = load("res://data/fx/blast.tres")
+	# Down and to the left of the player, so both components are nonzero.
 	Blast.detonate(root, Vector2(-300, 300), def, -1, PackedStringArray())
-	await _step(15)
-	assert_float(player.global_position.x) \
-		.override_failure_message("not thrown away horizontally (x=%.0f)" \
-			% player.global_position.x) \
-		.is_greater(30.0)
-	assert_float(player.global_position.y) \
-		.override_failure_message("not thrown away vertically (y=%.0f)" \
-			% player.global_position.y) \
-		.is_less(-30.0)
+	# TWO frames, not one: `physics_frame` is emitted at the START of a physics
+	# frame, so awaiting it once returns before the player has processed anything
+	# and the sideways half has not been added yet.
+	await _step(2)
+	assert_float(player.velocity.x) \
+		.override_failure_message("not thrown away horizontally (v=%s)" % player.velocity) \
+		.is_greater(100.0)
+	assert_float(player.velocity.y) \
+		.override_failure_message("not thrown away vertically (vy=%.0f)" % player.velocity.y) \
+		.is_less(-100.0)
+
+
+## How high a blast under your feet throws you has to depend on how far under
+## your feet it was.
+##
+## This is the regression for the worst bug in the mechanic: the shove was
+## originally added to `velocity` in full every frame, which made its vertical
+## half an acceleration applied without a delta. It compounded into the velocity
+## that carries between frames, and every bomb below the player fired them off
+## the top of the pit at much the same speed whatever the distance.
+func test_the_height_of_the_throw_falls_off_with_distance() -> void:
+	var near := await _blast_launch(false, 80.0)
+	var far := await _blast_launch(false, 700.0)
+	assert_float(near) \
+		.override_failure_message("a blast 80 px below barely moved the player (%.0f)" % near) \
+		.is_greater(1000.0)
+	assert_float(far) \
+		.override_failure_message("80 px below threw at %.0f, 700 px below at %.0f — distance is not being read" \
+			% [near, far]) \
+		.is_less(near * 0.7)
 
 
 ## The shove reaches further than the damage does, deliberately: a bomb going off
@@ -435,36 +455,37 @@ func test_beyond_its_push_radius_a_blast_leaves_you_alone() -> void:
 
 
 ## The point-blank case is the same mechanic with a much bigger number, and this
-## is the number being asserted: walking into one throws you far further than
+## is the number being asserted: walking into one throws you far harder than
 ## standing next to one that went off.
-func test_a_bomb_against_the_body_throws_you_far_further() -> void:
-	var caught := await _blast_travel(false)
-	var point_blank := await _blast_travel(true)
+func test_a_bomb_against_the_body_throws_you_far_harder() -> void:
+	var caught := await _blast_launch(false, 90.0)
+	var point_blank := await _blast_launch(true, 90.0)
 	assert_float(point_blank) \
-		.override_failure_message("point blank threw the player %.0f px, merely nearby %.0f px" \
+		.override_failure_message("point blank launched at %.0f, merely nearby at %.0f" \
 			% [point_blank, caught]) \
 		.is_greater(caught * 1.8)
 
 
-## One blast, one throwaway stage, the distance the player covered. Flight is on
-## for the same reason as above — this is measuring the push, not gravity.
-func _blast_travel(point_blank: bool) -> float:
+## Upward speed the moment a blast `below` px under the player goes off, on a
+## stage of its own. Read before any frame passes: gravity, decay and the ground
+## all start eating the number immediately, and the launch is the thing being
+## measured. Only one avatar may exist at a time — the blast finds the local one
+## and stops — so the stage is disposed of before the next reading.
+func _blast_launch(point_blank: bool, below: float) -> float:
 	var stage := Node2D.new()
 	root.add_child(stage)
 	var player: CharacterBody2D = load(PLAYER).instantiate()
 	player.position = Vector2.ZERO
 	stage.add_child(player)
-	player.flying = true
 	await _step(2)
 
 	var def: BlastDef = load("res://data/fx/blast.tres")
-	var from := player.global_position
-	Blast.detonate(stage, Vector2(0, 90), def, -1, PackedStringArray(),
+	Blast.detonate(stage, Vector2(0, below), def, -1, PackedStringArray(),
 		Game.local_peer_id if point_blank else -1)
-	await _step(15)
-	var travel := from.distance_to(player.global_position)
-	stage.free()
-	return travel
+	var launch := -player.velocity.y
+	stage.queue_free()
+	await _step(2)
+	return launch
 
 
 # ── Credit ──────────────────────────────────────────────────────────────────

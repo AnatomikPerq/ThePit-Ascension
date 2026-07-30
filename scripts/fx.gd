@@ -98,14 +98,15 @@ func shake_from(pos: Vector2, amount: float, range_px: float) -> void:
 ## Wash the screen with light. Nothing happens unless the active scene has
 ## instanced a BlastFlash — the same opt-in as effects_root.
 ##
-## `close` is the other thing entirely: a fireball filling the frame, for the one
-## player who set a bomb off with their own body. Everybody else gets the wash.
-func screen_flash(strength: float, close: bool = false) -> void:
+## `close` is the other thing entirely: a fireball growing out of `world_pos`,
+## for the one player who set a bomb off with their own body. Everybody else gets
+## the wash, which covers the frame and does not care where it came from.
+func screen_flash(strength: float, world_pos: Vector2, close: bool = false) -> void:
 	if strength <= 0.0:
 		return
 	var flasher := get_tree().get_first_node_in_group(FxBlastFlash.GROUP) as FxBlastFlash
 	if flasher != null:
-		flasher.flash(strength, close)
+		flasher.flash(strength, world_pos, close)
 
 
 # ── Particles ───────────────────────────────────────────────────────────────

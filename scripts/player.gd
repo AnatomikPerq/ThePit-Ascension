@@ -22,9 +22,8 @@ const PVP_STOMP_REBOUND: float = -900.0
 ## A shockwave spawns on every machine, so its camera kick fades over this
 ## distance. Yours is at zero and lands in full.
 const SHOCKWAVE_SHAKE_RANGE: float = 1800.0
-## How fast an external shove bleeds off, in e-folds per second. A shove is
-## added on top of whatever the player is doing rather than replacing it, so it
-## has to fade or it would be a permanent wind.
+## How fast the sideways half of an external shove bleeds off, in e-folds per
+## second. See shove() for why only that half needs carrying.
 const SHOVE_DECAY: float = 7.0
 
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
@@ -86,8 +85,8 @@ var can_input: bool = true
 var _trail_timer: float = 0.0
 var _squash_tween: Tween
 var _puppet_anim: StringName = &""
-## Outstanding external push — see shove().
-var _shove: Vector2 = Vector2.ZERO
+## Outstanding sideways push — see shove().
+var _shove_x: float = 0.0
 
 # ── Node References ─────────────────────────────────────────────────────────
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -386,12 +385,24 @@ func _resolve_versus_stomp() -> void:
 ## moved this avatar without being its input": a blast uses it, a rival's hit
 ## uses it, and anything added later can.
 ##
-## It has to be an impulse that decays rather than a write to `velocity`, because
-## _handle_input() assigns `velocity.x` outright every frame — a horizontal knock
-## written straight into velocity is erased on the next tick and was, in effect,
-## invisible. This is added on top of the player's own movement while it bleeds
-## off, so being blown across a gap is something you can see and have to recover
-## from.
+## The two axes are handled differently, because the game already treats them
+## differently:
+##
+## - **Vertical** is a plain impulse. `velocity.y` carries from frame to frame and
+##   gravity is what takes it back, so adding to it once gives a real arc whose
+##   height falls off with the strength — exactly what a blast under your feet
+##   should do.
+## - **Horizontal** has to be carried and bled off, because `_handle_input()`
+##   reassigns `velocity.x` outright every single frame. A one-off write there is
+##   gone before it moves anybody, which is what made the old rival knockback
+##   invisible.
+##
+## Getting that split wrong is not subtle. Adding the whole vector to `velocity`
+## every frame — which is what this did first — makes the vertical half an
+## acceleration applied without a delta: it compounds into the velocity that
+## carried over, and a bomb anywhere below you fired you off the top of the pit
+## at roughly seventeen times the intended strength, near enough regardless of
+## how far away it was.
 ##
 ## Only the machine steering this avatar may push it: velocity is its business,
 ## and a puppet's position arrives already moved.
@@ -403,16 +414,18 @@ func shove(from: Vector2, strength: float) -> void:
 	var dir := global_position - from
 	if dir.length_squared() < 1.0:
 		dir = Vector2.UP
-	_shove += dir.normalized() * strength
+	var push := dir.normalized() * strength
+	velocity.y += push.y
+	_shove_x += push.x
 	dashing_down = false
 
 
 func _apply_shove(delta: float) -> void:
-	if _shove.length_squared() < 1.0:
-		_shove = Vector2.ZERO
+	if absf(_shove_x) < 1.0:
+		_shove_x = 0.0
 		return
-	velocity += _shove
-	_shove = _shove.lerp(Vector2.ZERO, clampf(SHOVE_DECAY * delta, 0.0, 1.0))
+	velocity.x += _shove_x
+	_shove_x = lerpf(_shove_x, 0.0, clampf(SHOVE_DECAY * delta, 0.0, 1.0))
 
 
 # ── Damage & Crush ──────────────────────────────────────────────────────────

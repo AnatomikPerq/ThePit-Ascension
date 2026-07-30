@@ -79,12 +79,12 @@ static func _show(epicentre: Vector2, def: BlastDef, credited_peer: int,
 		if def.point_blank_sound != &"":
 			Audio.play(def.point_blank_sound)
 		Fx.shake(def.point_blank_shake)
-		Fx.screen_flash(def.point_blank_flash, true)
+		Fx.screen_flash(def.point_blank_flash, epicentre, true)
 	else:
 		if def.sound != &"":
 			Audio.play_at(def.sound, epicentre)
 		Fx.shake_from(epicentre, def.shake, def.feedback_range)
-		Fx.screen_flash(def.flash * Fx.loudness_at(epicentre, def.feedback_range))
+		Fx.screen_flash(def.flash * Fx.loudness_at(epicentre, def.feedback_range), epicentre)
 	for preset in def.bursts:
 		Fx.burst(epicentre, preset)
 

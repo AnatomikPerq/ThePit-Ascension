@@ -88,21 +88,25 @@ These were each learned from a harness that lied. Full stories in CLAUDE.md §5.
    the destruction stage from the other end: the host finished first and quit,
    which closed the socket and sent the client to the main menu, and the client
    then reported "no world to blow anything up in".
-10. **An RPC is queued, not sent.** The client signalled the host and called
+10. **`physics_frame` fires at the START of the frame.** Awaiting it once
+    returns *before* any `_physics_process` has run, so "wait one frame and read
+    the result" reads the state you already had. Two frames is the minimum for
+    anything a node does to itself.
+11. **An RPC is queued, not sent.** The client signalled the host and called
     `get_tree().quit()` on the next line; the process ended before the socket was
     flushed, so about one run in three the host failed with "the client never
     reported on the blast" while the client's own log said PASSED. Spend a few
     frames after the last packet before quitting.
-11. **Position a body BEFORE add_child.** Setting `global_position` afterwards
+12. **Position a body BEFORE add_child.** Setting `global_position` afterwards
     leaves the physics server holding the overlap the body had at the origin for
     one step, so a player parked 44 px clear of a bomb still set it off. World
     spawns everything this way already; tests have to as well.
-12. **Global state on an autoload leaks between suites.** `Fx.listener_position`
+13. **Global state on an autoload leaks between suites.** `Fx.listener_position`
     is set by every World that is built, and a suite that builds one leaves it
     7700 px down the pit — which silently zeroed every distance-scaled
     assertion in whatever suite ran next. Reset it in `before_test`, like
     `effects_root`.
-13. **An enemy despawns below the avatar it tracks.** Parking a test's player
+14. **An enemy despawns below the avatar it tracks.** Parking a test's player
     3000 px above the enemies made all five leave on their own, and the case
     asserting that a blast kills them passed for the wrong reason. Keep the
     bystander level with them and put it out of range sideways instead.
