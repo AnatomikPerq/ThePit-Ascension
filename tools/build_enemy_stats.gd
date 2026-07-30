@@ -6,6 +6,10 @@ extends SceneTree
 ##
 ## Re-running OVERWRITES inspector edits. It exists so the origin of these
 ## numbers is traceable, not as part of the build.
+##
+## `data/enemies/bomb.tres` is deliberately NOT written here: the bomb has no
+## contact matrix to have numbers for, so it carries a `BombStats` rather than an
+## `EnemyStats` and was authored directly, like the resources in `data/fx/`.
 
 const OUT_DIR := "res://data/enemies/"
 
@@ -16,8 +20,10 @@ const ENEMIES: Dictionary = {
 	"golem": [50, Color(0.75, 0.72, 0.62), false, -600.0, ""],
 	# Converts into a trampoline. Silent on stomp, as it always was.
 	"slime": [75, Color(0.35, 0.90, 0.40), false, -700.0, ""],
-	"pursuer": [150, Color(0.95, 0.35, 0.35), true, -900.0, "stomp"],
-	"bat": [125, Color(0.75, 0.40, 0.95), true, -900.0, "stomp"],
+	# A plain jump on the head kills these two; only the spitter still demands a
+	# dash and punishes a landing without one.
+	"pursuer": [150, Color(0.95, 0.35, 0.35), false, -900.0, "stomp"],
+	"bat": [125, Color(0.75, 0.40, 0.95), false, -900.0, "stomp"],
 	"spitter": [150, Color(0.50, 0.95, 0.30), true, -900.0, "stomp"],
 }
 

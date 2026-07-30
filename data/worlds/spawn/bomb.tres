@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="SpawnEntry" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/defs/spawn_entry.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://scenes/Bomb.tscn" id="2_scene"]
+
+[resource]
+resource_name = "bomb"
+script = ExtResource("1_script")
+scene = ExtResource("2_scene")
+weight_start = 20.0
+weight_end = 30.0
+placement = 0
+above_player_min = 1200.0
+above_player_max = 1200.0
+group = &"bomb"
+max_alive = 3

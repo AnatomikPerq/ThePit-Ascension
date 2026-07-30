@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="BlastDef" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/defs/blast_def.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/fx/blast_smoke.tres" id="2_smoke"]
+[ext_resource type="Resource" path="res://data/fx/blast_fire.tres" id="3_fire"]
+[ext_resource type="Resource" path="res://data/fx/blast_sparks.tres" id="4_sparks"]
+[ext_resource type="Resource" path="res://data/fx/blast_core.tres" id="5_core"]
+[ext_resource type="Script" path="res://src/fx/burst_preset.gd" id="6_preset"]
+
+[resource]
+resource_name = "blast"
+script = ExtResource("1_script")
+radius = 520.0
+peak_force = 100.0
+push = 1800.0
+push_radius = 1000.0
+point_blank_damage = 2
+point_blank_push = 4400.0
+point_blank_shake = 1.0
+point_blank_flash = 1.0
+point_blank_sound = &"blast_close"
+score = 50
+score_color = Color(1, 0.6, 0.25, 1)
+sound = &"blast"
+shake = 0.95
+flash = 0.28
+feedback_range = 2600.0
+bursts = Array[ExtResource("6_preset")]([ExtResource("2_smoke"), ExtResource("3_fire"), ExtResource("4_sparks"), ExtResource("5_core")])

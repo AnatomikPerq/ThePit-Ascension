@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ShardPreset" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/shard_preset.gd" id="1_script"]
+
+[resource]
+resource_name = "shards"
+script = ExtResource("1_script")
+piece_pixels = 11
+max_pieces = 16
+speed = 1000.0
+speed_variance = 0.45
+push_bias = 0.8
+gravity = 1500.0
+spin = 9.0
+life = 1.0

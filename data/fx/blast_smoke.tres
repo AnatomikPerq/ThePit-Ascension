@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BurstPreset" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/burst_preset.gd" id="1_script"]
+
+[resource]
+resource_name = "blast_smoke"
+script = ExtResource("1_script")
+count = 30
+speed = 620.0
+life = 1.15
+gravity = -180.0
+color = Color(0.22, 0.19, 0.2, 1)
+scale_min = 8.0
+scale_max = 18.0

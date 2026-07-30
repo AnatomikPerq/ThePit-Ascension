@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://cworld01"]
+[gd_scene load_steps=10 format=3 uid="uid://cworld01"]
 
 [ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui_input.gd" id="2_uiinput"]
@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/UpgradeMenu.tscn" id="6_upgrade"]
 [ext_resource type="PackedScene" path="res://scenes/ui/PauseOverlay.tscn" id="7_pause"]
 [ext_resource type="PackedScene" path="res://scenes/ui/EndScreen.tscn" id="8_end"]
+[ext_resource type="PackedScene" path="res://scenes/fx/BlastFlash.tscn" id="9_flash"]
 
 [node name="World" type="Node2D" unique_id=1323789333]
 script = ExtResource("1_script")
@@ -32,7 +33,7 @@ drag_bottom_margin = 0.25
 [node name="Trampolines" type="Node2D" parent="." unique_id=1972712193 groups=["trampoline_container"]]
 
 [node name="EnemySpawner" type="MultiplayerSpawner" parent="."]
-_spawnable_scenes = PackedStringArray("res://scenes/Golem.tscn", "res://scenes/Slime.tscn", "res://scenes/Pursuer.tscn", "res://scenes/Bat.tscn", "res://scenes/Spitter.tscn", "res://scenes/Projectile.tscn")
+_spawnable_scenes = PackedStringArray("res://scenes/Golem.tscn", "res://scenes/Slime.tscn", "res://scenes/Pursuer.tscn", "res://scenes/Bat.tscn", "res://scenes/Spitter.tscn", "res://scenes/Projectile.tscn", "res://scenes/Bomb.tscn")
 spawn_path = NodePath("../Enemies")
 
 [node name="TrampolineSpawner" type="MultiplayerSpawner" parent="."]
@@ -46,6 +47,8 @@ process_mode = 3
 process_mode = 3
 script = ExtResource("2_uiinput")
 world_path = NodePath("../..")
+
+[node name="BlastFlash" parent="CanvasLayer" instance=ExtResource("9_flash")]
 
 [node name="HUD" parent="CanvasLayer" instance=ExtResource("5_hud")]
 

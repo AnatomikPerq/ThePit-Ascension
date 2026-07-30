@@ -54,7 +54,14 @@ world simulation run here" — true solo and on the host.
 | Stomp rebound on a client's avatar | **server** detects | `remote_stomp` RPC to the avatar's owner |
 | Mistimed-stomp punishment | **server** detects | `remote_hurt` RPC to the avatar's owner |
 | Projectiles | **server** (motion, lifetime, free) | spawner + synchronizer; each machine hurts only its own avatar on overlap |
-| Trampolines (from slimes) | **server** spawns | `MultiplayerSpawner` on `World/Trampolines`; the bounce itself is local physics on whoever touches it |
+| Trampolines (from slimes) | **server** spawns | `MultiplayerSpawner` on `World/Trampolines`; the bounce launch and its sound belong to the machine steering the player who landed — every machine still sees the pad flex |
+| Bombs: fall, being thrown, flight | **server** | spawner + synchronizer (position, rotation, thrown flag) |
+| Whether a bomb goes off | **server** decides (it is the machine that can see every avatar) | one `@rpc("call_local")` carrying the epicentre, the destroyed list and who is credited |
+| What a blast destroys | **server** decides | the *names* of the pieces travel; every machine breaks exactly those. Never recomputed per peer — see below |
+| Blast damage to an avatar | **client** (the victim) | nothing crosses the wire: the event says where it went off and each machine measures its own avatar |
+| Being thrown by a blast | **client** (the victim) | same event, same rule — the shove is applied where the velocity lives |
+| A bomb set off by a body | **server** names the peer in the event | that one machine takes two hearts, a much bigger shove, a flat deep boom and a screen-filling fireball. Everyone else plays the ordinary blast; the spectacle needs no packet of its own because the avatar's position is already replicated |
+| Enemies caught in a blast | **server** | the blast's hitbox is in the `"strike"` group, so it resolves down the existing kill path |
 | Score, kills, combo | **server** | kill events broadcast the resulting numbers; client score requests route through the host |
 | Upgrade milestones, zone crossings | **server** detects | RPC to the earning peer opens *its* menu / notification |
 | Upgrade choice & ability flags | **client** (owner machine) | abilities affect only the owner's simulation; attacks replicate as above |
@@ -91,6 +98,25 @@ world simulation run here" — true solo and on the host.
   each other and whether their attacks land. Nothing else in the game tests
   the mode, and it is false in co-op and false solo, so single-player physics
   is untouched.
+- **Destruction is decided once and named, not recomputed.** Everything else
+  about the world is a pure function of the seed, so it is tempting to let each
+  peer work out for itself what a blast broke. It does not hold: a moving
+  platform's live position is a function of how many physics ticks *that*
+  machine has run, so a mover at the edge of a wave breaks on one screen and
+  survives on another — and a platform that exists for one player and not
+  another is a desync you climb into. The host therefore sends the *names* of
+  the casualties. `WorldBuilder` names every piece after its place in the plan
+  precisely so that a name means the same node on every machine, and
+  `test/destruction_test.gd` pins that every name a blast emits resolves back to
+  a `Destructible`.
+- **A sound that belongs to one avatar plays on one machine.** Your jump, your
+  landing, your punch, your stomp, your bounce. This is a real rule, not a
+  detail: strike and shockwave sounds used to sit *inside* the `call_local` RPC
+  that spawns the attack, so every punch anyone threw played in every lobby, and
+  the stomp sound played wherever the contact was resolved, which meant the host
+  heard every client's boots. Things that happen at a *place* in the pit — an
+  enemy dying, a golem setting, a bomb, a platform coming apart — do play
+  everywhere, positionally, and fade with distance.
 
 ## Race: players against each other
 
@@ -122,8 +148,9 @@ neither: teammates pass through each other and cannot do each other harm.
   offset by the few ticks between their world builds (constant, no drift).
   Perfect alignment would need a session tick broadcast — the seam exists
   in `MovingPlatform` (a pure function of tick).
-- The stomp sound of a remote player's kill plays on the host machine only;
-  the kill popup/burst play everywhere via the kill event.
+- A bomb going off is the host's call, so a client walking into one detonates it
+  with the host's view of where that client was — the same trade as remote stomp
+  resolution above.
 - A race hit is judged on the victim's machine from the attacker's synced
   position, so on a bad connection the attacker can see a hit the victim
   never takes. The alternative — the attacker deciding — puts someone else's
@@ -157,6 +184,13 @@ check, because one machine always agrees with itself: both machines report
 `is_versus()`, each avatar is solid to rivals, each machine watches its own
 hurt box and not the rival's, and the client walking up and striking the host
 takes a heart off the host's avatar **on the host's machine**.
+
+Finally it blows something up. The host aims a real bomb at one named platform
+and sets it off; the **client**, which decided nothing, has to lose exactly that
+platform and keep a control platform three radii away. The bomb is held still
+while the spawn packet travels — a live one falls 600 px a second, and the first
+version of this stage moved the epicentre a quarter of a blast below its target
+and reported that destruction does not replicate.
 
 `test/net_session_test.gd` pins the mode semantics (co-op = shared victory,
 race = one winner, ending stops the simulation).

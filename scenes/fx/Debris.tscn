@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3 uid="uid://cfxdebris01"]
+
+[ext_resource type="Script" path="res://src/fx/debris.gd" id="1_script"]
+
+[sub_resource type="Gradient" id="Gradient_chunks"]
+resource_local_to_scene = true
+offsets = PackedFloat32Array(0, 0.75, 1)
+colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0)
+
+[node name="Debris" type="CPUParticles2D"]
+z_index = 45
+emitting = false
+one_shot = true
+explosiveness = 1.0
+spread = 45.0
+angle_min = -180.0
+angle_max = 180.0
+angular_velocity_min = -420.0
+angular_velocity_max = 420.0
+damping_min = 20.0
+damping_max = 70.0
+color_ramp = SubResource("Gradient_chunks")
+script = ExtResource("1_script")

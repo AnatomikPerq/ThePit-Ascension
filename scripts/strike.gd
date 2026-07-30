@@ -2,6 +2,10 @@ extends Area2D
 ## Strike attack — spawned by Player, lasts 0.35s, snaps to player side.
 
 const LIFETIME: float = 0.35
+## How far this hitbox reaches from its own centre — the half-diagonal of the
+## 80×64 box in Strike.tscn. Anything that wants to know how squarely it was hit
+## reads this off the hitbox; the bomb throws further for a centred punch.
+const HIT_REACH: float = 51.0
 
 var _player: Node2D
 var _facing_right: bool = true
@@ -22,6 +26,7 @@ func _ready() -> void:
 	# Enemies find this hitbox through the "strike" group and credit the kill
 	# to whoever owns it.
 	set_meta(&"owner_peer", _player.get("peer_id") if is_instance_valid(_player) else 0)
+	set_meta(&"hit_reach", HIT_REACH)
 
 
 func _physics_process(delta: float) -> void:

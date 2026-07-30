@@ -9,9 +9,13 @@ extends GdUnitTestSuite
 ##   enemy    plain landing        dash stomp        strike     leaves behind
 ##   golem    converts             converts          converts   a platform
 ##   slime    converts             converts          converts   a trampoline
-##   pursuer  hurts the player     dies              dies       nothing
-##   bat      hurts the player     dies              dies       nothing
+##   pursuer  dies                 dies              dies       nothing
+##   bat      dies                 dies              dies       nothing
 ##   spitter  hurts the player     dies              dies       nothing
+##
+## The spitter is now the only one that demands a dash: a plain jump on the head
+## kills everything else. That is one field per enemy — requires_dash_to_stomp on
+## its EnemyStats — and the `needs_dash` column below is the oracle for it.
 ##
 ## Each case runs in its own container which is freed immediately afterwards.
 ## That is not ceremony: the first version of this suite reused the tree, and a
@@ -31,11 +35,11 @@ const CASES := {
 	},
 	"pursuer": {
 		"scene": "res://scenes/Pursuer.tscn",
-		"needs_dash": true, "rebound": -900.0, "score": 150, "leaves": "", "vanishes": true,
+		"needs_dash": false, "rebound": -900.0, "score": 150, "leaves": "", "vanishes": true,
 	},
 	"bat": {
 		"scene": "res://scenes/Bat.tscn",
-		"needs_dash": true, "rebound": -900.0, "score": 125, "leaves": "", "vanishes": true,
+		"needs_dash": false, "rebound": -900.0, "score": 125, "leaves": "", "vanishes": true,
 	},
 	"spitter": {
 		"scene": "res://scenes/Spitter.tscn",

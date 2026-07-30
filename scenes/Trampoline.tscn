@@ -1,7 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://ctrampoline01"]
+[gd_scene load_steps=8 format=3 uid="uid://ctrampoline01"]
 
 [ext_resource type="Script" uid="uid://bfe5by86mtmkp" path="res://scripts/trampoline.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://daltt52tghplt" path="res://assets/sprites/slime_active.png" id="2_tex"]
+[ext_resource type="Script" path="res://src/entities/destructible.gd" id="3_destruct"]
+[ext_resource type="Resource" path="res://data/fx/shards.tres" id="4_shards"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(64, 32)
@@ -49,6 +51,13 @@ libraries = {
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=626921991]
 position = Vector2(0, -4)
 shape = SubResource("RectangleShape2D_1")
+
+[node name="Destructible" type="Node" parent="."]
+script = ExtResource("3_destruct")
+strength = 30.0
+frees_locally = false
+shards = ExtResource("4_shards")
+dust_count = 8
 
 [node name="Sync" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SRC_trampoline")

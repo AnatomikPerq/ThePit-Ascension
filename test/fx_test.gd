@@ -11,10 +11,16 @@ func before_test() -> void:
 	root = Node2D.new()
 	add_child(root)
 	Fx.effects_root = root
+	# Fx.listener_position is global and any suite that builds a World leaves it
+	# wherever that world's avatar stood — 7700 px down the pit. Every
+	# distance-scaled assertion below would then be measuring a kill on the far
+	# side of the map.
+	Fx.listener_position = Vector2.ZERO
 
 
 func after_test() -> void:
 	Fx.effects_root = null
+	Fx.listener_position = Vector2.ZERO
 	if is_instance_valid(root):
 		root.free()
 
@@ -102,6 +108,31 @@ func test_a_kill_shakes_the_camera() -> void:
 	assert_vector(Fx.get_shake_offset()) \
 		.override_failure_message("killing something did not move the camera at all") \
 		.is_not_equal(Vector2.ZERO)
+
+
+## Distance-scaled feedback. Kills, blasts and shockwaves all fire on every
+## machine in a session, so their kick has to fade with distance — otherwise
+## every player's camera jumps for everybody else's fights, anywhere in the pit.
+func test_loudness_falls_off_from_the_listener_and_never_goes_negative() -> void:
+	Fx.listener_position = Vector2.ZERO
+	assert_float(Fx.loudness_at(Vector2.ZERO, 1000.0)).is_equal_approx(1.0, 0.001)
+	assert_float(Fx.loudness_at(Vector2(500, 0), 1000.0)).is_equal_approx(0.5, 0.001)
+	assert_float(Fx.loudness_at(Vector2(4000, 0), 1000.0)) \
+		.override_failure_message("something far away produced negative loudness") \
+		.is_equal_approx(0.0, 0.001)
+	# A range of zero means "distance does not apply", not "silent".
+	assert_float(Fx.loudness_at(Vector2(9999, 0), 0.0)).is_equal_approx(1.0, 0.001)
+
+
+func test_a_distant_event_does_not_shake_the_camera() -> void:
+	for i in 300:
+		if Fx.get_shake_offset() == Vector2.ZERO:
+			break
+		await get_tree().process_frame
+	Fx.shake_from(Vector2(20000, 0), 1.0, 2600.0)
+	assert_vector(Fx.get_shake_offset()) \
+		.override_failure_message("an event 20000 px away still shook the screen") \
+		.is_equal(Vector2.ZERO)
 
 
 func test_the_pool_dies_with_its_root_and_recovers() -> void:

@@ -30,6 +30,15 @@ func _ready() -> void:
 	# …and credit the kill to whoever owns the hitbox.
 	_hit_area.set_meta(&"owner_peer",
 		_player.get("peer_id") if is_instance_valid(_player) else 0)
+	# How far this attack reaches at full extent, for anything that cares how
+	# squarely it was caught — the bomb is thrown further the nearer the middle
+	# of the ring it was standing.
+	#
+	# The FULL radius, deliberately, not the radius at the moment of contact. The
+	# ring grows outward, so it always meets a bomb exactly when it has grown to
+	# reach it: measured against the current radius every bomb is at the edge of
+	# the wave and none of them would ever be thrown hard.
+	_hit_area.set_meta(&"hit_reach", MAX_RADIUS)
 	# Start with a zero-radius hit shape so the wave grows from the player.
 	var circ := _hit_shape.shape as CircleShape2D
 	if circ:

@@ -7,6 +7,5 @@ resource_name = "bat"
 script = ExtResource("1_ork5k")
 score = 125
 score_color = Color(0.75, 0.4, 0.95, 1)
-requires_dash_to_stomp = true
 stomp_rebound = -900.0
 stomp_sound = &"stomp"

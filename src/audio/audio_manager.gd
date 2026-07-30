@@ -30,9 +30,16 @@ var music_enabled: bool = true:
 			_music_player.stream_paused = not value
 		music_toggled.emit(value)
 
+## Where positional sounds live, registered by the active scene the same way
+## Fx.effects_root is (World does both in _ready). Without one, play_at falls
+## back to the flat mix — a world sound in a menu is then merely
+## un-attenuated, never silent.
+var world_root: Node2D = null
+
 var _music_player: AudioStreamPlayer
 ## bus name -> the polyphonic playback handle we push streams into.
 var _playbacks: Dictionary[StringName, AudioStreamPlaybackPolyphonic] = {}
+var _world_sound_scene: PackedScene
 
 
 func _ready() -> void:
@@ -42,6 +49,7 @@ func _ready() -> void:
 	if bank == null:
 		push_error("Audio: could not load " + BANK_PATH)
 		return
+	_world_sound_scene = load("res://scenes/fx/WorldSound.tscn")
 	_build_players()
 	_start_music()
 
@@ -102,6 +110,36 @@ func play(id: StringName, pitch_override: float = 0.0) -> void:
 	playback.play_stream(def.stream, 0.0, def.volume_db, pitch)
 
 
+## Play a sound that happened at a place in the world. Whether distance actually
+## matters is the SoundDef's business, not the call site's: an id marked flat
+## comes straight back out of play() above, so which sounds attenuate is an
+## inspector decision on data/audio/sound_bank.tres.
+##
+## Multiplayer needs nothing else. The listener is the active Camera2D, which is
+## each machine's own camera on its own avatar, so the same replicated event is
+## loud for the player standing in it and inaudible for the one three levels up.
+func play_at(id: StringName, pos: Vector2, pitch_override: float = 0.0) -> void:
+	if bank == null:
+		return
+	var def: SoundDef = bank.get_sound(id)
+	if def == null or def.stream == null:
+		push_warning("Audio: no sound registered for id '%s'" % id)
+		return
+	if not def.positional or not is_instance_valid(world_root) or _world_sound_scene == null:
+		play(id, pitch_override)
+		return
+	var voice: WorldSound = _world_sound_scene.instantiate()
+	voice.stream = def.stream
+	voice.volume_db = def.volume_db
+	voice.pitch_scale = pitch_override if pitch_override > 0.0 else def.roll_pitch()
+	voice.bus = String(def.bus)
+	if def.max_distance > 0.0:
+		voice.max_distance = def.max_distance
+	world_root.add_child(voice)
+	voice.global_position = pos
+	voice.play()
+
+
 func toggle_music() -> bool:
 	music_enabled = not music_enabled
 	return music_enabled
@@ -115,6 +153,8 @@ func _exit_tree() -> void:
 	_playbacks.clear()
 	bank = null
 	_music_player = null
+	_world_sound_scene = null
+	world_root = null
 	for child in get_children():
 		var player := child as AudioStreamPlayer
 		if player == null:

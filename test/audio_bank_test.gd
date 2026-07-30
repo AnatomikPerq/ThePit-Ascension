@@ -11,6 +11,27 @@ const REQUIRED_IDS: Array[StringName] = [
 	&"jump", &"double_jump", &"land", &"stomp", &"kill", &"hurt", &"crush",
 	&"strike", &"shockwave", &"bounce", &"thud", &"upgrade", &"heal",
 	&"die", &"win", &"ui_click", &"ui_confirm", &"zone",
+	&"blast", &"blast_close", &"rubble", &"bomb_hit",
+]
+
+## Sounds that happened at a place in the pit. Every machine plays these from
+## one replicated event, so they must fade with distance — otherwise a bomb
+## eight levels up is as loud as one under your feet.
+const POSITIONAL_IDS: Array[StringName] = [
+	&"kill", &"thud", &"die", &"blast", &"rubble", &"bomb_hit",
+]
+
+## Sounds that belong to YOUR avatar, or to the UI. These are flat on purpose,
+## and — the part that matters in a session — they are played only on the machine
+## that owns the avatar making them. A lobby must not hear everyone else's
+## jumping, landing, punching and stomping.
+## `blast_close` is here rather than with the world sounds on purpose: a bomb
+## that went off against your own body did not happen somewhere in the pit that
+## you overheard, and only that one player's machine plays it at all.
+const PRIVATE_IDS: Array[StringName] = [
+	&"jump", &"double_jump", &"land", &"stomp", &"hurt", &"crush",
+	&"strike", &"shockwave", &"bounce", &"heal", &"upgrade", &"win", &"zone",
+	&"ui_click", &"ui_confirm", &"blast_close",
 ]
 
 var bank: SoundBank
@@ -60,6 +81,40 @@ func test_roll_pitch_stays_in_range() -> void:
 
 func test_music_track_is_present() -> void:
 	assert_object(bank.music).is_not_null()
+
+
+func test_world_sounds_are_positional_and_have_a_range() -> void:
+	for id in POSITIONAL_IDS:
+		var def: SoundDef = bank.get_sound(id)
+		assert_bool(def.positional) \
+			.override_failure_message("'%s' happens in the world and must fade with distance" % id) \
+			.is_true()
+		assert_float(def.max_distance) \
+			.override_failure_message("positional '%s' has no range, so it never fades" % id) \
+			.is_greater(0.0)
+
+
+## The other half of the same rule. A sound marked positional is broadcast by
+## whatever fires it; one of these turning positional is the tell that somebody
+## moved an avatar's own noise onto every machine in the lobby.
+func test_avatar_and_ui_sounds_stay_flat() -> void:
+	for id in PRIVATE_IDS:
+		var def: SoundDef = bank.get_sound(id)
+		assert_bool(def.positional) \
+			.override_failure_message("'%s' belongs to one avatar or to the UI, not to the pit" % id) \
+			.is_false()
+
+
+## Between them the two lists must account for the whole vocabulary: a new sound
+## has to be classified, not quietly default to flat.
+func test_every_sound_is_classified() -> void:
+	var unclassified: Array[String] = []
+	for id in bank.ids():
+		if not POSITIONAL_IDS.has(id) and not PRIVATE_IDS.has(id):
+			unclassified.append(String(id))
+	assert_array(unclassified) \
+		.override_failure_message("sounds in neither list (flat or positional?): %s" % str(unclassified)) \
+		.is_empty()
 
 
 func test_buses_exist() -> void:

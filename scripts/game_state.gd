@@ -14,6 +14,9 @@ const SAVE_PATH := "user://thepit_save.cfg"
 const KILL_SHAKE: float = 0.3
 const KILL_SHAKE_PER_COMBO: float = 0.05
 const KILL_SHAKE_MAX: float = 0.6
+## Kills are broadcast, so their feedback fades over this distance. Without it
+## every player's screen jumps for everybody else's fights, anywhere in the pit.
+const KILL_FEEDBACK_RANGE: float = 2600.0
 
 ## Per-player run state for the current run, keyed by peer id.
 var runs: Dictionary[int, PlayerRun] = {}
@@ -123,8 +126,9 @@ func _kill_feedback(pos: Vector2, gained: int, combo: int, color: Color) -> void
 		text += "  x%d" % combo
 	Fx.popup(pos + Vector2(0, -50), text, color)
 	Fx.burst(pos, _kill_burst, color, 14 + mini(combo * 2, 16))
-	Fx.shake(minf(KILL_SHAKE + combo * KILL_SHAKE_PER_COMBO, KILL_SHAKE_MAX))
-	Audio.play(&"kill", clampf(0.9 + combo * 0.07, 0.9, 1.7))
+	Fx.shake_from(pos, minf(KILL_SHAKE + combo * KILL_SHAKE_PER_COMBO, KILL_SHAKE_MAX),
+		KILL_FEEDBACK_RANGE)
+	Audio.play_at(&"kill", pos, clampf(0.9 + combo * 0.07, 0.9, 1.7))
 
 
 ## Flat score without combo (projectiles, milestones). `peer_id` 0 = local.

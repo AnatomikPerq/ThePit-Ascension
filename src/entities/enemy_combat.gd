@@ -132,15 +132,20 @@ func _resolve_kills() -> void:
 			# Landing on this one without a dash is a mistake, not an attack.
 			_hurt(body)
 			return
+		# The rebound and the sound both belong to the avatar's own machine. The
+		# sound used to play right here, which meant the host heard every client's
+		# boots: a stomp is a sound your own avatar makes, not an event in the pit
+		# that the lobby overhears.
 		if not Net.active or body.is_multiplayer_authority():
 			body.velocity.y = stats.stomp_rebound
 			body.dashing_down = false
+			if stats.stomp_sound != &"":
+				Audio.play(stats.stomp_sound)
 		else:
-			# The rebound belongs to the avatar's own machine; the invincibility
-			# window there absorbs the duplicate if its damage path also fired.
-			body.rpc_id(body.get_multiplayer_authority(), &"remote_stomp", stats.stomp_rebound)
-		if stats.stomp_sound != &"":
-			Audio.play(stats.stomp_sound)
+			# The invincibility window on that machine absorbs the duplicate if
+			# its damage path also fired.
+			body.rpc_id(body.get_multiplayer_authority(), &"remote_stomp",
+				stats.stomp_rebound, stats.stomp_sound)
 		_kill(false, body.get("peer_id"))
 		return
 
@@ -156,13 +161,19 @@ func _resolve_local_damage() -> void:
 			continue
 		if body.get("peer_id") != Game.local_peer_id:
 			continue
-		# A player dashing down from above is mid-stomp. Without this the
-		# outcome depends on which Area2D the engine reports first: damage_area
-		# covers the whole body while stomp_area is a thin strip on top, so a
-		# legitimate dash-kill was frequently turned into the player taking a
-		# hit — and the knockback then failed the stomp check's velocity guard on
-		# the following frame.
-		if body.get("dashing_down") == true \
+		# A player coming down from above is mid-stomp, dashing or not. Without
+		# this the outcome depends on which Area2D the engine reports first:
+		# damage_area covers the whole body while stomp_area is a thin strip on
+		# top, so a legitimate kill was frequently turned into the player taking
+		# a hit — and the knockback then failed the stomp check's velocity guard
+		# on the following frame.
+		#
+		# It used to test `dashing_down`, which was enough while only a dash
+		# could kill a pursuer or a bat. Now that a plain landing does, the
+		# descent itself is what matters. A landing that is NOT allowed to kill
+		# still punishes the player — that is the spitter, and it happens on the
+		# stomp ladder above, not here.
+		if body.velocity.y > 0.0 \
 				and body.global_position.y < _owner_2d.global_position.y:
 			continue
 		body.take_damage()

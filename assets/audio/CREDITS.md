@@ -28,6 +28,32 @@ source pack.
 | `die.ogg` | run over | Kenney — Music Jingles | `jingles_NES07.ogg` |
 | `win.ogg` | surface reached | Kenney — Music Jingles | `jingles_NES13.ogg` |
 | `click.ogg` | UI click | Kenney — Interface Sounds | `click_001.ogg` |
+| `blast.ogg` | a bomb going off | Kenney — Sci-fi Sounds | `explosionCrunch_000.ogg` |
+| `blast_close.ogg` | a bomb going off against **your** body | Kenney — Sci-fi Sounds | `lowFrequency_explosion_000.ogg` |
+| `rubble.ogg` | a platform coming apart | Kenney — Impact Sounds | `impactMining_000.ogg` |
+
+Three ids share `stomp.ogg` and `click.ogg` between them; see the table in
+`tools/build_sound_bank.gd`. `bomb_hit` — a fist on a bomb's shell — is
+`stomp.ogg` dropped a couple of semitones.
+
+## Which sounds are heard where
+
+Two facts about every sound live on its `SoundDef`, and they answer different
+questions:
+
+- **`positional`** — did this happen at a *place*? A positional sound plays
+  through an `AudioStreamPlayer2D` where it happened, so it is quieter the
+  further away you are. In 2D the listener is the active `Camera2D`, which in a
+  session is each machine's own camera on its own avatar — so distance works in
+  multiplayer with nothing about volume crossing the wire. `kill`, `thud`, `die`,
+  `blast`, `rubble` and `bomb_hit` are positional.
+- **Who plays it at all** — that is behaviour, not data, and it lives at the call
+  site. Everything that belongs to *your* avatar (jump, land, hurt, crush,
+  strike, shockwave, stomp, bounce) plays only on the machine steering it. A
+  lobby does not hear everybody else's footsteps.
+
+`test/audio_bank_test.gd` pins both lists, and fails if a new sound belongs to
+neither.
 
 ## Music — `music/`
 

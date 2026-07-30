@@ -1,6 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://cplatform01"]
+[gd_scene load_steps=5 format=3 uid="uid://cplatform01"]
 
 [ext_resource type="Texture2D" uid="uid://ull3by6dnr0i" path="res://assets/sprites/platform_part.png" id="1_tex"]
+[ext_resource type="Script" path="res://src/entities/destructible.gd" id="2_destruct"]
+[ext_resource type="Resource" path="res://data/fx/debris.tres" id="3_debris"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(64, 32)
@@ -16,3 +18,8 @@ region_rect = Rect2(0, 0, 32, 16)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_1")
+
+[node name="Destructible" type="Node" parent="."]
+script = ExtResource("2_destruct")
+strength = 68.0
+debris = ExtResource("3_debris")

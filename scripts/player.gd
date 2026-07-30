@@ -19,6 +19,13 @@ const PVP_KNOCKBACK: float = 700.0
 ## Dash-stomping a rival in a race rebounds you exactly like a dash-killed
 ## enemy does (see data/enemies/*.tres).
 const PVP_STOMP_REBOUND: float = -900.0
+## A shockwave spawns on every machine, so its camera kick fades over this
+## distance. Yours is at zero and lands in full.
+const SHOCKWAVE_SHAKE_RANGE: float = 1800.0
+## How fast an external shove bleeds off, in e-folds per second. A shove is
+## added on top of whatever the player is doing rather than replacing it, so it
+## has to fade or it would be a permanent wind.
+const SHOVE_DECAY: float = 7.0
 
 const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
@@ -79,6 +86,8 @@ var can_input: bool = true
 var _trail_timer: float = 0.0
 var _squash_tween: Tween
 var _puppet_anim: StringName = &""
+## Outstanding external push — see shove().
+var _shove: Vector2 = Vector2.ZERO
 
 # ── Node References ─────────────────────────────────────────────────────────
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
@@ -123,6 +132,8 @@ func _physics_process(delta: float) -> void:
 
 	if not flying:
 		_apply_gravity(delta)
+
+	_apply_shove(delta)
 
 	# Coyote time: if just walked off edge, start timer
 	var was_on_floor := is_on_floor()
@@ -293,6 +304,10 @@ func _try_strike() -> void:
 	if not strike_cd_timer.is_stopped():
 		return
 	strike_cd_timer.start()
+	# The swing is ours to hear. It used to live inside the RPC below, which
+	# spawns on every machine — so every punch anyone threw played in every
+	# lobby, wherever in the pit it happened.
+	Audio.play(&"strike")
 	if Net.active:
 		_spawn_strike.rpc()
 	else:
@@ -301,7 +316,6 @@ func _try_strike() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _spawn_strike() -> void:
-	Audio.play(&"strike")
 	var s := STRIKE_SCENE.instantiate()
 	s.setup(self, facing_right)
 	get_parent().add_child(s)
@@ -313,6 +327,7 @@ func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
 		return
 	shockwave_cd_timer.start()
+	Audio.play(&"shockwave")
 	if Net.active:
 		_spawn_shockwave.rpc()
 	else:
@@ -321,8 +336,10 @@ func _try_shockwave() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _spawn_shockwave() -> void:
-	Audio.play(&"shockwave")
-	Fx.shake(0.45)
+	# Fired on every machine, so the kick has to be measured from where it went
+	# off: a rival letting one off across the pit used to shake a camera nowhere
+	# near it. At zero distance — your own blast — this is the same 0.45.
+	Fx.shake_from(global_position, 0.45, SHOCKWAVE_SHAKE_RANGE)
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.setup(self)
 	get_parent().add_child(wave)
@@ -338,11 +355,10 @@ func _on_hostile_area(area: Area2D) -> void:
 		return # our own punch, passing through our own body
 	if not take_damage():
 		return
-	# Shoved away from whoever hit us, on top of take_damage()'s knockback.
-	var away := signf(global_position.x - area.global_position.x)
-	if away == 0.0:
-		away = 1.0 if facing_right else -1.0
-	velocity.x = away * PVP_KNOCKBACK
+	# Shoved away from whoever hit us, on top of take_damage()'s knockback. This
+	# used to write velocity.x directly, which _handle_input() overwrote on the
+	# very next frame — the knockback was in the code and not on the screen.
+	shove(area.global_position, PVP_KNOCKBACK)
 
 
 ## Coming down on a rival's head while dashing. The rebound is ours to apply;
@@ -365,14 +381,50 @@ func _resolve_versus_stomp() -> void:
 		return
 
 
+# ── Being pushed around ─────────────────────────────────────────────────────
+## Shoved away from a point, along both axes. The one entry point for "something
+## moved this avatar without being its input": a blast uses it, a rival's hit
+## uses it, and anything added later can.
+##
+## It has to be an impulse that decays rather than a write to `velocity`, because
+## _handle_input() assigns `velocity.x` outright every frame — a horizontal knock
+## written straight into velocity is erased on the next tick and was, in effect,
+## invisible. This is added on top of the player's own movement while it bleeds
+## off, so being blown across a gap is something you can see and have to recover
+## from.
+##
+## Only the machine steering this avatar may push it: velocity is its business,
+## and a puppet's position arrives already moved.
+func shove(from: Vector2, strength: float) -> void:
+	if Net.active and not is_multiplayer_authority():
+		return
+	if strength <= 0.0 or is_crushed:
+		return
+	var dir := global_position - from
+	if dir.length_squared() < 1.0:
+		dir = Vector2.UP
+	_shove += dir.normalized() * strength
+	dashing_down = false
+
+
+func _apply_shove(delta: float) -> void:
+	if _shove.length_squared() < 1.0:
+		_shove = Vector2.ZERO
+		return
+	velocity += _shove
+	_shove = _shove.lerp(Vector2.ZERO, clampf(SHOVE_DECAY * delta, 0.0, 1.0))
+
+
 # ── Damage & Crush ──────────────────────────────────────────────────────────
-func take_damage() -> bool:
+## `amount` is almost always one heart. A bomb that goes off against your body
+## takes two, which is the only reason this is a parameter.
+func take_damage(amount: int = 1) -> bool:
 	# Health belongs to the owning machine; puppets never take damage locally.
 	if Net.active and not is_multiplayer_authority():
 		return false
 	if invincible or flying or not can_input:
 		return false
-	health -= 1
+	health -= maxi(amount, 1)
 	invincible = true
 	inv_timer.start()
 	velocity.y = KNOCKBACK_FORCE
@@ -480,7 +532,10 @@ func _die_everywhere() -> void:
 	collision_mask = Layers.NONE
 	hurt_box.monitoring = false
 	var mine := not Net.active or is_multiplayer_authority()
-	Audio.play(&"die")
+	# Announced everywhere, so it is a world sound with a long range rather than
+	# a private one: ours plays at zero distance and full volume, and somebody
+	# going down three levels up is not something we can hear.
+	Audio.play_at(&"die", global_position)
 	Fx.shake(0.7 if mine else 0.25)
 	Fx.burst(global_position, DEATH_BURST)
 
@@ -508,12 +563,16 @@ func remote_hurt() -> void:
 		take_damage()
 
 
-## Host-resolved stomp rebound for an avatar the host does not own.
+## Host-resolved stomp rebound for an avatar the host does not own. The sound
+## comes with it rather than playing where the stomp was resolved: it is our
+## avatar's boot, so it belongs on our machine and nobody else's.
 @rpc("any_peer", "call_remote", "reliable")
-func remote_stomp(rebound: float) -> void:
+func remote_stomp(rebound: float, sound: StringName = &"") -> void:
 	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
 		velocity.y = rebound
 		dashing_down = false
+		if sound != &"":
+			Audio.play(sound)
 
 
 func _on_invincibility_timeout() -> void:

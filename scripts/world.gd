@@ -76,9 +76,11 @@ func _ready() -> void:
 		# screen's own hint line says who may do what.
 		game_over_screen.get_node(^"SubTitle").text = ""
 
-	# World-space effects (bursts, popups, ghosts) spawn under this scene
-	# and die with it.
+	# World-space effects (bursts, popups, ghosts, rubble, fireballs) spawn under
+	# this scene and die with it — and so do positional sounds, which need to be
+	# in the 2D world for distance to mean anything.
 	Fx.effects_root = self
+	Audio.world_root = self
 
 	while world_seed == 0:
 		world_seed = randi()
@@ -88,6 +90,9 @@ func _ready() -> void:
 
 	_spawn_players()
 	hud.build_hp_bar(player.max_health, player.health)
+	# Before the first frame, so anything that goes off on frame one is judged
+	# from where the avatar actually is rather than from the world origin.
+	Fx.listener_position = player.global_position
 
 	# Camera limits — keep within world bounds
 	camera.limit_left = int(-profile.wall_thickness)
@@ -104,6 +109,8 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if Fx.effects_root == self:
 		Fx.effects_root = null
+	if Audio.world_root == self:
+		Audio.world_root = null
 
 
 func _process(delta: float) -> void:
@@ -132,9 +139,13 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 
-	# Update camera to follow player (+ screen shake)
+	# Update camera to follow player (+ screen shake). The camera is also this
+	# machine's ear and eye: Fx measures how far away an event was from here, and
+	# the Camera2D is the 2D audio listener, so both kinds of distance come from
+	# the same place — the avatar this machine steers.
 	camera.global_position = player.global_position
 	camera.offset = CAMERA_BASE_OFFSET + Fx.get_shake_offset()
+	Fx.listener_position = player.global_position
 
 	hud.update(player, max_depth, delta)
 

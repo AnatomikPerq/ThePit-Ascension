@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="BombStats" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/defs/bomb_stats.gd" id="1_script"]
+[ext_resource type="Resource" path="res://data/fx/blast.tres" id="2_blast"]
+[ext_resource type="Resource" path="res://data/fx/shards.tres" id="3_shards"]
+
+[resource]
+resource_name = "bomb"
+script = ExtResource("1_script")
+fall_speed = 600.0
+launch_speed = 1150.0
+launch_lift = -420.0
+launch_gravity = 3200.0
+launch_spin = 13.0
+launch_power_min = 0.45
+launch_default_reach = 60.0
+launch_sound = &"bomb_hit"
+blast = ExtResource("2_blast")
+shards = ExtResource("3_shards")
+despawn_below = 1500.0

@@ -11,6 +11,7 @@ const PLATFORM_SIZE := Vector2(64, 64)
 
 @onready var combat: EnemyCombat = $Combat
 @onready var sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var destructible: Destructible = $Destructible
 
 
 func _ready() -> void:
@@ -33,7 +34,7 @@ func _physics_process(delta: float) -> void:
 
 func _on_killed(_by_strike: bool) -> void:
 	Fx.dust(global_position, 14)
-	Audio.play(&"thud")
+	Audio.play_at(&"thud", global_position)
 	_petrify.call_deferred()
 
 
@@ -58,3 +59,8 @@ func _petrify() -> void:
 	shape.shape = rect
 	body.add_child(shape)
 	add_child(body)
+
+	# From here it is furniture, and furniture can be blown up. While it was
+	# still falling it was an enemy and died as one — a blast kills it down the
+	# same path a punch does, and the corpse it leaves is this platform.
+	destructible.enabled = true

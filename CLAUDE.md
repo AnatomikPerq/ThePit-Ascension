@@ -14,7 +14,28 @@ Read this before changing anything.
 
 > 5 enemies (Golem, Slime, Pursuer, Bat, Spitter) · 3 unlockable upgrades (double jump,
 > sideways strike, shockwave) plus the +1 HP heal option · 1 built-in dash-down ·
-> 1 trampoline · 2 platform kinds · 4 levels · 1 world · no bosses.
+> 1 trampoline · 1 bomb · 2 platform kinds, both breakable · 4 levels · 1 world ·
+> no bosses.
+
+The **bomb** and the destruction mechanic were added on the owner's instruction
+(30 July 2026), with the design decided by him in advance: it falls through the
+level rather than detonating on it, player abilities *throw* it instead of setting
+it off, and toughness is one `strength` number per object compared against a
+blast force that falls off with distance — chosen that way because the map is
+going to grow more kinds of breakable furniture. See docs/CONTENT.md. Nothing
+else went in with it.
+
+Changed on the owner's instruction the same day, and not to be "restored":
+
+- **A plain jump on the head kills the pursuer and the bat.** Only the spitter
+  still demands a dash. Rivals in a race are unchanged — a dash-stomp is still
+  what hurts them.
+- Three player-facing mechanics were made general rather than one-off, because
+  more things will use them: `Player.shove()` (anything that pushes an avatar
+  without deciding its damage), `Fx.shards()` (anything that is one drawing
+  coming apart, as opposed to `Fx.debris()` for things built from a repeating
+  block), and the `hit_reach` metadata every hitbox now stamps (anything that
+  cares how squarely it was hit).
 
 No new enemy, ability, boss, world, structure, character or mechanic. A previous
 refactor was thrown away for exactly this: it produced a clean architecture *and* a
@@ -80,6 +101,17 @@ origin of the numbers is traceable. They are not part of the build.
   of `(tick, spawn parameters)`.
 - **Cosmetics are local.** Shake, particles, popups, ghosts and sound never replicate as
   state. They are triggered by replicated *events*.
+- **Feedback from an event fades with distance from the local avatar.** Anything fired on
+  every machine — a kill, a blast, a shockwave — goes through `Fx.shake_from` /
+  `Fx.screen_flash` and `Audio.play_at`, never plain `Fx.shake` / `Audio.play`. Otherwise a
+  session is every player's camera jumping for everybody else's fights across the pit.
+- **A sound that belongs to one avatar plays on one machine.** Jump, land, hurt, crush,
+  strike, shockwave, stomp, bounce. Never inside the `call_local` RPC that spawns an
+  attack, and never on whichever machine happened to resolve a contact.
+- **Destruction is decided once and travels by name.** The world is otherwise a pure
+  function of the seed, but a moving platform is a few ticks out of step between peers, so
+  letting each recompute what a blast broke desyncs the climb. `WorldBuilder` names pieces
+  after their place in the plan for exactly this reason — do not "tidy" those names away.
 - **Single-player never opens a socket.** Every probe must pass with no networking active.
 - **Collision layers are named** in `project.godot`. Never write a raw bitmask literal.
 - **Pause is owned in one place.** No script sets `get_tree().paused` ad hoc.
@@ -192,6 +224,24 @@ Fixed on the owner's instruction (do not "restore" them):
   two identical colliders at the same position.
 - `Shockwave.tscn` shared one `CircleShape2D` across every instance while writing its
   radius every frame.
+- Every machine in a lobby heard every other player's avatar. `Audio.play(&"strike")` and
+  `Audio.play(&"shockwave")` sat *inside* the `@rpc("call_local")` that spawns the attack, so
+  a punch thrown anywhere in the pit played on every screen; the stomp sound played wherever
+  the contact was resolved, which meant the host heard every client's boots; and the
+  trampoline's bounce fired on whichever machine saw the overlap, which is all of them. The
+  attack sounds are now played by the swinging machine before the RPC, the stomp travels with
+  `remote_stomp` to the avatar's own machine, and the trampoline launches (and is heard by)
+  only the player who landed on it — everyone still sees the pad flex.
+- A remote kill shook your camera as hard as one under your feet, wherever in the pit it
+  happened. `Game._kill_feedback` and the shockwave now go through `Fx.shake_from`.
+- The trampoline wrote velocity, `jump_count` and `dashing_down` onto *puppet* avatars. It
+  never did anything — the owner's next sync packet overwrote all three — but it was
+  somebody else's machine deciding about your movement, and the noise it made was real.
+- Knockback was in the code and not on the screen. A rival's hit set `velocity.x`
+  directly, and `_handle_input()` assigns `velocity.x` outright on the very next frame,
+  so the shove lasted one tick and moved the player by about a pixel. Impulses go through
+  `Player.shove()` now: added on top of movement and decayed, so being blown across a gap
+  is something you can see and have to recover from.
 
 ## 7. Talking to the owner
 

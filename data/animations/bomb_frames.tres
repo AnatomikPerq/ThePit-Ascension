@@ -1,0 +1,27 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/bomb_falling_1.png" id="1_c1d43"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bomb_falling_2.png" id="2_e4p57"]
+[ext_resource type="Texture2D" path="res://assets/sprites/bomb_falling_3.png" id="3_qxlgd"]
+
+[resource]
+animations = [{
+"frames": [],
+"loop": 0,
+"name": &"explode",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_c1d43")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_e4p57")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_qxlgd")
+}],
+"loop": 1,
+"name": &"falling",
+"speed": 2.0
+}]

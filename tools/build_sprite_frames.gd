@@ -44,6 +44,28 @@ const GOLEM := {
 	"petrified": {"fps": 1.0, "loop": true, "frames": ["golem_active.png"]},
 }
 
+# The bomb, and the only spec with RESERVED slots.
+#
+# `optional` means a listed frame that is not on disk is skipped with a note
+# instead of failing the build, and an animation whose frames are all missing is
+# still created — empty. That is what reserving a slot means here: the animation
+# exists in the resource and in the inspector, the scenes already point at it,
+# and dropping the next frame in and re-running this is the entire job. Nothing
+# in code has to change and nothing has to be wired.
+#
+# The core lights up over half a second per frame, so 2 fps.
+#
+# `explode` is the same arrangement for a drawn explosion. Empty today; the
+# blast is carried by particles (data/fx/blast_*.tres) and shards of the bomb
+# itself, and Explosion.tscn hides the sprite until there is something in it,
+# then scales it to the blast radius.
+const BOMB := {
+	"falling": {"fps": 2.0, "loop": true, "optional": true,
+		"frames": ["bomb_falling_1.png", "bomb_falling_2.png", "bomb_falling_3.png"]},
+	"explode": {"fps": 12.0, "loop": false, "optional": true,
+		"frames": ["bomb_explode_1.png", "bomb_explode_2.png", "bomb_explode_3.png"]},
+}
+
 
 func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute("res://data/animations")
@@ -51,6 +73,7 @@ func _initialize() -> void:
 	_build(PURSUER, "res://data/animations/pursuer_frames.tres", "walk")
 	_build(STRIKE, "res://data/animations/strike_frames.tres", "punch")
 	_build(GOLEM, "res://data/animations/golem_frames.tres", "falling")
+	_build(BOMB, "res://data/animations/bomb_frames.tres", "falling")
 	quit(0)
 
 
@@ -60,10 +83,14 @@ func _build(spec: Dictionary, out_path: String, default_anim: String) -> void:
 	# animations exist so the resource has no dead entries.
 	for anim_name: String in spec:
 		var entry: Dictionary = spec[anim_name]
+		var optional: bool = entry.get("optional", false)
 		frames.add_animation(anim_name)
 		frames.set_animation_speed(anim_name, float(entry["fps"]))
 		frames.set_animation_loop(anim_name, bool(entry["loop"]))
 		for file: String in entry["frames"]:
+			if optional and not ResourceLoader.exists(SPR + file):
+				print("  reserved slot, not drawn yet: ", file)
+				continue
 			var tex: Texture2D = load(SPR + file)
 			if tex == null:
 				push_error("missing sprite: " + SPR + file)

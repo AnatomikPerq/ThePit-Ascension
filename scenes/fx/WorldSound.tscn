@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://cfxworldsound01"]
+
+[ext_resource type="Script" path="res://src/audio/world_sound.gd" id="1_script"]
+
+[node name="WorldSound" type="AudioStreamPlayer2D"]
+process_mode = 3
+attenuation = 1.2
+max_distance = 2400.0
+panning_strength = 0.5
+script = ExtResource("1_script")

@@ -18,6 +18,8 @@ extends Node
 ##                   the SAME new world, without anyone rejoining
 ##   race          — rivals are solid, each machine watches only its own hurt
 ##                   box, and a client's strike costs the host a heart
+##   destruction   — the host sets off a real bomb against one platform and the
+##                   CLIENT loses that platform and keeps a distant one
 
 const FIXED_SEED: int = 20260728
 const RACE_SEED: int = 20260729
@@ -35,6 +37,15 @@ var _client_done: bool = false
 ## Climbing earns milestone and zone points, which would otherwise land on the
 ## host mid-assertion and make the expected 100 into 850.
 var _host_done: bool = false
+## Destruction stage: the two platforms the host picked, by name. The client
+## decides nothing about destruction, so it has to be told what to watch.
+var _blast_victim: String = ""
+var _blast_control: String = ""
+## The client has judged the blast. The host must not quit before this: closing
+## the socket drops the client back to the main menu, and the first run of this
+## stage had the client reporting "no world to blow anything up in" for exactly
+## that reason — it was already in MainMenu when its turn came.
+var _client_blast_done: bool = false
 
 
 func _ready() -> void:
@@ -107,9 +118,17 @@ func _run_host() -> void:
 	var old_seed: int = get_tree().current_scene.world_seed
 	Net.restart_session()
 	await _probe_race(await _probe_restart(old_seed))
+	await _probe_destruction()
 
-	# Hold the session open until the client has finished its checks.
-	for i in 120:
+	# Hold the session open until the client has finished its checks. Quitting
+	# here closes the socket, which sends the client to the main menu.
+	for i in 1200:
+		await get_tree().process_frame
+		if _client_blast_done:
+			break
+	if not _client_blast_done:
+		_failures.append("host: the client never reported on the blast")
+	for i in 60:
 		await get_tree().process_frame
 	_finish()
 
@@ -160,6 +179,15 @@ func _run_client() -> void:
 	var old_seed: int = get_tree().current_scene.world_seed
 	_client_checkpoint.rpc_id(1)
 	await _probe_race(await _probe_restart(old_seed))
+	await _probe_destruction()
+	_client_blast_checkpoint.rpc_id(1)
+	# Let the packet actually leave. An RPC is queued, not sent, and quit() can
+	# end the process before the socket is next flushed — which showed up as the
+	# host failing with "the client never reported on the blast" about one run in
+	# three, while the client's own log said it had passed. The other checkpoint
+	# never hit this because a whole probe stage follows it.
+	for i in 30:
+		await get_tree().process_frame
 	_finish()
 
 
@@ -237,6 +265,97 @@ func _probe_race(prev_seed: int) -> void:
 	_expect_eq("health_after_rival_strike", mine.health, 4)
 
 
+## Destruction over the wire — the one thing about the world that changes after
+## it is built, and therefore the one thing that cannot be recomputed per peer.
+##
+## Every machine builds its own copy of the pit from the shared seed, so a
+## destroyed platform can only be identified by NAME; WorldBuilder names each
+## piece after its place in the plan precisely so the name means the same node
+## everywhere. The host aims a real bomb at one platform and sets it off the way
+## the game does. The client decides nothing — it is told what died — so it has
+## to lose exactly that platform and keep one the wave never reached.
+##
+## A single instance can never check this: one machine always agrees with itself.
+func _probe_destruction() -> void:
+	var world := get_tree().current_scene
+	if world == null or world.name != "World":
+		_failures.append("%s: no world to blow anything up in (current_scene=%s)" \
+			% [_role, "null" if world == null else world.name])
+		return
+	var platforms: Node = world.get_node("Platforms")
+
+	if _role == "host":
+		var victim := _first_breakable(platforms)
+		if victim == null:
+			_failures.append("host: the world has no breakable platform")
+			return
+		var def: BlastDef = load("res://data/fx/blast.tres")
+		var epicentre: Vector2 = victim.global_position
+		var control := _far_breakable(platforms, epicentre, def.radius * 3.0)
+		if control == null:
+			_failures.append("host: no platform far enough away to use as a control")
+			return
+		_blast_victim = String(victim.name)
+		_blast_control = String(control.name)
+		_blast_plan.rpc(_blast_victim, _blast_control)
+
+		# A real bomb, spawned into the container the spawner mirrors, then set
+		# off — not Blast called directly. The point is the whole path.
+		#
+		# Held still while the spawn packet travels: a live bomb falls 600 px a
+		# second, so waiting for the client to see it moved the epicentre a
+		# quarter of a blast radius below the platform being aimed at, and the
+		# first run of this stage reported that destruction does not replicate
+		# when in fact the wave had simply walked away from its target.
+		var bomb: CharacterBody2D = load("res://scenes/Bomb.tscn").instantiate()
+		bomb.position = epicentre
+		bomb.process_mode = Node.PROCESS_MODE_DISABLED
+		world.get_node("Enemies").add_child(bomb, true)
+		for i in 60:
+			await get_tree().process_frame
+		bomb._detonate_soon(1)
+		print("PROBE blast_at %d,%d" % [int(epicentre.x), int(epicentre.y)])
+
+	# Both sides now wait for the same two verdicts.
+	for i in 600:
+		await get_tree().process_frame
+		if not is_instance_valid(platforms):
+			break
+		if _blast_victim != "" and platforms.get_node_or_null(_blast_victim) == null:
+			break
+	if not is_instance_valid(platforms):
+		_failures.append("%s: the world went away before the blast could be judged" % _role)
+		return
+	if _blast_victim == "":
+		_failures.append("%s: never learned which platform the bomb was aimed at" % _role)
+		return
+	_expect_eq("blast_victim_gone", platforms.get_node_or_null(_blast_victim) == null, true)
+	_expect_eq("blast_control_alive", platforms.get_node_or_null(_blast_control) != null, true)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _blast_plan(victim: String, control: String) -> void:
+	_blast_victim = victim
+	_blast_control = control
+
+
+func _first_breakable(platforms: Node) -> Node2D:
+	for child in platforms.get_children():
+		if child.get_node_or_null(^"Destructible") != null:
+			return child as Node2D
+	return null
+
+
+func _far_breakable(platforms: Node, from: Vector2, min_distance: float) -> Node2D:
+	for child in platforms.get_children():
+		if child.get_node_or_null(^"Destructible") == null:
+			continue
+		var body := child as Node2D
+		if body.global_position.distance_to(from) > min_distance:
+			return body
+	return null
+
+
 ## Wait for a World whose seed is not `prev_seed`. Returns its seed, or 0.
 func _await_new_world(prev_seed: int) -> int:
 	for i in 2400:
@@ -255,6 +374,11 @@ func _client_checkpoint() -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func _host_checkpoint() -> void:
 	_host_done = true
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _client_blast_checkpoint() -> void:
+	_client_blast_done = true
 
 
 func _await_world() -> bool:

@@ -2,19 +2,39 @@ class_name WorldBuilder
 extends Object
 ## Turns WorldPlan records into nodes under one parent. Every layout decision
 ## was already made by WorldGenerator — nothing here draws a random number.
+##
+## Each piece is NAMED after its place in the plan, and that is load-bearing
+## rather than tidiness. The world never travels: every peer builds its own copy
+## from the shared seed. So when a blast destroys a platform, the only thing the
+## host can send is "that one" — and a name derived from the plan means the same
+## node on every machine. Left to Godot's own duplicate-name handling the pieces
+## would be @Platform@7-style names off a per-instance counter, which agree
+## between peers only by luck.
 
 const PLATFORM_SCENE: PackedScene = preload("res://scenes/Platform.tscn")
 const MOVING_PLATFORM_SCENE: PackedScene = preload("res://scenes/MovingPlatform.tscn")
 
+## Node name prefix per record kind. Readable, so a destroyed-platform path in a
+## log still says what it was.
+const KIND_NAMES: Dictionary = {
+	WorldPlan.Kind.WALL: "Wall",
+	WorldPlan.Kind.FLOOR: "Floor",
+	WorldPlan.Kind.DIVIDER: "Div",
+	WorldPlan.Kind.PLATFORM: "Plat",
+}
+
 
 static func build(plan: WorldPlan, theme: WorldTheme, parent: Node2D) -> void:
-	for piece in plan.statics:
-		if piece.kind == WorldPlan.Kind.PLATFORM:
-			parent.add_child(_platform(piece.rect, theme))
-		else:
-			parent.add_child(_shaft_body(piece, theme))
-	for mover in plan.movers:
-		parent.add_child(_moving_platform(mover, theme))
+	for i in plan.statics.size():
+		var piece := plan.statics[i]
+		var body := _platform(piece.rect, theme) if piece.kind == WorldPlan.Kind.PLATFORM \
+				else _shaft_body(piece, theme)
+		body.name = "%s%d" % [KIND_NAMES.get(piece.kind, "Piece"), i]
+		parent.add_child(body)
+	for i in plan.movers.size():
+		var mover := _moving_platform(plan.movers[i], theme)
+		mover.name = "Mover%d" % i
+		parent.add_child(mover)
 
 
 ## Static platforms come from the authored scene, resized to the plan.
