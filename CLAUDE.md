@@ -82,7 +82,14 @@ scenes/    .tscn by category (fx/, ui/, entities at the top level)
 assets/    sprites/, audio/ (+ CREDITS.md), ui/
 test/      GdUnit4 suites
 tools/     headless probes, one-shot generators, the test harness
+           hooks/ what Claude Code runs after an edit · lib/ shared shell helpers
+           setup_claude.sh brings the toolchain up on a fresh clone
 docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
+addons/    AsepriteWizard, gdUnit4, godot_mcp — committed, they are part of the project
+.claude/   settings.json, the PostToolUse hook wiring
+.mcp.json  the godot-mcp server entry, paths via ${VAR:-default}
+gdlintrc   linter config, with the three disabled rules explained in the file
+godot-pixel-stack-setup.md   how the toolchain was installed, and the path map
 ```
 
 Anything in `tools/` named `build_*.gd` is a **one-shot generator**: it produced a
@@ -172,7 +179,102 @@ Pixel identity is a **detector, not a gate**. The owner explicitly relaxed it: b
 fixed even when the fix is visible. When a capture changes, say what changed and why, and
 re-baseline deliberately.
 
-## 6. Bugs that are deliberate, and bugs that were fixed
+## 6. The toolchain around the editor
+
+Installed 31 July 2026 on the owner's instruction, from `godot-pixel-stack-setup.md`.
+Every piece exists so a change can be *seen*, not guessed at.
+
+**On a fresh clone, run `bash tools/setup_claude.sh` first.** Everything that can live in
+git does: the addons, the hook, `gdlintrc`, `.mcp.json`, the scripts. The setup script
+installs the two things that cannot — the gdtoolkit venv and the godot-mcp Node server —
+and *checks* the two it must not install behind your back, Godot and Aseprite, printing
+the exact fix for whatever is missing. It is idempotent.
+
+**No committed file names a machine-specific path.** `tools/lib/find_godot.sh` and the
+matching logic in the hook discover the binaries; `GODOT`/`GODOT_CLI`, `GODOT_DIR`,
+`GODOT_MCP_SERVER`, `GODOT_MCP_PORT`, `GDLINT` and `ASEPRITE` override the search. The
+table in §0 of the setup doc lists the defaults. When a tool is genuinely absent the hook
+says which file went unchecked and names the setup script — it never fails silently and
+never blocks.
+
+This machine, for reference:
+
+```
+GODOT_CLI  C:/tools/godot/Godot_v4.7.1-stable_win64_console.exe   headless, CI, hooks
+GODOT_GUI  Steam "Godot Engine"/godot.windows.opt.tools.64.exe    hand work, godot-mcp
+ASEPRITE   Steam "Aseprite"/Aseprite.exe                          1.3.18.1
+```
+
+**Use the console build for anything headless.** Both are 4.7.1 off commit `a13da4fe`,
+but the Steam exe is linked as a Windows GUI-subsystem app: started from a terminal it
+attaches to no console and prints nothing. `run_tests.sh` only ever looked fine because
+every line of it pipes into `grep`, and a redirected handle it does write to. Steam
+auto-updates and the standalone does not — after a Steam update, check `--version` on
+both before trusting a run.
+
+Godot and Aseprite each keep **two** setting stores here, which is the usual reason a
+plugin "silently does nothing":
+
+- The Steam install is *self-contained* (there is a `._sc_` marker in it), so its editor
+  settings are `<steam>/Godot Engine/editor_data/editor_settings-4.7.tres`. The standalone
+  uses `%APPDATA%/Godot/`. Aseprite Wizard's path to `Aseprite.exe` is an **editor**
+  setting, so it is written in both.
+- Everything else the Wizard reads is a *project* setting and lives in `project.godot`
+  under `[aseprite]`. `default_automatic_importer="SpriteFrames"` is what makes a saved
+  `.aseprite` turn into a `SpriteFrames` with no manual step; the other importers
+  (Tileset Texture, Static Texture) are per-file choices in the Import dock.
+
+Sprites come out of Aseprite, through the Wizard, into `AnimatedSprite2D`. A tag becomes
+an animation and Aseprite's frame durations become the Godot FPS — a 100 ms frame lands as
+10 FPS. Generating image data in code stays banned, exactly as §2 already says: that ban
+is about `Image.set_pixel` loops, and it is the reason the Wizard is here.
+
+`addons/godot_mcp` is a WebSocket bridge into a **running** editor (port 6505; the Node
+side is built outside the repo and declared in this project's `.mcp.json`).
+Nothing to connect to with the editor closed. **Registering it globally does not work**: the
+Node server binds 6505 the moment it starts, so with a user-scoped entry every open Claude
+session races for the port and all but the first die with `EADDRINUSE` — which reads as
+"the MCP silently has no tools". It is per-project for that reason, and even then only one
+session at a time gets the bridge.
+
+**Never run Godot in *editor* mode while the editor is open** — that means `--import` and
+`--editor`, with or without `--headless`. The bridge keeps exactly one client and the
+newest wins (`this.client = ws` in `godot-bridge.ts`); a second Godot loads the plugin,
+steals the slot, and takes the bridge down with it when it exits. The live editor's socket
+stays ESTABLISHED, so its plugin never notices and never reconnects — the only way back is
+to restart the editor. Everything in §5 is safe: those runs are *game* mode (`-s` or a
+scene path), where editor plugins do not load at all.
+
+Two tools do not do what their names promise, and both fail *quietly*.
+`update_property` runs the value through a type parser that returns a `res://` path as a
+plain String, so it cannot set any resource-typed property — it assigns the string, Godot
+drops it, and the tool still reports success with the path echoed back. `execute_editor_script`
+is an `Expression`, not a script: no `var`, no statements, no singletons, and `load()` fails.
+Wiring a resource into a property is the case §2's "author it in the scene" covers — edit
+the `.tscn`, and let the `.tscn` hook confirm it loads.
+
+While it runs the plugin injects three autoloads —
+`MCPRuntimeBridge`, `MCPInputBridge`, `MCPScreenshotBridge` — into `project.godot` and
+removes them on a clean shutdown. **If they show up in `git status`, the editor did not
+exit cleanly; drop them, do not commit them.** Its edits go through the editor's UndoRedo,
+so Ctrl+Z reverses them.
+
+`gdlint` runs from the project venv (`.venv/`, git-ignored) and is wired to a PostToolUse
+hook in `.claude/settings.json`: write a `.gd` and the linter answers in the same turn;
+write a `.tscn` and `tools/hooks/check_scene.gd` loads and instantiates it, which is what
+catches a dead `ext_resource`, a stale UID or a node path that no longer resolves. Neither
+blocks — a warning is not a reason to stop. `gdlintrc` turns off three rules this repo
+disagrees with on purpose and says why in the file.
+
+`check_scene` is a **scene**, not a `-s` script, and that is load-bearing: under `-s` the
+main loop is replaced, the autoloads never register, and every script that names `Fx`,
+`Audio`, `Game` or `Net` fails to compile — so the probe reports a wall of errors about a
+scene that is fine.
+
+`gdformat` is installed but **not** wired to anything. It would reformat 53 of the 74
+scripts here. Running it is the owner's call, not a side effect of editing one file.
+
+## 7. Bugs that are deliberate, and bugs that were fixed
 
 Fixed on the owner's instruction (do not "restore" them):
 
@@ -243,7 +345,7 @@ Fixed on the owner's instruction (do not "restore" them):
   `Player.shove()` now: added on top of movement and decayed, so being blown across a gap
   is something you can see and have to recover from.
 
-## 7. Talking to the owner
+## 8. Talking to the owner
 
 Russian. He is the sole developer and treats this repo as his. Ask before adding
 anything; report what actually happened, including what failed.

@@ -13,3 +13,11 @@ reports/
 # PlayGodot bytecode cache
 tests_e2e/__pycache__/
 .pytest_cache/
+
+# gdtoolkit lives in a project venv, not in git.
+# tools/setup_claude.sh rebuilds it on a fresh clone.
+.venv/
+
+# .claude/settings.json IS committed — it carries the lint hook, and the point
+# is that a clone gets it. Only the personal override is ignored.
+.claude/settings.local.json

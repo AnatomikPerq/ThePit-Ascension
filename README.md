@@ -136,6 +136,19 @@ git clone https://github.com/AnatomikPerq/ThePit-Ascension.git
 
 Open **Godot 4.7** (or a compatible 4.x), import `project.godot`, press `F5`.
 
+That is all you need to play it. If you also want to *work* on it — headless
+tests, the linter, sprites round-tripping out of Aseprite — there is one more
+command:
+
+```bash
+bash tools/setup_claude.sh
+```
+
+It is idempotent, it installs only what git cannot carry, and it tells you what
+is missing instead of guessing. [godot-pixel-stack-setup.md](godot-pixel-stack-setup.md)
+explains the whole toolchain and lists every environment variable that overrides
+a path.
+
 ### Multiplayer quickstart
 
 1. Host: forward the UDP port, then **MULTIPLAYER → HOST**.
@@ -151,9 +164,10 @@ scripts/   entity controllers and the older autoloads
 data/      .tres resources — the tuning surface (audio/, animations/, enemies/, fx/, worlds/)
 scenes/    .tscn by category (fx/, ui/, entities at the top level)
 assets/    sprites/, audio/ (+ CREDITS.md), ui/
-tools/     headless probes, one-shot generators, the test harness
+tools/     headless probes, one-shot generators, the test harness, setup_claude.sh
 docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
 test/      GdUnit4 suites
+addons/    AsepriteWizard, gdUnit4, godot_mcp — committed with the project
 ```
 
 Code defines behaviour; `.tres` files define numbers. If you are tuning

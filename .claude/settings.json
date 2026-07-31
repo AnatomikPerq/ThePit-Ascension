@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/tools/hooks/claude_hook.mjs\"",
+            "timeout": 120,
+            "statusMessage": "Checking the file that was just written"
+          }
+        ]
+      }
+    ]
+  }
+}

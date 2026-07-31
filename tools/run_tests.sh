@@ -4,11 +4,18 @@
 #
 #   bash tools/run_tests.sh
 #
-# GODOT can be overridden; it defaults to the Steam install.
+# GODOT can be pinned; otherwise tools/lib/find_godot.sh discovers one, and
+# prefers the standalone console build over the Steam exe for the reason
+# spelled out in that file.
 set -uo pipefail
 
-GODOT="${GODOT:-C:/Program Files (x86)/Steam/steamapps/common/Godot Engine/godot.windows.opt.tools.64.exe}"
 cd "$(dirname "$0")/.."
+source tools/lib/find_godot.sh
+if ! GODOT="$(find_godot)"; then
+  printf 'No Godot binary found. Set GODOT, or run: bash tools/setup_claude.sh\n' >&2
+  exit 1
+fi
+printf 'godot: %s\n' "$GODOT"
 fail=0
 
 step() { printf '\n=== %s ===\n' "$1"; }

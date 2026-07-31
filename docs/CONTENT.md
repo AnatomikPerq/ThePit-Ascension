@@ -224,5 +224,5 @@ the core lighting up as it comes down.
 
 Bugs fixed on the owner's instruction that must not be "restored", plus the
 mechanics removed on purpose (kill hitstop; `Engine.time_scale` is banned)
-are listed in CLAUDE.md §4 and §6 — read them before "improving" anything
+are listed in CLAUDE.md §4 and §7 — read them before "improving" anything
 back in.
