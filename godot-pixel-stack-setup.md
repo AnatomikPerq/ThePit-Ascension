@@ -391,7 +391,8 @@ ASEPRITE   = C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe
 GODOT_GUI  = C:\Program Files (x86)\Steam\steamapps\common\Godot Engine\godot.windows.opt.tools.64.exe
 GODOT_CLI  = C:\tools\godot\Godot_v4.7.1-stable_win64_console.exe
 GODOT_VER  = 4.7.1.stable, коммит a13da4feb — у обоих экзешников один и тот же
-PROJECT    = C:\Users\local\Desktop\ThePit-Ascension
+PROJECT    = <корень репозитория> — путь машинно-специфичный и разный на разных
+             ПК владельца, поэтому здесь сознательно не зафиксирован
 NODE_VER   = v24.18.0
 PYTHON_VER = 3.10.10  (venv проекта: .venv, gdtoolkit 4.5.0)
 GO         = не ставился — в pixel-plugin лежит уже собранный бинарник, см. 4.1
