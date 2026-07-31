@@ -6,7 +6,16 @@ Nothing here needs a running editor. One command runs every gate:
 bash tools/run_tests.sh
 ```
 
-`GODOT` can be overridden; it defaults to the Steam install path.
+On a clone, run `bash tools/setup_claude.sh` once first — it installs gdtoolkit
+and imports the project. Without that import there is no
+`.godot/global_script_class_cache.cfg`, no `class_name` resolves, and the gates
+below fail on parse errors instead of on anything real. `run_tests.sh` checks
+for it and says so rather than grinding.
+
+`GODOT` (or `GODOT_CLI`) pins the binary. Left unset, `tools/lib/find_godot.sh`
+discovers one and the run prints which it picked; it prefers the standalone
+*console* build, because the Steam exe writes nothing unless its output is
+redirected.
 
 ## The gates
 

@@ -190,6 +190,14 @@ installs the two things that cannot — the gdtoolkit venv and the godot-mcp Nod
 and *checks* the two it must not install behind your back, Godot and Aseprite, printing
 the exact fix for whatever is missing. It is idempotent.
 
+It also **imports the project once**, and that step is not optional. `.godot/` is ignored,
+so a clone has no `global_script_class_cache.cfg`, and without it no `class_name` resolves:
+`SoundBank`, `SoundDef` and the rest come back as "Could not find type", every suite drowns
+in parse errors, and the net probe hangs instead of failing. Only *editor* mode builds that
+cache, so this is the one place the rule below is deliberately broken — do it before
+opening the editor, not while it is open. `run_tests.sh` checks for the cache and says what
+to run rather than grinding for ten minutes.
+
 **No committed file names a machine-specific path.** `tools/lib/find_godot.sh` and the
 matching logic in the hook discover the binaries; `GODOT`/`GODOT_CLI`, `GODOT_DIR`,
 `GODOT_MCP_SERVER`, `GODOT_MCP_PORT`, `GDLINT` and `ASEPRITE` override the search. The

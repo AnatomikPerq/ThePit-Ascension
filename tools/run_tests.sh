@@ -16,6 +16,15 @@ if ! GODOT="$(find_godot)"; then
   exit 1
 fi
 printf 'godot: %s\n' "$GODOT"
+
+# A clone with no .godot/ has no global script class cache, so every `class_name`
+# type fails to resolve and the suites below drown in parse errors — or hang.
+# Game mode cannot build that cache; say so instead of running for ten minutes.
+if [ ! -f .godot/global_script_class_cache.cfg ]; then
+  printf 'No .godot/global_script_class_cache.cfg — the project has never been imported.\n' >&2
+  printf 'Run: bash tools/setup_claude.sh\n' >&2
+  exit 1
+fi
 fail=0
 
 step() { printf '\n=== %s ===\n' "$1"; }

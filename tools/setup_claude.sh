@@ -117,6 +117,36 @@ else
 	note "The version must match whatever opens the project by hand."
 fi
 
+# ----------------------------------------------------------------- asset import
+
+say "asset import (.godot/)"
+# A fresh clone has no .godot/, and game mode never builds one. Without it there
+# is no global_script_class_cache, so every `class_name` type — SoundBank,
+# SoundDef and the rest — fails to resolve and the whole harness collapses into
+# parse errors. Only EDITOR mode builds it, which is why this step exists at all.
+if [ -f .godot/global_script_class_cache.cfg ]; then
+	ok ".godot/global_script_class_cache.cfg"
+elif [ -n "${GODOT_FOUND:-}" ]; then
+	note "importing — this is EDITOR mode. If a Godot editor is open right now, its"
+	note "godot-mcp bridge will drop and only an editor restart brings it back."
+	note "the first pass segfaults on purpose; the second one builds the cache."
+	# That crash is reproducible, not a symptom of anything in this project: the
+	# first --import after new assets dies partway and takes .godot/imported with
+	# it, and the second completes. The loop's stderr is dropped so bash does not
+	# report the signal as if something had gone wrong.
+	for _ in 1 2; do
+		"${GODOT_FOUND}" --headless --path . --import >/dev/null 2>&1
+	done 2>/dev/null
+	if [ -f .godot/global_script_class_cache.cfg ]; then
+		ok "built .godot/"
+	else
+		warn "import did not produce .godot/global_script_class_cache.cfg"
+		note "Open the project in the Godot editor once by hand."
+	fi
+else
+	warn "cannot import without a Godot binary"
+fi
+
 # -------------------------------------------------------------------- aseprite
 
 say "aseprite"
