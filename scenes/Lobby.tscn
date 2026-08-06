@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://cuilobby01"]
+[gd_scene load_steps=4 format=3 uid="uid://cuilobby01"]
 
 [ext_resource type="Script" path="res://src/net/lobby.gd" id="1_script"]
 [ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CharacterSelect.tscn" id="3_select"]
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -96,6 +97,24 @@ text = "JOIN"
 custom_minimum_size = Vector2(0, 12)
 layout_mode = 2
 
+[node name="RoleRow" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="CharacterBtn" type="Button" parent="UI/RoleRow"]
+custom_minimum_size = Vector2(340, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "CHARACTER: CYN"
+
+[node name="SpectatorCheck" type="Button" parent="UI/RoleRow"]
+custom_minimum_size = Vector2(340, 52)
+layout_mode = 2
+toggle_mode = true
+theme_override_font_sizes/font_size = 24
+text = "SPECTATOR: OFF"
+
 [node name="StatusLabel" type="Label" parent="UI"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.72, 0.35, 1)
@@ -133,3 +152,6 @@ layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 22
 text = "BACK  (ESC)"
+
+[node name="CharacterSelect" parent="." instance=ExtResource("3_select")]
+visible = false

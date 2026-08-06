@@ -16,8 +16,12 @@ extends Node
 ##   score         — a host-credited kill reached the client's run mirror
 ##   restart       — the host restarts the session and both machines land in
 ##                   the SAME new world, without anyone rejoining
+##   roster        — the two peers picked DIFFERENT climbers, and both machines
+##                   built one of each with that character's hearts on it
 ##   race          — rivals are solid, each machine watches only its own hurt
 ##                   box, and a client's strike costs the host a heart
+##   revive        — the client runs out of hearts, its body stays in the world,
+##                   the host pays one of its own to stand it back up
 ##   destruction   — the host sets off a real bomb against one platform and the
 ##                   CLIENT loses that platform and keeps a distant one
 
@@ -52,6 +56,13 @@ func _ready() -> void:
 	_run.call_deferred()
 
 
+## The role, before _run() has parsed the arguments into _role — the climbers
+## have to be picked before Net announces anything.
+func _role_from_args() -> String:
+	var args := OS.get_cmdline_user_args()
+	return args[0] if args.size() > 0 else "host"
+
+
 func _run() -> void:
 	# The Router frees current_scene on every swap, and when this probe runs
 	# as the main scene, current_scene is the probe itself — the swap into the
@@ -61,6 +72,14 @@ func _run() -> void:
 	placeholder.name = "ProbePlaceholder"
 	get_tree().root.add_child(placeholder)
 	get_tree().current_scene = placeholder
+
+	# Pin the climbers, and pin them DIFFERENTLY. The race stage counts hearts,
+	# so neither may be whatever the machine running this last played — and the
+	# two picks being different is itself a check: they travel with the roster,
+	# so if that ever stopped working both machines would build two of the same
+	# avatar and the roster stage below would say so.
+	Game.selected_character = &"cyn" if _role_from_args() == "host" else &"tessa"
+	Net.local_choice = Game.selected_character
 
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
@@ -118,6 +137,7 @@ func _run_host() -> void:
 	var old_seed: int = get_tree().current_scene.world_seed
 	Net.restart_session()
 	await _probe_race(await _probe_restart(old_seed))
+	await _probe_revive()
 	await _probe_destruction()
 
 	# Hold the session open until the client has finished its checks. Quitting
@@ -179,6 +199,7 @@ func _run_client() -> void:
 	var old_seed: int = get_tree().current_scene.world_seed
 	_client_checkpoint.rpc_id(1)
 	await _probe_race(await _probe_restart(old_seed))
+	await _probe_revive()
 	await _probe_destruction()
 	_client_blast_checkpoint.rpc_id(1)
 	# Let the packet actually leave. An RPC is queued, not sent, and quit() can
@@ -263,6 +284,58 @@ func _probe_race(prev_seed: int) -> void:
 		if mine.health < 5:
 			break
 	_expect_eq("health_after_rival_strike", mine.health, 4)
+
+
+## Being picked up off the floor. A single instance cannot check any of this,
+## because the whole point is that the machine that runs out of hearts and the
+## machine that pays one for it are different machines: the client goes down on
+## its own machine, the HOST decides the pick-up happened, and the client stands
+## itself back up because health is nobody else's to write.
+func _probe_revive() -> void:
+	var world := get_tree().current_scene
+	if world == null or world.name != "World":
+		_failures.append("%s: no world to be revived in" % _role)
+		return
+	var mine: CharacterBody2D = world.players.get(Game.local_peer_id)
+	var other: CharacterBody2D = null
+	for peer_id in world.players:
+		if peer_id != Game.local_peer_id:
+			other = world.players[peer_id]
+	if not is_instance_valid(mine) or not is_instance_valid(other):
+		_failures.append("%s: revive stage is missing an avatar" % _role)
+		return
+
+	if _role == "client":
+		# Run ourselves out of hearts on our own machine, which is the only
+		# machine allowed to do that, and then wait to be picked back up.
+		mine.invincible = false
+		mine.health = 1
+		mine.take_damage()
+		_expect_eq("downed_on_own_machine", mine.is_downed, true)
+		_expect_eq("body_is_still_here", is_instance_valid(mine), true)
+		for i in 1200:
+			await get_tree().physics_frame
+			if not mine.is_downed:
+				break
+		_expect_eq("stood_back_up", mine.is_downed, false)
+		_expect_eq("back_on_one_heart", mine.health, 1)
+		return
+
+	# Host: wait for the body to show up over here, stand next to it, and pay.
+	for i in 1200:
+		await get_tree().physics_frame
+		if other.is_downed:
+			break
+	_expect_eq("saw_the_body", other.is_downed, true)
+	var before: int = mine.health
+	mine.global_position = other.global_position + Vector2(40, 0)
+	for i in 10:
+		await get_tree().physics_frame
+	world._resolve_revive(Game.local_peer_id, other.peer_id)
+	for i in 300:
+		await get_tree().physics_frame
+	_expect_eq("body_stood_up", other.is_downed, false)
+	_expect_eq("paid_exactly_one_heart", mine.health, before - 1)
 
 
 ## Destruction over the wire — the one thing about the world that changes after
@@ -405,6 +478,20 @@ func _probe_world() -> void:
 		if is_instance_valid(avatars[peer_id]):
 			_expect_eq("authority_p%d" % peer_id,
 				avatars[peer_id].get_multiplayer_authority(), peer_id)
+
+	# Who each machine built. The two peers picked different climbers, and the
+	# picks travelled inside the same packet as the roster — so both machines
+	# have to have built one of each, with that character's hearts on it. If the
+	# roster ever stopped carrying them, every machine would fall back to the
+	# default and this would show two Cyns.
+	var kinds: Array[String] = []
+	for peer_id in avatars:
+		if not is_instance_valid(avatars[peer_id]):
+			continue
+		kinds.append("%s(%dhp)" % [avatars[peer_id].character.id, avatars[peer_id].max_health])
+	kinds.sort()
+	print("PROBE roster %s" % " ".join(kinds))
+	_expect_eq("roster_agrees", " ".join(kinds), "cyn(5hp) tessa(1hp)")
 
 	# The host spawns enemies; the client's MultiplayerSpawner mirrors them.
 	var enemies := world.get_node("Enemies").get_child_count()

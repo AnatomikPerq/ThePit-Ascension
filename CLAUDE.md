@@ -1,7 +1,8 @@
 # CLAUDE.md — working rules for this repository
 
-The PIT: Ascension. Godot 4.7, GDScript. A vertical platformer: Cyn climbs out of a
-trash pit from depth 8000 to the surface at 0, while broken drone parts fall past her.
+The PIT: Ascension. Godot 4.7, GDScript. A vertical platformer: Cyn — or Tessa —
+climbs out of a trash pit from depth 16000 to the surface at 0, while broken drone
+parts fall past her.
 Fan project, open source, non-commercial. Theme: *Murder Drones* (Glitch), episode 5.
 
 Read this before changing anything.
@@ -12,10 +13,10 @@ Read this before changing anything.
 
 **Do not add game content.** The inventory is frozen unless the owner asks:
 
-> 5 enemies (Golem, Slime, Pursuer, Bat, Spitter) · 3 unlockable upgrades (double jump,
-> sideways strike, shockwave) plus the +1 HP heal option · 1 built-in dash-down ·
-> 1 trampoline · 1 bomb · 2 platform kinds, both breakable · 4 levels · 1 world ·
-> no bosses.
+> 2 characters (Cyn, Tessa) · 5 enemies (Golem, Slime, Pursuer, Bat, Spitter) ·
+> Cyn's 4 upgrades (double jump, sideways strike, shockwave, +1 HP) · Tessa's 3
+> (sword slash, pistol, triple jump) · 1 built-in dash-down · 1 trampoline ·
+> 1 bomb · 2 platform kinds, both breakable · 8 levels · 1 world · no bosses.
 
 The **bomb** and the destruction mechanic were added on the owner's instruction
 (30 July 2026), with the design decided by him in advance: it falls through the
@@ -24,6 +25,32 @@ it off, and toughness is one `strength` number per object compared against a
 blast force that falls off with distance — chosen that way because the map is
 going to grow more kinds of breakable furniture. See docs/CONTENT.md. Nothing
 else went in with it.
+
+Added on the owner's instruction (5 August 2026), with his answers to four
+design questions on the record — see docs/CONTENT.md for what each one is:
+
+- **Tessa**, the second climber. One heart, jumps 92% of Cyn's height, starts
+  with the double jump, unlocks a sword and a triple jump — he was offered a
+  heal option for her and said no on purpose.
+- **Tessa's pistol**, added on his instruction on 6 August 2026 with the design
+  in the same message: a third upgrade for her, on the second attack button
+  (right mouse; the sword is on the left), a fast pose, a bullet that leaves the
+  muzzle straight out to the side she is facing, ordinary attack damage, gone on
+  the first surface it meets with a few particles, and a two-second cooldown.
+- **Reviving** in multiplayer, in every mode. A body stays where it fell, the
+  sign is over the body rather than on the reviver's HUD, and the cost is one of
+  the reviver's own hearts. Solo death is untouched.
+- **Spectating**: for a downed player until somebody picks them up, and for
+  anyone who chose SPECTATOR in the lobby instead of a climber.
+- **A character-select screen**, on the main menu and in the lobby.
+- **Four more levels**, to eight. His words on the upgrade pacing: an offer at
+  every other level starting with the first, the menu shows only what you have
+  not taken, one left is granted automatically, and once there is nothing left
+  it pays experience instead.
+
+Everything about a climber is a `CharacterDef` resource. Nothing in the game may
+branch on *which* character it is steering — if a difference cannot be expressed
+as a field there, the missing field is the bug.
 
 Changed on the owner's instruction the same day, and not to be "restored":
 
@@ -77,9 +104,10 @@ widget, that widget belongs in a `.tscn`.
 ```
 src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/)
 scripts/   entity controllers and the older autoloads (Fx, Game, world, player, enemies)
-data/      .tres resources — the tuning surface (audio/, animations/, enemies/, fx/, worlds/)
+data/      .tres resources — the tuning surface
+           (audio/, animations/, characters/, enemies/, fx/, upgrades/, worlds/)
 scenes/    .tscn by category (fx/, ui/, entities at the top level)
-assets/    sprites/, audio/ (+ CREDITS.md), ui/
+assets/    sprites/ (cyn/, tessa/, src/), audio/ (+ CREDITS.md), ui/
 test/      GdUnit4 suites
 tools/     headless probes, one-shot generators, the test harness
            hooks/ what Claude Code runs after an edit · lib/ shared shell helpers
@@ -122,6 +150,23 @@ origin of the numbers is traceable. They are not part of the build.
 - **Single-player never opens a socket.** Every probe must pass with no networking active.
 - **Collision layers are named** in `project.godot`. Never write a raw bitmask literal.
 - **Pause is owned in one place.** No script sets `get_tree().paused` ad hoc.
+- **A downed avatar is not a dead one.** In a session, running out of hearts
+  leaves a body on the floor that a teammate can spend a heart on;
+  `_any_avatar_alive()`, every milestone and every ending ask `is_downed`, not
+  `is_instance_valid`. Solo death is unchanged and must stay that way.
+- **Committed text is LF, and it is not a style preference.** A `.tscn` string
+  spans real file lines, so one CRLF file puts a stray carriage return *inside*
+  every multi-line label — and Godot treats it as a line break of its own, which
+  silently double-spaces the text with no error anywhere. It cost an afternoon,
+  twice. `.gitattributes` has said `eol=lf` all along; `check_conventions.sh` now
+  checks the working tree too, because the files that broke it were written by
+  scripts that used the platform default.
+- **An `Area2D` that others must detect needs `monitoring` AS WELL AS
+  `monitorable`, and `monitoring` set last.** Godot does not report an area with
+  monitoring off from another area's `get_overlapping_areas()`, and setting the
+  two the other way round does not pair either. The dash-down box was silently
+  doing nothing until `test/character_test.gd` measured its reach against a
+  golem: 53 px (the body) instead of 57 (the box).
 
 ## 5. Verifying a change
 
@@ -147,7 +192,15 @@ bash tools/run_net_probe.sh                             # real host+client over 
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
 godot --path . tools/ui_check.tscn -- out_dir           # every UI surface, for eyeballing (advisory)
 bash tools/check_conventions.sh                         # grep gates for the rules above
+
+godot --headless --path . -s tools/world_balance.gd     # the pit level by level (advisory)
 ```
+
+`world_balance` is a measuring stick, not a gate. Every ramp in `WorldProfile`
+is a lerp over ascent *progress*, so changing `level_count` restretches all of
+them at once — it prints, per level, how far apart the things you can stand on
+actually are, against what each climber can jump. Read it before retuning any
+of those numbers, and after.
 
 **Write tests against physics frames, never wall-clock.** Two harnesses in this
 repo have already been wrong in exactly that way. `await await_millis(50)` looked

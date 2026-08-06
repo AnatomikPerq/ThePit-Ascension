@@ -7,7 +7,7 @@
 resource_name = "pursuer"
 script = ExtResource("1_script")
 scene = ExtResource("2_scene")
-weight_start = 1.0
+weight_start = 10.0
 weight_end = 60.0
 placement = 1
 above_player_min = 800.0

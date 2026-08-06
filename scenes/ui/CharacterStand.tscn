@@ -1,0 +1,152 @@
+[gd_scene load_steps=3 format=3 uid="uid://cuicharstand01"]
+
+[ext_resource type="Script" path="res://src/ui/character_stand.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_selected"]
+bg_color = Color(0.98, 0.8, 0.3, 0.05)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.98, 0.8, 0.3, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+
+[node name="CharacterStand" type="Button"]
+custom_minimum_size = Vector2(420, 672)
+offset_right = 420.0
+offset_bottom = 672.0
+size_flags_horizontal = 4
+size_flags_vertical = 4
+script = ExtResource("1_script")
+
+[node name="Name" type="Label" parent="."]
+layout_mode = 0
+offset_left = 14.0
+offset_top = 16.0
+offset_right = 406.0
+offset_bottom = 64.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 34
+text = "NAME"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Glow" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 130.0
+offset_top = 118.0
+offset_right = 290.0
+offset_bottom = 278.0
+mouse_filter = 2
+color = Color(1, 1, 1, 0.035)
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+position = Vector2(210, 202)
+scale = Vector2(4, 4)
+
+[node name="PlinthTop" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 122.0
+offset_top = 278.0
+offset_right = 298.0
+offset_bottom = 302.0
+mouse_filter = 2
+color = Color(0.235, 0.192, 0.204, 1)
+
+[node name="PlinthEdge" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 122.0
+offset_top = 278.0
+offset_right = 298.0
+offset_bottom = 282.0
+mouse_filter = 2
+color = Color(0.373, 0.31, 0.298, 1)
+
+[node name="PlinthBase" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 148.0
+offset_top = 302.0
+offset_right = 272.0
+offset_bottom = 326.0
+mouse_filter = 2
+color = Color(0.153, 0.122, 0.137, 1)
+
+[node name="Blurb" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.72)
+layout_mode = 0
+offset_left = 26.0
+offset_top = 344.0
+offset_right = 394.0
+offset_bottom = 412.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+text = "blurb"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Rule" type="ColorRect" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 420.0
+offset_right = 380.0
+offset_bottom = 422.0
+mouse_filter = 2
+color = Color(0.9, 0.6, 0.25, 0.35)
+
+[node name="StatKeys" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 0
+offset_left = 34.0
+offset_top = 434.0
+offset_right = 240.0
+offset_bottom = 524.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 17
+text = "HEARTS
+JUMPS
+JUMP HEIGHT"
+
+[node name="StatValues" type="Label" parent="."]
+layout_mode = 0
+offset_left = 240.0
+offset_top = 434.0
+offset_right = 390.0
+offset_bottom = 524.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 17
+horizontal_alignment = 2
+
+[node name="UnlocksTitle" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.45)
+layout_mode = 0
+offset_left = 34.0
+offset_top = 532.0
+offset_right = 390.0
+offset_bottom = 554.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 14
+text = "UNLOCKS ON THE WAY UP"
+
+[node name="Unlocks" type="Label" parent="."]
+layout_mode = 0
+offset_left = 34.0
+offset_top = 556.0
+offset_right = 390.0
+offset_bottom = 666.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 2
+
+[node name="Selected" type="Panel" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_selected")

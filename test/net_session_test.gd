@@ -8,6 +8,9 @@ var _w: Node
 
 
 func before_test() -> void:
+	# Pin the climber: these assertions are about hearts and upgrade pools, and
+	# the character is otherwise whatever this machine last played.
+	Game.selected_character = &"cyn"
 	_w = load("res://scenes/World.tscn").instantiate()
 	_w.world_seed = 1
 	add_child(_w)

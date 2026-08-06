@@ -12,18 +12,25 @@ game is gated on it. With no session, the game is bit-for-bit the solo game
 ## Session flow
 
 1. Host: **MULTIPLAYER → HOST** (opens the port, up to 8 players).
-2. Clients: enter address + port → **JOIN**. The lobby lists everyone.
-3. Host picks **CO-OP** or **RACE** and starts. `Net.start_session()` locks
-   the roster and broadcasts `(mode, seed, peers)`; every machine sets its
-   local peer id, starts a run for the roster, and enters the world through
-   `Router.start_run(seed)`.
-4. The host can **restart** at any point — `R`, the pause menu, or the end
+2. Clients: enter address + port → **JOIN**. The lobby lists everyone, and
+   what each of them will be.
+3. Everyone picks a **climber**, or **SPECTATOR** instead. Each peer speaks
+   only for itself (`Net.announce_choice`), and everyone re-announces whenever
+   somebody arrives, so a late joiner learns the whole picture without the host
+   keeping a master copy.
+4. Host picks **CO-OP** or **RACE** and starts. `Net.start_session()` locks
+   the roster and broadcasts `(mode, seed, peers, picks)`; every machine sets
+   its local peer id, starts a run for the peers that picked a climber, and
+   enters the world through `Router.start_run(seed)`. The picks travel *with*
+   the roster rather than being asked for afterwards, because every machine has
+   to build the same avatars in the same order before the first frame.
+5. The host can **restart** at any point — `R`, the pause menu, or the end
    screen. `Net.restart_session()` rolls a fresh seed and goes back through
    `start_session()`, so a restart is not a special case: the roster is
    re-locked from whoever is still connected and every machine enters the new
    run exactly the way it entered the first one. Clients cannot restart a
    shared run; their buttons say so.
-5. There is **no join-in-progress** and no host migration. A client that
+6. There is **no join-in-progress** and no host migration. A client that
    drops is removed everywhere; if the host drops, clients return to the
    menu. Anyone can leave for the main menu at any time, from the pause
    overlay or the end screen.
@@ -46,7 +53,14 @@ world simulation run here" — true solo and on the host.
 | :--- | :--- | :--- |
 | Avatar movement, input, physics | **client** (owning machine) | `MultiplayerSynchronizer` on Player.tscn: position, velocity, facing, dash, flight, health, animation |
 | Avatar health & damage | **client** (the victim's machine decides its own damage) | health synced; invincibility window absorbs duplicate resolutions |
-| Avatar death | **client** (owner) | one `@rpc` runs the death visuals on every machine |
+| Avatar death, solo | **client** (owner) | one `@rpc` runs the death visuals on every machine |
+| Avatar death, session | **client** (owner) | `_go_down` on every machine: the body drops off every collision layer, keeps WORLD in its mask so it falls to a floor, and stays. `is_downed` is replicated |
+| The revive sign over a body | **local, always** | nothing crosses the wire — each machine asks whether ITS climber is close enough and can afford it |
+| Whether a revive happened | **server** decides | the presser asks the host; the host judges from replicated state and asks the two owning machines. Health is never written by anyone else |
+| Standing up, and the heart it cost | **client** (each owner) | `remote_revive` / `remote_pay_revive` from the host, then `call_local` from the owner so every machine sees it |
+| Everybody down | **server** | `_end_session_wiped` — the run is over when nobody is left to pick anyone up |
+| Which climber each peer is | **server** locks it | `session_characters`, broadcast in the same packet as the roster and the seed |
+| Where a spectator is looking | **local, always** | never replicated; a spectator changes nothing about the run |
 | Strike / Shockwave | **client** initiates | `@rpc("call_local")` spawns the scene on *every* machine — the host needs the hitbox, the rest the visual; strikes snap themselves to their owner |
 | Enemy AI & movement | **server** (host) | per-enemy `MultiplayerSynchronizer` (position + minimal visual state) |
 | Enemy spawning | **server** | `MultiplayerSpawner` on `World/Enemies` |
@@ -93,6 +107,16 @@ world simulation run here" — true solo and on the host.
   same packet rather than in a separate handshake is deliberate: a stale
   position then arrives *labelled* stale, and no ordering has to be assumed
   between the reliable and unreliable channels.
+- **The host decides that a revive happened; the two machines involved do it.**
+  Health belongs to the machine steering the avatar, so the host cannot simply
+  write it — but two climbers reaching the same body on the same frame must not
+  both be charged for one pick-up. So the presser asks the host, the host judges
+  from replicated state (both alive-or-not, the reviver above one heart, the two
+  within range plus slack for lag) and then asks each owner to do its own half.
+  `is_downed` clears on the body's own machine and takes a few frames to come
+  back, so the host also latches the decision until it sees that avatar standing
+  — without it the window between deciding and hearing about it is wide enough
+  for a second request to pay a second heart.
 - **One predicate per mode difference.** `Net.is_versus()` — a live session
   in RACE mode — is the only thing that decides whether players are solid to
   each other and whether their attacks land. Nothing else in the game tests
@@ -179,11 +203,22 @@ restart landing both machines in the same *new* world with both avatars, in
 past the first upgrade milestone *before* the restart on purpose: that is the
 progress a restart must not carry over.
 
+The two peers deliberately pick **different climbers** — the host is Cyn, the
+client Tessa — and both machines have to end up with one of each, carrying that
+character's hearts. If the picks ever stopped travelling with the roster, every
+machine would fall back to the default and the probe would report two Cyns.
+
 It then starts a **race** and checks the part a single instance can never
 check, because one machine always agrees with itself: both machines report
 `is_versus()`, each avatar is solid to rivals, each machine watches its own
 hurt box and not the rival's, and the client walking up and striking the host
 takes a heart off the host's avatar **on the host's machine**.
+
+Then the client runs itself out of hearts. Its body has to still be there, on
+both machines; the host walks over, pays, and the client has to stand back up on
+one heart with exactly one heart gone from the host. Three machines' worth of
+opinion about one event — the one that goes down, the one that decides, the one
+that pays — which is precisely why it cannot be checked anywhere else.
 
 Finally it blows something up. The host aims a real bomb at one named platform
 and sets it off; the **client**, which decided nothing, has to lose exactly that

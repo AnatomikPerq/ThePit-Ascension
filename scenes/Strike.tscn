@@ -1,21 +1,74 @@
-[gd_scene format=3 uid="uid://cstrike01"]
+[gd_scene load_steps=5 format=3 uid="uid://cstrike01"]
 
 [ext_resource type="Script" uid="uid://doiu1uo2th2ip" path="res://scripts/strike.gd" id="1_script"]
 [ext_resource type="SpriteFrames" path="res://data/animations/strike_frames.tres" id="2_frames"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(80, 64)
+size = Vector2(96, 96)
+
+[sub_resource type="Animation" id="Animation_swing"]
+resource_name = "swing"
+length = 0.35
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = false
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.35),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [0.0, 15.708]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AnimatedSprite2D:scale")
+tracks/1/interp = 2
+tracks/1/loop_wrap = false
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.1, 0.24, 0.35),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [Vector2(0.35, 0.35), Vector2(2.2, 2.2), Vector2(1.9, 1.9), Vector2(0.25, 0.25)]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("AnimatedSprite2D:modulate:a")
+tracks/2/interp = 1
+tracks/2/loop_wrap = false
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.06, 0.27, 0.35),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, 1.0, 1.0, 0.0]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
+_data = {
+&"swing": SubResource("Animation_swing")
+}
 
 [node name="Strike" type="Area2D" unique_id=383251958 groups=["strike"]]
 collision_layer = 8
 collision_mask = 16
 script = ExtResource("1_script")
+lifetime = 0.35
+side_offset = 52.0
+hit_reach = 68.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=290215926]
 scale = Vector2(2, 2)
 sprite_frames = ExtResource("2_frames")
 animation = &"punch"
-autoplay = "punch"
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_1")
+}
+autoplay = "swing"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1752994211]
 shape = SubResource("RectangleShape2D_1")

@@ -25,16 +25,47 @@ var runs: Dictionary[int, PlayerRun] = {}
 var local_peer_id: int = 1
 var best_score: int = 0
 var run_start_ms: int = 0
+
+## Every playable climber, in the order the select screen shows them.
+var roster: CharacterRoster
+## The climber this machine picked, remembered between sessions. Held as an id
+## rather than a resource so an unknown one (a save from a build that had a
+## character this one does not) simply falls back instead of failing to load.
+var selected_character: StringName = &""
+
 var _kill_burst: BurstPreset
 
 
 func _ready() -> void:
-	# load, not a preload const: an autoload's preloads pin resources past
+	# load, not preload consts: an autoload's preloads pin resources past
 	# shutdown (same lesson as the sound bank).
 	_kill_burst = load("res://data/fx/kill.tres")
+	roster = load("res://data/characters/roster.tres")
 	var cf := ConfigFile.new()
 	if cf.load(SAVE_PATH) == OK:
 		best_score = cf.get_value("run", "best_score", 0)
+		selected_character = StringName(cf.get_value("run", "character", ""))
+
+
+# ── Character choice ────────────────────────────────────────────────────────
+## The climber this machine plays. Never null while the roster has anybody in
+## it, so callers do not have to have an opinion about a bad saved id.
+func character_def() -> CharacterDef:
+	return roster.resolve(selected_character)
+
+
+## The id a peer is assumed to have picked when it never said. Used by Net when
+## it locks the session roster.
+func default_character_id() -> StringName:
+	var fallback := roster.fallback()
+	return fallback.id if fallback != null else CharacterRoster.SPECTATOR
+
+
+func select_character(id: StringName) -> void:
+	if selected_character == id:
+		return
+	selected_character = id
+	_save()
 
 
 ## Start a fresh run for the given peers. Empty means "just the local peer",
@@ -65,10 +96,15 @@ func finish_run() -> bool:
 	if run == null or run.score <= best_score:
 		return false
 	best_score = run.score
+	_save()
+	return true
+
+
+func _save() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("run", "best_score", best_score)
+	cf.set_value("run", "character", String(selected_character))
 	cf.save(SAVE_PATH)
-	return true
 
 
 func _process(delta: float) -> void:

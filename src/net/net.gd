@@ -17,6 +17,8 @@ extends Node
 
 signal peers_changed
 signal session_closed(reason: String)
+## Somebody in the lobby picked a different climber, or switched to watching.
+signal choices_changed
 
 enum Mode {COOP, RACE}
 
@@ -27,14 +29,33 @@ const MAX_PLAYERS: int = 8
 var active: bool = false
 var mode: int = Mode.COOP
 ## The locked roster of the running session, host first, same on every
-## machine. Empty while in the lobby or solo.
+## machine. Empty while in the lobby or solo. Spectators are in it — they are
+## in the session, they just have no avatar.
 var session_peers: Array[int] = []
+## peer -> the climber it locked in, `CharacterRoster.SPECTATOR` for a peer that
+## joined to watch. Filled at start_session and identical on every machine, so
+## every peer builds the same avatars in the same order without a handshake.
+var session_characters: Dictionary[int, StringName] = {}
+
+## Lobby only: who has picked what so far. Each peer speaks for itself and
+## nobody else, and everyone re-announces whenever the lobby changes, so a peer
+## that arrives late still learns the whole picture.
+var lobby_choices: Dictionary[int, StringName] = {}
+## What this machine has picked. Kept here rather than read back out of
+## lobby_choices, which is a view of everybody.
+var local_choice: StringName = &"":
+	set(value):
+		local_choice = value
+		announce_choice()
 
 
 func _ready() -> void:
+	# Whatever this machine last played solo. character_def() resolves an empty
+	# or unknown saved id to the roster's fallback, so this is never garbage.
+	local_choice = Game.character_def().id
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	multiplayer.connected_to_server.connect(func() -> void: peers_changed.emit())
+	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.connection_failed.connect(func() -> void: close_session("CONNECTION FAILED"))
 	multiplayer.server_disconnected.connect(func() -> void: close_session("HOST LEFT"))
 
@@ -46,6 +67,8 @@ func host(port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	active = true
+	lobby_choices.clear()
+	announce_choice()
 	peers_changed.emit()
 	return OK
 
@@ -57,8 +80,15 @@ func join(address: String, port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	active = true
+	lobby_choices.clear()
 	peers_changed.emit()
 	return OK
+
+
+## The socket is up. Say what we picked — until now there was nobody to tell.
+func _on_connected_to_server() -> void:
+	announce_choice()
+	peers_changed.emit()
 
 
 func is_host() -> bool:
@@ -90,6 +120,32 @@ func lobby_peers() -> Array[int]:
 	return out
 
 
+# ── Who is playing whom ─────────────────────────────────────────────────────
+## Tell the lobby what this machine picked. A peer may only ever speak for
+## itself; the id it sends is checked against the sender.
+func announce_choice() -> void:
+	if not active:
+		lobby_choices[1] = local_choice
+		choices_changed.emit()
+		return
+	_set_choice.rpc(local_choice)
+
+
+@rpc("any_peer", "call_local", "reliable")
+func _set_choice(id: StringName) -> void:
+	# call_local reports sender 0; that is us, speaking for ourselves.
+	var sender := multiplayer.get_remote_sender_id()
+	if sender == 0:
+		sender = multiplayer.get_unique_id()
+	lobby_choices[sender] = id
+	choices_changed.emit()
+
+
+## What a peer has picked, as something the UI can print.
+func choice_of(peer_id: int) -> StringName:
+	return lobby_choices.get(peer_id, Game.default_character_id())
+
+
 ## Host only: lock the roster and start an identical run on every machine.
 func start_session(run_mode: Mode, world_seed: int) -> void:
 	if not is_host():
@@ -98,7 +154,13 @@ func start_session(run_mode: Mode, world_seed: int) -> void:
 	for p in multiplayer.get_peers():
 		ids.append(p)
 	ids.sort()
-	_begin_run.rpc(run_mode, world_seed, ids)
+	# The picks travel WITH the roster rather than being asked for afterwards:
+	# every machine has to build the same avatars in the same order before the
+	# first frame, and a peer that never announced simply gets the default.
+	var picks: Array[StringName] = []
+	for id in ids:
+		picks.append(lobby_choices.get(id, Game.default_character_id()))
+	_begin_run.rpc(run_mode, world_seed, ids, picks)
 
 
 ## Host only: same mode, fresh layout, everyone at the bottom again. It goes
@@ -115,11 +177,15 @@ func restart_session() -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _begin_run(run_mode: int, world_seed: int, peer_ids: Array) -> void:
+func _begin_run(run_mode: int, world_seed: int, peer_ids: Array, picks: Array) -> void:
 	mode = run_mode as Mode
 	session_peers.clear()
-	for id in peer_ids:
-		session_peers.append(int(id))
+	session_characters.clear()
+	for i in peer_ids.size():
+		var id := int(peer_ids[i])
+		session_peers.append(id)
+		session_characters[id] = StringName(picks[i]) if i < picks.size() \
+				else Game.default_character_id()
 	Game.local_peer_id = multiplayer.get_unique_id()
 	Router.start_run(world_seed)
 
@@ -136,16 +202,26 @@ func close_session(reason: String) -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	active = false
 	session_peers.clear()
+	session_characters.clear()
+	lobby_choices.clear()
 	Game.local_peer_id = 1
 	peers_changed.emit()
+	choices_changed.emit()
 	if reason != "":
 		session_closed.emit(reason)
 
 
+## Somebody arrived. Everyone says again what they picked, rather than the host
+## keeping a master copy and forwarding it: each peer is the only authority on
+## its own choice, and a lobby of eight re-announcing is a few dozen bytes.
 func _on_peer_connected(_id: int) -> void:
+	announce_choice()
 	peers_changed.emit()
 
 
-func _on_peer_disconnected(_id: int) -> void:
-	session_peers.erase(_id)
+func _on_peer_disconnected(id: int) -> void:
+	session_peers.erase(id)
+	session_characters.erase(id)
+	lobby_choices.erase(id)
 	peers_changed.emit()
+	choices_changed.emit()

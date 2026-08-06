@@ -11,7 +11,11 @@ extends Resource
 @export_group("Shaft")
 @export var world_width: float = 2000.0
 @export var wall_thickness: float = 128.0
-@export var level_count: int = 4
+## Eight levels of 2000 — the pit is 16000 deep. Every ramp below is a lerp over
+## ascent PROGRESS rather than over depth, so doubling this stretches all of
+## them; the endpoints were re-tuned for the longer climb rather than left where
+## a four-level pit had put them.
+@export var level_count: int = 8
 @export var level_height: float = 2000.0
 ## Walls are stacked in segments of this height …
 @export var wall_segment_height: float = 512.0
@@ -29,6 +33,14 @@ extends Resource
 ## … and rows keep coming until they pass this y.
 @export var row_top_y: float = -400.0
 ## Vertical distance between rows, by ascent progress.
+##
+## These endpoints did NOT move when the pit went from four levels to eight, and
+## that is the point: every one of them is a lerp over PROGRESS, so eight levels
+## sample the same difficulty curve the four-level pit had, at twice the
+## resolution. tools/world_balance.gd measures it — the mean climb between two
+## things you can stand on runs ~85 px at the floor to ~310 px at the surface in
+## both, which is the shape the game was tuned around. Stretching the endpoints
+## as well made the last two levels harder than any level had ever been.
 @export var row_step_bottom: float = 80.0
 @export var row_step_top: float = 180.0
 ## Rows are suppressed this close to a level divider.
@@ -70,8 +82,11 @@ extends Resource
 @export var player_spawn_height: float = 300.0
 ## Ascending past this y wins the run.
 @export var victory_y: float = 200.0
-## Depth fractions that open the upgrade menu, each once.
-@export var upgrade_fractions: Array[float] = [0.75, 0.5, 0.25]
+## Depth fractions that open the upgrade menu, each once. One at the top of
+## every other level — 1, 3, 5 and 7 — which is four offers over eight levels.
+## What a milestone actually gives depends on what the climber has left: a
+## choice, an automatic grant when only one thing is missing, or score.
+@export var upgrade_fractions: Array[float] = [0.875, 0.625, 0.375, 0.125]
 @export var camera_top_limit: float = -384.0
 @export var camera_bottom_margin: float = 120.0
 
@@ -79,8 +94,11 @@ extends Resource
 @export var spawn_table: Array[SpawnEntry] = []
 @export var spawn_interval_start: float = 2.0
 @export var spawn_interval_min: float = 0.4
-## The interval shrinks by this much per spawn until it hits the minimum.
-@export var spawn_interval_step: float = 0.05
+## The interval shrinks by this much per spawn until it hits the minimum. Halved
+## when the pit went from four levels to eight: the ramp is counted in spawns,
+## not in depth, so leaving it alone would have put the whole back half of a
+## twice-as-long climb at the floor rate.
+@export var spawn_interval_step: float = 0.025
 ## SKY and PLATFORM_BAND spawns keep this far from the walls.
 @export var spawn_margin_x: float = 200.0
 ## SKY spawns never appear above this y.

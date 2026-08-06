@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="UpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/defs/upgrade_def.gd" id="1_script"]
+
+[resource]
+resource_name = "cyn_shockwave"
+script = ExtResource("1_script")
+id = &"shockwave"
+title = "SHOCKWAVE BLAST"
+subtitle = "A ring that grows around you"
+effect = 2

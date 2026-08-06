@@ -1,6 +1,11 @@
 extends CharacterBody2D
 ## Player controller for "The PIT: Ascension"
 ## All physics values are ×2 scaled from original Pygame version.
+##
+## What differs between climbers is not in here. `character` is a CharacterDef
+## resource — hearts, jump strength, how many jumps come free, which attack
+## scene, which frames — and this script reads it once in _ready(). Nothing
+## below asks *who* it is steering.
 
 # ── Constants (×2 from legacy) ──────────────────────────────────────────────
 const GRAVITY: float = 5760.0 # 0.8 * 60 * 60 * 2
@@ -25,15 +30,27 @@ const SHOCKWAVE_SHAKE_RANGE: float = 1800.0
 ## How fast the sideways half of an external shove bleeds off, in e-folds per
 ## second. See shove() for why only that half needs carrying.
 const SHOVE_DECAY: float = 7.0
+## The little pop a body gives when it goes down, before it falls to the floor.
+const DOWNED_POP_FORCE: float = -300.0
+## The hop a revived climber gets, so being picked up is something you see from
+## across the pit rather than a heart quietly changing on somebody's bar.
+const REVIVE_HOP_FORCE: float = -520.0
+## Laid out on their back. The sprite also drops to the floor by this much,
+## because a drawing on its side is half as tall as one standing up.
+const DOWNED_SPRITE_Y: float = 0.0
 
-const STRIKE_SCENE: PackedScene = preload("res://scenes/Strike.tscn")
 const SHOCKWAVE_SCENE: PackedScene = preload("res://scenes/Shockwave.tscn")
 
 const DOUBLE_JUMP_BURST: BurstPreset = preload("res://data/fx/double_jump.tres")
 const HURT_BURST: BurstPreset = preload("res://data/fx/player_hurt.tres")
 const DEATH_BURST: BurstPreset = preload("res://data/fx/player_death.tres")
 
-# ── State ───────────────────────────────────────────────────────────────────
+# ── Identity ────────────────────────────────────────────────────────────────
+## Which climber this avatar is. World assigns it from the session roster before
+## add_child; the scene's own default keeps Player.tscn standing on its own for
+## the probes and the visual harness.
+@export var character: CharacterDef
+
 ## Which peer this avatar belongs to. 1 in solo; World assigns it on spawn.
 ## Kills, score and milestones are credited through it.
 var peer_id: int = 1
@@ -50,6 +67,7 @@ var peer_id: int = 1
 ## labelled stale, with no assumption about packet ordering.
 var run_seed: int = -1
 
+# ── State ───────────────────────────────────────────────────────────────────
 var health: int = 5
 var max_health: int = 5
 
@@ -69,12 +87,34 @@ var invincible: bool = false:
 			sprite.visible = true
 
 var jump_count: int = 0
-var has_double_jump: bool = false
-var has_strike: bool = false
+## Jumps available before the ground has to be touched again. The character's
+## `base_jumps` to start with; every EXTRA_JUMP upgrade adds one.
+var max_jumps: int = 1
+var has_attack: bool = false
 var has_shockwave: bool = false
-var dashing_down: bool = false
+var has_ranged: bool = false
+
+## True while diving. The dash-down hitbox lives and dies with it — see the
+## DashBox node, which is a couple of art pixels bigger than the body on every
+## side, so a dive that clips the edge of something still counts.
+##
+## Replicated, so a puppet's box is live on the host too: the host resolves every
+## kill, and it can only do that against a hitbox that exists on its machine.
+var dashing_down: bool = false:
+	set(value):
+		if dashing_down == value:
+			return
+		dashing_down = value
+		if is_node_ready():
+			_arm_dash_box(value)
+
 var flying: bool = false
 var is_crushed: bool = false
+
+## Multiplayer only: out of hearts, but not out of the run. The body drops where
+## it died and lies there until a teammate spends a heart to bring it back. Solo
+## death is unchanged — it ends the run.
+var is_downed: bool = false
 
 var facing_right: bool = true
 
@@ -85,6 +125,9 @@ var can_input: bool = true
 var _trail_timer: float = 0.0
 var _squash_tween: Tween
 var _puppet_anim: StringName = &""
+## Where the sprite sits when standing — authored in the scene, because the art
+## is taller than the collision box. _lay_down() restores it.
+@onready var _sprite_y: float = $AnimatedSprite2D.position.y
 ## Outstanding sideways push — see shove().
 var _shove_x: float = 0.0
 
@@ -96,17 +139,30 @@ var _shove_x: float = 0.0
 @onready var coyote_timer: Timer = $CoyoteTimer
 @onready var strike_cd_timer: Timer = $StrikeCooldownTimer
 @onready var shockwave_cd_timer: Timer = $ShockwaveCooldownTimer
+@onready var ranged_cd_timer: Timer = $RangedCooldownTimer
+## How long the firing pose is held. Only the pose — the bullet has left.
+@onready var shot_pose_timer: Timer = $ShotPoseTimer
 ## Watches for hostile PLAYER_ATTACK hitboxes. It is on no layer at all, so
 ## nothing can see it back, and it only monitors in a race — the mode is a
 ## physical fact about the scene rather than an `if` in a hot path.
 @onready var hurt_box: Area2D = $HurtBox
+## The dash-down hitbox. On its own layer so that a race rival's HurtBox, which
+## watches PLAYER_ATTACK, does not read a dive going past as a punch.
+@onready var dash_box: Area2D = $DashBox
+## The sign over a corpse. Cosmetic and local: each machine shows it on the
+## bodies ITS player could pick up, and World decides that every frame.
+@onready var revive_prompt: RevivePrompt = $RevivePrompt
 
 # ── Signals ─────────────────────────────────────────────────────────────────
 signal player_damaged(new_health: int)
 signal player_died
+## Multiplayer: this avatar is down and revivable. Emitted on its own machine.
+signal player_downed
+signal player_revived
 
 
 func _ready() -> void:
+	_apply_character()
 	inv_timer.timeout.connect(_on_invincibility_timeout)
 	# Race: rivals are solid, so you can stand on a head — and their strikes
 	# reach you. Co-op and solo: nothing changes, players pass through each
@@ -117,11 +173,53 @@ func _ready() -> void:
 	# else's opinion about our health.
 	hurt_box.monitoring = Net.is_versus() and is_multiplayer_authority()
 	hurt_box.area_entered.connect(_on_hostile_area)
+	_arm_dash_box(dashing_down)
+
+
+## The dash-down hitbox exists only while the dive does.
+##
+## Both flags, IN THIS ORDER, and neither part of that is cosmetic:
+##
+## - An Area2D with `monitoring` off is not reported by another area's
+##   get_overlapping_areas() even with `monitorable` on. A box that armed only
+##   `monitorable` was invisible to every enemy's stomp strip, and the dash
+##   silently fell back to the body's own reach — the widening did nothing at
+##   all, and nothing failed to say so.
+## - Setting `monitoring` LAST is what makes the pairing take. The other order
+##   also leaves the box undetected: measured against a golem, monitoring-first
+##   reaches 53 px (the body) and monitorable-first reaches 57 px (the box), and
+##   57 is what the two shapes actually add up to.
+##
+## The box detects nothing itself — its mask is empty — so monitoring costs a
+## query against no layers.
+func _arm_dash_box(on: bool) -> void:
+	dash_box.monitorable = on
+	dash_box.monitoring = on
+
+
+## Everything this climber is, read once. Nothing else in the game may branch on
+## which character is being played — if a difference is not expressible here, it
+## belongs in CharacterDef as a new field.
+func _apply_character() -> void:
+	if character == null:
+		return
+	sprite.sprite_frames = character.frames
+	sprite.play(&"standing")
+	max_health = character.max_health
+	health = max_health
+	max_jumps = character.base_jumps
+	strike_cd_timer.wait_time = character.attack_cooldown
+	ranged_cd_timer.wait_time = character.ranged_cooldown
+	shot_pose_timer.wait_time = character.ranged_pose
 
 
 func _physics_process(delta: float) -> void:
 	if Net.active and not is_multiplayer_authority():
 		_puppet_process(delta)
+		return
+
+	if is_downed:
+		_downed_process(delta)
 		return
 
 	if not can_input:
@@ -153,6 +251,12 @@ func _physics_process(delta: float) -> void:
 		if dashing_down:
 			dashing_down = false
 		jump_count = 0
+	elif jump_count == 0:
+		# Airborne without having jumped — walked off a ledge, bounced, spawned.
+		# The ground jump is spent either way, so the air jumps that follow are
+		# counted from one. Without this a character with no EXTRA_JUMP at all
+		# would get a free jump every time they stepped off something.
+		jump_count = 1
 
 	# Landing feedback: dust + thud + squash after a serious fall.
 	if not was_on_floor and now_on_floor and fall_speed > HARD_LANDING_SPEED:
@@ -195,6 +299,15 @@ func _puppet_process(delta: float) -> void:
 			Fx.ghost(sprite, Color(0.6, 0.85, 1.0, 0.45))
 
 
+## A body with nobody in it: no input, no attacks, nothing can touch it. It
+## still falls, because a corpse hanging in the air where you happened to run
+## out of hearts is not where anyone would come looking for it.
+func _downed_process(delta: float) -> void:
+	velocity.x = 0.0
+	_apply_gravity(delta)
+	move_and_slide()
+
+
 # ── Gravity ─────────────────────────────────────────────────────────────────
 func _apply_gravity(delta: float) -> void:
 	if dashing_down:
@@ -215,9 +328,10 @@ func _crushed_by_geometry() -> bool:
 	collision_mask = Layers.WORLD
 	# Cannot move in either direction along an axis, or already overlapping in
 	# place (the diagonal squeeze).
-	var stuck_h := test_move(global_transform, Vector2.RIGHT) and test_move(global_transform, Vector2.LEFT)
-	var stuck_v := test_move(global_transform, Vector2.UP) and test_move(global_transform, Vector2.DOWN)
-	var embedded := test_move(global_transform, Vector2.ZERO)
+	var xf := global_transform
+	var stuck_h := test_move(xf, Vector2.RIGHT) and test_move(xf, Vector2.LEFT)
+	var stuck_v := test_move(xf, Vector2.UP) and test_move(xf, Vector2.DOWN)
+	var embedded := test_move(xf, Vector2.ZERO)
 	collision_mask = saved
 	return stuck_h or stuck_v or embedded
 
@@ -254,8 +368,13 @@ func _handle_input() -> void:
 		_try_jump()
 
 	# Attack
-	if Input.is_action_just_pressed("attack") and has_strike:
+	if Input.is_action_just_pressed("attack") and has_attack:
 		_try_strike()
+
+	# The second attack button. Tessa's pistol; nobody else has one, and a
+	# character with no ranged scene simply never unlocks it.
+	if Input.is_action_just_pressed("attack_alt") and has_ranged:
+		_try_shoot()
 
 	# Shockwave (radial blast) — unlocked upgrade, longer cooldown.
 	if Input.is_action_just_pressed("shockwave") and has_shockwave:
@@ -275,21 +394,27 @@ func _handle_flight_input() -> void:
 
 
 # ── Jump ────────────────────────────────────────────────────────────────────
+## How hard this climber jumps. Tessa's is shorter than Cyn's, and that is the
+## whole of the difference: one multiplier on her CharacterDef.
+func jump_force() -> float:
+	return JUMP_FORCE * (character.jump_scale if character else 1.0)
+
+
 func _try_jump() -> void:
 	if flying:
 		return
 
 	if is_on_floor() or not coyote_timer.is_stopped():
-		velocity.y = JUMP_FORCE
+		velocity.y = jump_force()
 		jump_count = 1
 		coyote_timer.stop()
 		dashing_down = false
 		Fx.dust(global_position + Vector2(0, 30), 8)
 		Audio.play(&"jump")
 		_squash(Vector2(1.6, 2.4))
-	elif has_double_jump and jump_count < 2:
-		velocity.y = JUMP_FORCE * 0.9
-		jump_count = 2
+	elif jump_count < max_jumps:
+		velocity.y = jump_force() * 0.9
+		jump_count += 1
 		dashing_down = false
 		Fx.burst(global_position + Vector2(0, 20), DOUBLE_JUMP_BURST)
 		Audio.play(&"double_jump")
@@ -300,13 +425,13 @@ func _try_jump() -> void:
 ## Attacks spawn on EVERY machine: the host needs the hitbox to resolve
 ## kills, the others need the visual. The cooldown gates only the owner.
 func _try_strike() -> void:
-	if not strike_cd_timer.is_stopped():
+	if not strike_cd_timer.is_stopped() or character == null:
 		return
 	strike_cd_timer.start()
 	# The swing is ours to hear. It used to live inside the RPC below, which
 	# spawns on every machine — so every punch anyone threw played in every
 	# lobby, wherever in the pit it happened.
-	Audio.play(&"strike")
+	Audio.play(character.attack_sound)
 	if Net.active:
 		_spawn_strike.rpc()
 	else:
@@ -315,10 +440,51 @@ func _try_strike() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _spawn_strike() -> void:
-	var s := STRIKE_SCENE.instantiate()
+	if character == null or character.attack_scene == null:
+		return
+	var s := character.attack_scene.instantiate()
 	s.setup(self, facing_right)
 	get_parent().add_child(s)
 	current_strike = s
+
+
+# ── Shot ────────────────────────────────────────────────────────────────────
+## Where the bullet leaves the drawing, on the side being faced.
+func muzzle_position() -> Vector2:
+	if character == null:
+		return global_position
+	var off := character.muzzle_offset
+	if not facing_right:
+		off.x = -off.x
+	return global_position + off
+
+
+func _try_shoot() -> void:
+	if not ranged_cd_timer.is_stopped() or character == null 			or character.ranged_scene == null:
+		return
+	ranged_cd_timer.start()
+	shot_pose_timer.start()
+	# Ours to hear, like the swing: the RPC below runs on every machine.
+	Audio.play(character.ranged_sound)
+	if Net.active:
+		_spawn_bullet.rpc(facing_right, muzzle_position())
+	else:
+		_spawn_bullet(facing_right, muzzle_position())
+
+
+## Spawned on every machine, exactly like a Strike, and for the same reasons:
+## the host needs the hitbox to resolve kills and everybody else needs to see
+## it. `facing` and `from` travel because the shot has to leave the muzzle it
+## was fired from even if the avatar has already turned round by the time the
+## packet lands.
+@rpc("authority", "call_local", "reliable")
+func _spawn_bullet(facing: bool, from: Vector2) -> void:
+	if character == null or character.ranged_scene == null:
+		return
+	shot_pose_timer.start()
+	var b := character.ranged_scene.instantiate()
+	b.setup(self, facing, from)
+	get_parent().add_child(b)
 
 
 # ── Shockwave ────────────────────────────────────────────────────────────────
@@ -409,7 +575,7 @@ func _resolve_versus_stomp() -> void:
 func shove(from: Vector2, strength: float) -> void:
 	if Net.active and not is_multiplayer_authority():
 		return
-	if strength <= 0.0 or is_crushed:
+	if strength <= 0.0 or is_crushed or is_downed:
 		return
 	var dir := global_position - from
 	if dir.length_squared() < 1.0:
@@ -435,7 +601,7 @@ func take_damage(amount: int = 1) -> bool:
 	# Health belongs to the owning machine; puppets never take damage locally.
 	if Net.active and not is_multiplayer_authority():
 		return false
-	if invincible or flying or not can_input:
+	if invincible or flying or not can_input or is_downed:
 		return false
 	health -= maxi(amount, 1)
 	invincible = true
@@ -522,12 +688,16 @@ func _floor_limit() -> float:
 	var world_node := get_parent()
 	if world_node and "max_depth" in world_node:
 		return world_node.max_depth - 100.0
-	return 8000.0
+	return 16000.0
 
 
+# ── Death ───────────────────────────────────────────────────────────────────
+## Out of hearts. In a session that is not the end of you — the body drops where
+## it fell and anyone still climbing can spend a heart on it. Solo, it is the
+## end of the run, exactly as it always was.
 func _die() -> void:
 	if Net.active:
-		_die_everywhere.rpc()
+		_go_down.rpc()
 	else:
 		_die_everywhere()
 
@@ -541,7 +711,7 @@ func _die_everywhere() -> void:
 	velocity.x = 0.0
 	velocity.y = -600.0
 	dashing_down = false
-	sprite.rotation_degrees = -90.0
+	_lay_down(true)
 	collision_mask = Layers.NONE
 	hurt_box.monitoring = false
 	var mine := not Net.active or is_multiplayer_authority()
@@ -561,8 +731,116 @@ func _die_everywhere() -> void:
 	)
 
 
-## Harm resolved elsewhere, applied here — the machine that steers this avatar
-## is the only one that may change its health.
+# ── Down and out (multiplayer) ──────────────────────────────────────────────
+## The body stops being a player and becomes scenery that can be picked back up.
+## It is off every collision layer, so no enemy, trampoline or rival can see it,
+## and it keeps WORLD in its mask so it falls to the nearest floor instead of
+## hanging in the air where the last heart went.
+@rpc("authority", "call_local", "reliable")
+func _go_down() -> void:
+	if is_downed:
+		return
+	is_downed = true
+	health = 0
+	can_input = false
+	invincible = false
+	is_crushed = false
+	dashing_down = false
+	flying = false
+	velocity = Vector2(0.0, DOWNED_POP_FORCE)
+	collision_layer = Layers.NONE
+	collision_mask = Layers.WORLD
+	hurt_box.monitoring = false
+	sprite.play(&"died")
+	_puppet_anim = &"died"
+	_lay_down(true)
+	var mine := is_multiplayer_authority()
+	Audio.play_at(&"die", global_position)
+	Fx.shake(0.7 if mine else 0.25)
+	Fx.burst(global_position, DEATH_BURST)
+	if mine:
+		player_damaged.emit(0)
+		player_downed.emit()
+
+
+## The host has decided somebody paid for this body. Health belongs to the
+## machine steering the avatar, so the host asks rather than tells, exactly as it
+## does for a world hazard — see remote_hurt. That machine then announces the
+## pick-up to everyone, because it is the one with the authority to.
+@rpc("any_peer", "call_remote", "reliable")
+func remote_revive() -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
+		stand_up.rpc()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func remote_pay_revive() -> void:
+	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
+		pay_revive.rpc()
+
+
+## Somebody paid a heart for this body. It stands up where it fell with one
+## heart and a moment of invincibility, so being revived under an enemy is not
+## instantly being downed again.
+@rpc("authority", "call_local", "reliable")
+func stand_up() -> void:
+	if not is_downed:
+		return
+	is_downed = false
+	health = 1
+	# Up onto your feet with a hop — the one moment in a session worth looking
+	# across the pit for.
+	velocity = Vector2(0.0, REVIVE_HOP_FORCE)
+	_lay_down(false)
+	_squash(Vector2(1.5, 2.6))
+	_restore_collision()
+	hurt_box.monitoring = Net.is_versus() and is_multiplayer_authority()
+	revive_prompt.show_sign(false)
+	sprite.play(&"standing")
+	_puppet_anim = &"standing"
+	invincible = true
+	inv_timer.start()
+	can_input = true
+	Audio.play_at(&"heal", global_position)
+	Fx.burst(global_position, DOUBLE_JUMP_BURST)
+	if is_multiplayer_authority():
+		player_damaged.emit(health)
+		player_revived.emit()
+
+
+## The cost, on the machine of whoever paid it. A plain heart off the bar: no
+## knockback, no invincibility, no flash — you were not hit, you gave it away.
+@rpc("authority", "call_local", "reliable")
+func pay_revive() -> void:
+	health = maxi(health - 1, 1)
+	if is_multiplayer_authority():
+		player_damaged.emit(health)
+		Audio.play(&"hurt")
+
+
+## On your back, or back on your feet. The sprite drops as it turns, because a
+## climber lying down is half as tall as one standing up and would otherwise
+## float above the floor its collider is resting on.
+func _lay_down(on: bool) -> void:
+	sprite.rotation_degrees = -90.0 if on else 0.0
+	sprite.position.y = DOWNED_SPRITE_Y if on else _sprite_y
+
+
+func _restore_collision() -> void:
+	collision_layer = Layers.PLAYER
+	collision_mask = Layers.WORLD
+	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus())
+
+
+## World decides, every frame, which bodies this machine's player could pick up.
+## It is a local, cosmetic answer — nothing about it crosses the wire.
+func set_revive_prompt(on: bool) -> void:
+	revive_prompt.show_sign(on)
+
+
+# ── Harm resolved elsewhere ─────────────────────────────────────────────────
+## Applied here — the machine that steers this avatar is the only one that may
+## change its health.
 ##
 ## The host sends this for world hazards (a mistimed stomp onto an enemy). In a
 ## race a rival sends it for a stomp on our head, which is why the sender is not
@@ -605,16 +883,21 @@ func _squash(target: Vector2) -> void:
 
 # ── Animation ───────────────────────────────────────────────────────────────
 ## Picks which clip should be playing. Frame timing lives in the SpriteFrames
-## resource (data/animations/player_frames.tres), not here.
+## resource (data/animations/<character>_frames.tres), not here.
 func _update_animation() -> void:
 	var wanted := &"standing"
 	if current_strike:
 		wanted = &"attacking"
+	elif not shot_pose_timer.is_stopped():
+		wanted = &"shooting"
 	elif not is_on_floor() and not flying:
 		wanted = &"jumping" if velocity.y < 0 else &"falling"
 	elif absf(velocity.x) > 0.1:
 		wanted = &"running"
 
-	if sprite.animation != wanted:
+	# A clip a character does not have is simply not played. Only Tessa has a
+	# `shooting` pose, and only she can unlock the thing that asks for it, but a
+	# CharacterDef is data and data can be wrong.
+	if sprite.animation != wanted and sprite.sprite_frames.has_animation(wanted):
 		sprite.play(wanted)
 	sprite.flip_h = not facing_right

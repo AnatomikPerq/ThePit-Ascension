@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="CharacterDef" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://src/defs/character_def.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/defs/upgrade_def.gd" id="2_upgrade"]
+[ext_resource type="SpriteFrames" path="res://data/animations/cyn_frames.tres" id="3_frames"]
+[ext_resource type="PackedScene" path="res://scenes/Strike.tscn" id="4_attack"]
+[ext_resource type="Resource" path="res://data/upgrades/cyn_double_jump.tres" id="5_jump"]
+[ext_resource type="Resource" path="res://data/upgrades/cyn_strike.tres" id="6_strike"]
+[ext_resource type="Resource" path="res://data/upgrades/cyn_shockwave.tres" id="7_shock"]
+[ext_resource type="Resource" path="res://data/upgrades/cyn_max_hp.tres" id="8_hp"]
+
+[resource]
+resource_name = "cyn"
+script = ExtResource("1_script")
+id = &"cyn"
+display_name = "CYN"
+blurb = "Five hearts and a heavy jump.
+Everything is earned on the way up."
+accent = Color(0.98, 0.729, 0.384, 1)
+frames = ExtResource("3_frames")
+max_health = 5
+jump_scale = 1.0
+base_jumps = 1
+attack_scene = ExtResource("4_attack")
+attack_cooldown = 0.45
+attack_sound = &"strike"
+upgrades = Array[ExtResource("2_upgrade")]([ExtResource("5_jump"), ExtResource("6_strike"), ExtResource("7_shock"), ExtResource("8_hp")])

@@ -22,11 +22,17 @@ func _run() -> void:
 	if args.size() > 0:
 		_out_dir = args[0]
 	DirAccess.make_dir_recursive_absolute(_out_dir)
+	# Shoot the same climber every time, whoever this machine last played.
+	Game.selected_character = &"cyn"
 
 	var menu: Node = load("res://scenes/MainMenu.tscn").instantiate()
 	get_tree().root.add_child(menu)
 	await _frames(20)
 	await _shot("menu.png")
+	# The same panel serves the menu and the lobby, so it is shot once, here.
+	menu.get_node(^"CharacterSelect").open()
+	await _frames(20)
+	await _shot("characters.png")
 	menu.free()
 
 	var lobby: Node = load("res://scenes/Lobby.tscn").instantiate()
@@ -53,6 +59,36 @@ func _run() -> void:
 	await _shot("upgrade.png")
 	world.choose_upgrade(3) # heal: also exercises the button flow + HP rebuild
 	await _frames(5)
+	# One taken, three left: the menu only ever offers what is still missing.
+	world._show_upgrade_menu()
+	await _frames(5)
+	await _shot("upgrade_partial.png")
+	world.choose_upgrade(0)
+	await _frames(5)
+
+	# Cyn's strike, three moments apart. It is one drawing spun and scaled by an
+	# AnimationPlayer, so a still of it says nothing — the strip is the point.
+	world.player.has_attack = true
+	world.player._try_strike()
+	await _frames(3)
+	await _shot("strike_1.png")
+	await _frames(5)
+	await _shot("strike_2.png")
+	await _frames(6)
+	await _shot("strike_3.png")
+	await _frames(20)
+
+	# What a downed player sees while they wait to be picked up. The prompt over
+	# the body is shot with it, because that sign is the whole interaction, and
+	# after its appear animation has settled rather than halfway through it.
+	world.player.set_revive_prompt(true)
+	world._enter_spectator(world.player.global_position + Vector2(0, -300))
+	world.hud.update_spectator(world.spectator.status_text())
+	await _frames(45)
+	await _shot("spectator.png")
+	world._leave_spectator()
+	world.player.set_revive_prompt(false)
+	await _frames(5)
 
 	world.game_over_screen.show_with(world._stats_text(false))
 	await _frames(5)
@@ -62,9 +98,43 @@ func _run() -> void:
 	world.victory_screen.show_with(world._stats_text(true))
 	await _frames(5)
 	await _shot("victory.png")
+	world.free()
 
-	print("ui_check: wrote 7 captures to ", _out_dir)
+	await _shoot_tessa()
+
+	print("ui_check: wrote 16 captures to ", _out_dir)
 	get_tree().quit(0)
+
+
+## A second run as Tessa, for the two things only she does: the blade, and the
+## pistol. Both are spawned by hand rather than pressed, because a headless-ish
+## harness has no hands.
+func _shoot_tessa() -> void:
+	Game.selected_character = &"tessa"
+	var world: Node = load("res://scenes/World.tscn").instantiate()
+	world.world_seed = 20260728
+	get_tree().root.add_child(world)
+	get_tree().current_scene = world
+	await _frames(20)
+
+	var tessa: CharacterBody2D = world.player
+	tessa.has_attack = true
+	tessa.has_ranged = true
+	await _shot("tessa_hud.png")
+
+	tessa._try_strike()
+	await _frames(3)
+	await _shot("tessa_sword_1.png")
+	await _frames(4)
+	await _shot("tessa_sword_2.png")
+	await _frames(20)
+
+	tessa._try_shoot()
+	await _frames(2)
+	await _shot("tessa_shot_1.png")
+	await _frames(8)
+	await _shot("tessa_shot_2.png")
+	world.free()
 
 
 func _frames(count: int) -> void:

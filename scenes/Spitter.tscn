@@ -90,7 +90,7 @@ shape = SubResource("Shape_Damage")
 [node name="StompArea" type="Area2D" parent="."]
 position = Vector2(0, -24)
 collision_layer = 16
-collision_mask = 10
+collision_mask = 42
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="StompArea"]
 shape = SubResource("Shape_Stomp")

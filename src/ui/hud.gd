@@ -17,9 +17,17 @@ const HEART_EMPTY_TEX: Texture2D = preload("res://assets/sprites/heart_empty.png
 @onready var ascent_bar: ProgressBar = $AscentBar
 @onready var strike_icon: Panel = $AbilityIcons/StrikeIcon
 @onready var shockwave_icon: Panel = $AbilityIcons/ShockwaveIcon
+@onready var spectator_bar: Label = $SpectatorBar
 
 var _notification_timer: float = 0.0
 var _combo_tween: Tween
+## The widgets that are about an avatar. A spectator has none, so rather than
+## every one of them learning about spectating they are simply switched off
+## together.
+@onready var _avatar_widgets: Array[Control] = [
+	hp_bar, score_label, depth_label, skills_label, ascent_bar,
+	$SurfaceLabel, $AbilityIcons,
+]
 
 
 ## (Re)build the heart row. Called on spawn and when max HP grows.
@@ -52,9 +60,9 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 	depth_label.text = "DEPTH: %d" % int(player.global_position.y)
 
 	var skills_text := "Skills: "
-	if player.has_double_jump:
-		skills_text += "[WING] "
-	if player.has_strike:
+	if player.max_jumps > 1:
+		skills_text += "[JUMP x%d] " % player.max_jumps
+	if player.has_attack:
 		skills_text += "[STRIKE] "
 	if player.has_shockwave:
 		skills_text += "[SHOCKWAVE] "
@@ -66,7 +74,7 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 	var ascent := clampf(1.0 - player.global_position.y / max_depth, 0.0, 1.0)
 	ascent_bar.value = ascent * 100.0
 
-	strike_icon.visible = player.has_strike
+	strike_icon.visible = player.has_attack
 	strike_icon.modulate.a = 0.35 if not player.strike_cd_timer.is_stopped() else 1.0
 	shockwave_icon.visible = player.has_shockwave
 	shockwave_icon.modulate.a = 0.35 if not player.shockwave_cd_timer.is_stopped() else 1.0
@@ -77,6 +85,26 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 			notif_label.text = ""
 
 	fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+
+
+# ── Spectating ──────────────────────────────────────────────────────────────
+## Everything about an avatar goes away; one line along the bottom says what the
+## keys do. Called by World when this machine stops having a body to follow.
+func enter_spectator() -> void:
+	for widget in _avatar_widgets:
+		widget.visible = false
+	combo_label.visible = false
+	spectator_bar.visible = true
+
+
+func exit_spectator() -> void:
+	for widget in _avatar_widgets:
+		widget.visible = true
+	spectator_bar.visible = false
+
+
+func update_spectator(text: String) -> void:
+	spectator_bar.text = text
 
 
 ## Connected to Game.score_changed, which reports every peer; the HUD only

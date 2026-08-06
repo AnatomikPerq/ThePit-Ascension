@@ -21,12 +21,12 @@ redirected.
 
 | Step | What it proves |
 | :--- | :--- |
-| **GdUnit4 suites** (`test/`) | sound bank integrity, and that every sound is classified as an avatar's or the world's; the enemy contact matrix (stomp/strike/damage for all five, and whose corpse stays); the bomb's contact matrix (falls through the level, goes off against a body for two hearts, is *thrown* by an ability along both axes and harder for a centred hit, blows up on whatever it lands on), what its blast reaches, and how it throws the player (both axes, further than it hurts, nothing beyond the push radius, and far harder point blank); the destruction rule (strength vs. falloff force, nearest-edge distance, no accumulation, the strength ladder, blocks vs. shards, and that the shaft is indestructible in a real generated world); world generation is a pure function of the seed; Fx pooling, the effects-root contract, the shake amplitude and its distance falloff; per-player run state; session ending semantics (co-op vs race); what race mode changes and what co-op/solo must not notice; the crush penalty; what a restart must not carry over |
+| **GdUnit4 suites** (`test/`) | sound bank integrity, and that every sound is classified as an avatar's or the world's; the enemy contact matrix (stomp/strike/damage for all five, and whose corpse stays); the bomb's contact matrix (falls through the level, goes off against a body for two hearts, is *thrown* by an ability along both axes and harder for a centred hit, blows up on whatever it lands on), what its blast reaches, and how it throws the player (both axes, further than it hurts, nothing beyond the push radius, and far harder point blank); the destruction rule (strength vs. falloff force, nearest-edge distance, no accumulation, the strength ladder, blocks vs. shards, and that the shaft is indestructible in a real generated world); world generation is a pure function of the seed; Fx pooling, the effects-root contract, the shake amplitude and its distance falloff; per-player run state; session ending semantics (co-op vs race); what race mode changes and what co-op/solo must not notice; the crush penalty; what a restart must not carry over; the two climbers and that nothing branches on which one it is; that the dash-down box reaches further than the body and is armed only while diving; going down, the body that is left, and the arithmetic of a pick-up |
 | **smoke test** (`tools/smoke_test.gd`) | every autoload configured and loadable, every audio bus present, every sound id resolves to a real stream on a real bus, every scene instantiates |
 | **state probe** (`tools/state_probe.tscn`) | real `InputEventKey`s through `Input.parse_input_event()`: pause, input reachability while paused, restart-while-paused actually reloads, shake reaching the camera, and leaving a run for the main menu through the pause button |
 | **world fingerprint** (`tools/world_fingerprint.tscn`) | same seed ⇒ same geometry SHA256, no stacked duplicate colliders. The oracle for generator refactors and the property multiplayer stands on |
-| **net probe** (`tools/run_net_probe.sh`) | a real host + client over a localhost socket: identical world hash from the shared seed, both avatars with correct authorities, enemies mirrored, score replicated, a host restart landing both machines in the same new world, a race in which the client's strike costs the host a heart on the host's own machine, and a bomb the host sets off taking the same named platform out of the **client's** world while a control platform survives |
-| **conventions** (`tools/check_conventions.sh`) | grep gates for CLAUDE.md rules: no `Engine.time_scale` writes, no runtime texture drawing, no runtime audio synthesis, no `set_script()`, no raw collision bitmask literals |
+| **net probe** (`tools/run_net_probe.sh`) | a real host + client over a localhost socket: identical world hash from the shared seed, both avatars with correct authorities, enemies mirrored, score replicated, a host restart landing both machines in the same new world, both machines building the two DIFFERENT climbers the two peers picked, a race in which the client's strike costs the host a heart on the host's own machine, the client running out of hearts and the host paying one of its own to stand it back up, and a bomb the host sets off taking the same named platform out of the **client's** world while a control platform survives |
+| **conventions** (`tools/check_conventions.sh`) | grep gates for CLAUDE.md rules: no `Engine.time_scale` writes, no runtime texture drawing, no runtime audio synthesis, no `set_script()`, no raw collision bitmask literals, and LF line endings — a stray carriage return inside a `.tscn` string double-spaces the label with no error anywhere |
 
 Individual invocations are listed in CLAUDE.md §5.
 
@@ -48,10 +48,21 @@ Individual invocations are listed in CLAUDE.md §5.
   ```bash
   godot --path . tools/build_readme_shots.tscn
   ```
-- **`tools/ui_check.tscn`** — screenshots every UI surface (menu, lobby,
-  HUD, pause, upgrade menu, both end screens) for eyeballing. Not
-  deterministic (embers drift); use it to see that a layout change did what
-  you meant.
+- **`tools/ui_check.tscn`** — screenshots every UI surface (menu, character
+  select, lobby, HUD, pause, the upgrade menu both full and part-spent, the
+  spectator view with a revive sign, both end screens) plus the three attacks
+  caught mid-swing, which is the only way to look at them: Cyn's fist is one
+  drawing spun by an `AnimationPlayer`, so a single still of it says nothing.
+  Not deterministic (embers drift); use it to see that a change did what you
+  meant.
+- **`tools/world_balance.gd`** — the pit level by level: rows, platforms, the
+  mean and worst climb between two things you can stand on, and the enemy mix,
+  against what each character can actually jump. Every ramp in `WorldProfile` is
+  a lerp over ascent *progress*, so changing `level_count` restretches all of
+  them at once and this is the only honest way to see what that did.
+  ```bash
+  godot --headless --path . -s tools/world_balance.gd [seeds]
+  ```
 - **`tests_e2e/`** — PlayGodot end-to-end suite driving the whole running
   application. Runs under WSL on a Godot 4.6 automation fork, so a failure
   there can be a version difference; the gate is `run_tests.sh` on stock
@@ -115,7 +126,14 @@ These were each learned from a harness that lied. Full stories in CLAUDE.md §5.
     7700 px down the pit — which silently zeroed every distance-scaled
     assertion in whatever suite ran next. Reset it in `before_test`, like
     `effects_root`.
-14. **An enemy despawns below the avatar it tracks.** Parking a test's player
+14. **An `Area2D` others must see needs `monitoring` too, set LAST.** Godot does
+    not report an area with monitoring off from another area's
+    `get_overlapping_areas()`, whatever `monitorable` says — and setting the two
+    the other way round does not pair them either. The dash-down box was
+    silently inert: measured against a golem it reached 53 px (the body's own
+    width) instead of 57 (the box). Nothing failed until a test asked for the
+    number.
+15. **An enemy despawns below the avatar it tracks.** Parking a test's player
     3000 px above the enemies made all five leave on their own, and the case
     asserting that a blast kills them passed for the wrong reason. Keep the
     bystander level with them and put it out of range sideways instead.

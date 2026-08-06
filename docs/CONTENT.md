@@ -11,8 +11,10 @@ Open source, non-commercial, unaffiliated.
 
 - **The Pit** is a trash pit where broken worker drones are dumped.
 - **The player is Cyn** — her mansion-era look — climbing out after
-  activating the **Absolute Solver**. Depth 8000 is the bottom; 0 is the
+  activating the **Absolute Solver**. Depth 16000 is the bottom; 0 is the
   surface. The victory line ("It's solver time") is hers.
+- **Tessa** is the second climber: one heart, a shorter jump than Cyn's, and
+  the second jump already hers. She fights with a blade rather than a fist.
 - **Falling golems are broken drone heads** tumbling into the pit as you
   climb past them.
 - **Bombs are heads that were still live when they were dumped** — a cracked
@@ -28,14 +30,80 @@ Sprite sources live in `assets/sprites/src/*.aseprite`; exported PNGs in
 
 | Kind | Entries |
 | :--- | :--- |
+| Characters | Cyn, Tessa |
 | Enemies | Golem, Slime, Pursuer, Bat, Spitter |
-| Unlockable upgrades | Double Jump, Sideways Strike, Shockwave — plus the +1 Max HP heal option |
+| Cyn's upgrades | Double Jump, Sideways Strike, Shockwave, +1 Max HP |
+| Tessa's upgrades | Sword Slash, Pistol, Triple Jump |
 | Built-in ability | Dash down |
 | Objects | Trampoline (left by a killed slime), Bomb (falls past you) |
 | Platforms | Static, Moving (horizontal / vertical) — both breakable |
-| Worlds | 1 (the pit), 4 levels × 2000 depth |
+| Worlds | 1 (the pit), 8 levels × 2000 depth |
 | Bosses | none |
-| Modes | Solo, Co-op, Race |
+| Modes | Solo, Co-op, Race — plus watching, in a session |
+
+### The eight levels
+
+The pit doubled in depth without the difficulty curve changing shape. Every ramp
+in `WorldProfile` is a lerp over *ascent progress*, not over depth, so eight
+levels sample the same curve the four-level pit had, at twice the resolution —
+the endpoints deliberately did **not** move. `tools/world_balance.gd` measures
+it: over 40 seeds the mean climb between two things you can stand on runs 81 px
+at the floor to 359 px at the surface, against a standing jump of 281 px for Cyn
+and 431 px for Tessa on her second. The pit has always expected you to make
+some of the staircase yourself out of golems and slimes; that has not changed
+either.
+
+Two numbers did move, and both for the same reason — they are counted in
+*spawns* rather than in depth, so leaving them alone would have put the whole
+back half of a twice-as-long climb at the maximum rate:
+
+- `spawn_interval_step` halved to 0.025, so the spawn rate ramps over twice as
+  many enemies.
+- Pursuers, bats and spitters now carry a small non-zero weight at the very
+  bottom. Their weights ramp with progress, so without it the first *two* levels
+  would have been nothing but golems and slimes. With it, level 1 of the eight
+  has the same mix level 1 of the four did.
+
+### The climbers
+
+| | Cyn | Tessa |
+| :--- | :--- | :--- |
+| Hearts | 5 | **1** |
+| Jump | 100% | 92% of Cyn's |
+| Jumps to start | 1 | 2 |
+| Attack | fist, 0.35 s, 96×96 | blade, 0.23 s, 80×96, top to bottom |
+| Second button | — | **pistol**: a bullet straight out to the side, 2 s cooldown |
+| Unlocks | Double Jump · Sideways Strike · Shockwave · +1 Max HP | Sword Slash · Pistol · Triple Jump |
+
+Everything in that table is a field on a `CharacterDef` in `data/characters/`.
+Nothing in the game branches on *which* character it is steering, which is the
+whole point: a third climber is a `SpriteFrames`, a `.tres` and a row in
+`data/characters/roster.tres`.
+
+Tessa is deliberately the harsher read of the same pit: one mistake ends her
+run, and she has no heal to buy her way out of it. What she gets for it is
+reach — the second jump from the first metre, a third one later, and a swing
+that is over in two thirds the time Cyn's takes.
+
+Cyn's fist is one drawing that **spins** while it grows out of nothing and
+shrinks back into it — an `AnimationPlayer` clip on `Strike.tscn`, not a frame
+sequence — and its hitbox is deliberately larger than the drawing. Tessa's blade
+is five drawn crescents sweeping from above her head down past her feet.
+
+**The pistol** is her only ranged thing and the only reason a second attack
+button exists. The bullet is spawned on every machine by the same kind of
+`call_local` RPC a Strike uses, then flies in a straight line at a fixed speed
+from a muzzle position every machine agrees on — so it is in the same place
+everywhere without a packet of its own. It joins the `"strike"` group like
+everything else that can hurt an enemy, so no enemy scene knows guns exist.
+
+**Upgrades are a single-use pool.** The menu offers only what that climber has
+not taken yet; when one thing is left it is granted without asking, and once
+there is nothing left the milestone pays score instead. Cyn has four offers and
+four upgrades, so a clean run ends with all of them; Tessa has three.
+
+Milestones sit at the top of levels 1, 3, 5 and 7 —
+`upgrade_fractions` on the profile.
 
 ### Enemies
 
@@ -150,12 +218,49 @@ a cap so nothing explodes into a hundred nodes.
 The bomb uses shards on itself as a stand-in until there are explosion frames to
 play — at least the shell is seen to come apart instead of simply vanishing.
 
+### Dashing down
+
+The dive is the one ability nobody has to unlock, and it is the only way to kill
+a spitter. While it lasts the avatar carries a second hitbox two art pixels
+wider than its body on every side, so a dive that clips a shoulder still counts
+— measured, it reaches 57 px from an enemy's centre where the body alone reaches
+53. It is on its own collision layer, not the one attacks use, because in a race
+a rival's hurt box watches that layer and diving *past* somebody is not a hit on
+them.
+
+### Going down, and being picked up
+
+In a **session**, running out of hearts is not the end of you.
+
+| | |
+| :--- | :--- |
+| The body | falls onto its back — the `died` drawing, laid flat — and lies there. It is off every collision layer — no enemy, trampoline or rival can touch it — and keeps only the world in its mask, so it falls to the nearest floor instead of hanging where the last heart went |
+| The sign | appears **over the body**, on the screen of any climber close enough to pick it up and able to afford it. It is local and cosmetic; nothing about it crosses the wire |
+| The cost | one heart off the reviver. **You cannot revive on your last heart** — the pick-up would kill you |
+| Coming back | one heart, where you fell, with a hop and a moment of invincibility so being revived under an enemy is not instantly being downed again |
+| Meanwhile | that machine watches the pit instead (see below) until somebody spends a heart, or until everybody is down and the run ends |
+
+All of that is multiplayer only. **Solo death is unchanged** — it ends the run,
+with the same fall, fade and end screen it always had.
+
+### Watching
+
+Available two ways: pick **SPECTATOR** in the lobby instead of a climber and
+never get an avatar at all, or be down and waiting for a pick-up.
+
+`TAB` swaps between following a climber and a free camera, `A`/`D` cycle who
+you are following, and the mouse wheel or `Q`/`E` zoom out — which is the point,
+in a pit eight levels deep. A spectator changes nothing about the run and
+nothing about their camera is replicated.
+
 ### Other players
 
 In **race** mode the other climbers are solid — you can stand on a head — and
 your Strike, Shockwave and dash-stomp all land on them for one heart. In
 **co-op** they are neither solid nor hittable: teammates pass through each
-other. Solo is unaffected in every respect. See
+other. Solo is unaffected in every respect. Reviving works in every mode,
+including a race — spending one of your own hearts on a rival is a decision the
+mode does not need to have an opinion about. See
 [NETWORKING.md](NETWORKING.md#race-players-against-each-other).
 
 ### Getting crushed
@@ -173,6 +278,10 @@ you should be in the inspector, not a script.
 
 | Surface | File(s) |
 | :--- | :--- |
+| A climber: hearts, jump, starting jumps, attack scene, frames, upgrades | `data/characters/*.tres` (CharacterDef) |
+| Which climbers exist and in what order | `data/characters/roster.tres` (CharacterRoster) |
+| One upgrade: title, subtitle, effect | `data/upgrades/*.tres` (UpgradeDef) |
+| One weapon: dwell, how far out it sits, reach | exports on `Strike.tscn` / `SwordStrike.tscn` |
 | World geometry, platform ramps, spawn pacing, milestones, camera | `data/worlds/pit.tres` (WorldProfile) |
 | World textures, background gradient | `data/worlds/pit_theme.tres` (WorldTheme) |
 | Enemy spawn weights, placement, caps | `data/worlds/spawn/*.tres` (SpawnEntry) |
@@ -210,8 +319,15 @@ Sound splits two ways, and the split is about *whose* sound it is:
 
 ## Sprites still to draw
 
-Two animations are reserved and empty; both appear the moment the files exist
-and `tools/build_sprite_frames.gd` is re-run, with no code change.
+One slot is reserved; it appears the moment the file exists and
+`tools/build_sprite_frames.gd` is re-run, with no code change. The generator has
+two ways of reserving: an animation that nothing plays is left empty, and one
+that something *does* play falls back to a frame that exists, because an empty
+clip draws nothing at all.
+
+Two sounds are stand-ins rather than slots: the pistol borrows the punch's
+`strike` sample, because a gunshot is an audio file to source rather than
+something to invent.
 
 | Slot | Files | What it is |
 | :--- | :--- | :--- |

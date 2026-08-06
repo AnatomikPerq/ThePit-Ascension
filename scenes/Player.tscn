@@ -1,10 +1,37 @@
-[gd_scene load_steps=7 format=3 uid="uid://cplayer01"]
+[gd_scene format=3 uid="uid://cplayer01"]
 
 [ext_resource type="Script" uid="uid://d3h71svu74mjr" path="res://scripts/player.gd" id="1_script"]
-[ext_resource type="SpriteFrames" path="res://data/animations/player_frames.tres" id="2_frames"]
+[ext_resource type="Resource" path="res://data/characters/cyn.tres" id="2_character"]
+[ext_resource type="SpriteFrames" path="res://data/animations/cyn_frames.tres" id="3_frames"]
+[ext_resource type="PackedScene" path="res://scenes/ui/RevivePrompt.tscn" id="4_prompt"]
+
+[sub_resource type="Animation" id="Animation_blink"]
+resource_name = "blink"
+length = 0.1
+loop_mode = 1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:visible")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.05),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [false, true]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
+_data = {
+&"blink": SubResource("Animation_blink")
+}
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
-size = Vector2(48, 64)
+size = Vector2(43.5, 64)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_dash"]
+size = Vector2(52, 70)
 
 [sub_resource type="SceneReplicationConfig" id="SRC_player"]
 properties/0/path = NodePath(".:position")
@@ -31,45 +58,27 @@ properties/6/replication_mode = 2
 properties/7/path = NodePath(".:run_seed")
 properties/7/spawn = true
 properties/7/replication_mode = 1
-
-[sub_resource type="Animation" id="Animation_blink"]
-resource_name = "blink"
-length = 0.1
-loop_mode = 1
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:visible")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0, 0.05),
-"transitions": PackedFloat32Array(1, 1),
-"update": 1,
-"values": [false, true]
-}
-
-[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
-_data = {
-&"blink": SubResource("Animation_blink")
-}
+properties/8/path = NodePath(".:is_downed")
+properties/8/spawn = true
+properties/8/replication_mode = 2
 
 [node name="Player" type="CharacterBody2D" unique_id=390227050 groups=["player"]]
 collision_layer = 2
 script = ExtResource("1_script")
+character = ExtResource("2_character")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1284903224]
+position = Vector2(0, -6)
 scale = Vector2(2, 2)
-sprite_frames = ExtResource("2_frames")
+sprite_frames = ExtResource("3_frames")
 animation = &"standing"
 autoplay = "standing"
 
-[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-&"": SubResource("AnimationLibrary_1")
-}
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=974936282]
+libraries/ = SubResource("AnimationLibrary_1")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=149580378]
+position = Vector2(-1, 0)
 shape = SubResource("RectangleShape2D_1")
 
 [node name="InvincibilityTimer" type="Timer" parent="." unique_id=383227762]
@@ -83,21 +92,42 @@ one_shot = true
 wait_time = 0.45
 one_shot = true
 
-[node name="ShockwaveCooldownTimer" type="Timer" parent="."]
+[node name="ShockwaveCooldownTimer" type="Timer" parent="." unique_id=1628445445]
 wait_time = 3.0
 one_shot = true
 
-[node name="CrushRecoveryTimer" type="Timer" parent="."]
+[node name="CrushRecoveryTimer" type="Timer" parent="." unique_id=1341155306]
 wait_time = 0.5
 one_shot = true
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="RangedCooldownTimer" type="Timer" parent="."]
+wait_time = 2.0
+one_shot = true
+
+[node name="ShotPoseTimer" type="Timer" parent="."]
+wait_time = 0.18
+one_shot = true
+
+[node name="HurtBox" type="Area2D" parent="." unique_id=1649313304]
 collision_layer = 0
 collision_mask = 8
 monitoring = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=705024993]
+position = Vector2(-1, 0)
 shape = SubResource("RectangleShape2D_1")
 
-[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+[node name="DashBox" type="Area2D" parent="." unique_id=92450941 groups=["dash_stomp"]]
+collision_layer = 32
+collision_mask = 0
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DashBox" unique_id=202012914]
+position = Vector2(-1, -1)
+shape = SubResource("RectangleShape2D_dash")
+
+[node name="RevivePrompt" parent="." instance=ExtResource("4_prompt")]
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="." unique_id=34129306]
 replication_config = SubResource("SRC_player")

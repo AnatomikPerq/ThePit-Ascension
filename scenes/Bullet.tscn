@@ -1,0 +1,23 @@
+[gd_scene load_steps=4 format=3 uid="uid://cbullet01"]
+
+[ext_resource type="Script" path="res://scripts/bullet.gd" id="1_script"]
+[ext_resource type="SpriteFrames" path="res://data/animations/bullet_frames.tres" id="2_frames"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
+size = Vector2(16, 8)
+
+[node name="Bullet" type="Area2D" groups=["strike"]]
+collision_layer = 8
+collision_mask = 17
+script = ExtResource("1_script")
+speed = 1900.0
+lifetime = 1.2
+hit_reach = 10.0
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+scale = Vector2(2, 2)
+sprite_frames = ExtResource("2_frames")
+animation = &"fly"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_1")

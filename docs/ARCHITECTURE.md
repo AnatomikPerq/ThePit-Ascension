@@ -11,7 +11,8 @@ feature would use.
 ```
 autoloads   Fx        cosmetics: shake, pooled bursts, popups, ghosts
             Audio     SoundBank playback over AudioStreamPolyphonic
-            Game      per-player run state (PlayerRun), score events, save
+            Game      per-player run state (PlayerRun), score events, save,
+                      the character roster and this machine's pick
             Router    the only place scenes swap; runs start seeded here
             Net       ENet session lifecycle; inert until host()/join()
 
@@ -21,9 +22,10 @@ scene flow  MainMenu ──► Lobby ──► World        (Router.start_run(se
 world       WorldProfile ─► WorldGenerator ─► WorldPlan ─► WorldBuilder
 pipeline    (.tres numbers)  (seeded draws)    (records)    (nodes)
 
-entities    Player (one per peer)   enemies = movement script + EnemyCombat
-            Strike/Shockwave        component + stats .tres + Sync
-            Bomb                    breakables = Destructible component
+entities    Player (one per peer,   enemies = movement script + EnemyCombat
+            a CharacterDef each)    component + stats .tres + Sync
+            Strike/SwordStrike      breakables = Destructible component
+            Shockwave / Bomb        spectators = SpectatorCam, no avatar
 
 events      Blast     the one explosion: decide once, replay everywhere
 ```
@@ -50,9 +52,10 @@ events      Blast     the one explosion: decide once, replay everywhere
   `Camera2D`, i.e. each machine's own avatar, which is the whole of the
   multiplayer story for audio distance.
 - **`Game`** (`scripts/game_state.gd`) — `runs: Dictionary[int, PlayerRun]`,
-  one entry per peer; solo play is the single-entry case. Kills and score
-  carry the credited peer. Emits `score_changed(peer_id, score, combo)`.
-  Persists the local best score.
+  one entry per *playing* peer; solo play is the single-entry case, and a peer
+  that joined to watch has none. Kills and score carry the credited peer. Emits
+  `score_changed(peer_id, score, combo)`. Also holds the `CharacterRoster` and
+  the climber this machine picked, and persists both that and the best score.
 - **`Router`** (`src/core/router.gd`) — the only place scenes swap.
   `start_run(seed)` instantiates World and sets `world_seed` **before**
   `_ready()` generates the level — the same seam used by the fingerprint
@@ -102,13 +105,54 @@ generator with new record types and the builder with their constructors,
 gated behind profile fields — and if they should be breakable, a `Destructible`
 node with a strength on their scene, nothing more.
 
+## Characters
+
+One `Player` scene, one `player.gd`, and a **`CharacterDef`** resource
+(`src/defs/character_def.gd`, instances in `data/characters/`) for everything
+that differs between climbers: hearts, jump strength, how many jumps come free,
+which attack scene, which `SpriteFrames`, and the upgrade pool. `player.gd`
+reads it once in `_ready()` and nothing in the game asks *who* it is steering —
+if a difference cannot be expressed as a field there, the field is what is
+missing, not an `if`.
+
+**`UpgradeDef`** (`data/upgrades/`) is one thing a climb can hand you: a title
+and one of five effects (extra jump, attack, shockwave, +1 max HP, ranged).
+A character's `upgrades` array is a **single-use pool** — an upgrade leaves it
+when taken, so the menu only ever offers what is missing, one left is granted
+without asking, and a milestone with nothing left pays score instead.
+
+**`CharacterRoster`** (`data/characters/roster.tres`) is the ordered list the
+select screen shows, a resource rather than a folder scan because the order is
+a design decision. `Game.roster` loads it; `Game.selected_character` is this
+machine's pick, saved between runs and resolved through the roster so an
+unknown id falls back instead of failing.
+
+In a session the picks are locked into the roster **with the seed**
+(`Net.session_characters`), so every machine builds the same avatars in the
+same order before the first frame, with no handshake. A peer may also pick
+nothing at all, which is what a spectator is.
+
+*Seam:* a *new character* is a `SpriteFrames`, a `CharacterDef` `.tres`, its
+upgrade `.tres` files and a row in the roster — no scene and no script. A *new
+kind of upgrade* is one more `Effect` and one more branch in
+`World._apply_upgrade`.
+
 ## Entities
 
 - **Player** (`scenes/Player.tscn`, `scripts/player.gd`) — physics, input,
-  damage, crush handling. Carries `peer_id`; input runs only on the owning
-  machine, remote copies run a puppet branch fed by a
-  `MultiplayerSynchronizer`. Animations are `SpriteFrames` clips picked by a
-  tiny state function; the invincibility blink is an `AnimationPlayer` clip.
+  damage, crush handling, and the downed state. Carries `peer_id` and a
+  `CharacterDef`; input runs only on the owning machine, remote copies run a
+  puppet branch fed by a `MultiplayerSynchronizer`. Animations are
+  `SpriteFrames` clips picked by a tiny state function; the invincibility blink
+  is an `AnimationPlayer` clip.
+  The art is authored on a 32×38 canvas against a 48×64 collision box, so the
+  `AnimatedSprite2D` is offset 6 px up to stand the feet on the bottom of the
+  box — `tools/visual_check.tscn` puts every climber on one baseline for exactly
+  this reason.
+  `DashBox` is a second `Area2D`, the body grown two art pixels on every side
+  and live only while a dive is: a dash that clips a shoulder still lands. It is
+  on its own `player_stomp` layer rather than `player_attack`, because a race
+  rival's `HurtBox` watches that layer and diving past somebody is not a punch.
   `shove(from, strength)` is the one entry point for "something moved this avatar
   that was not its input" — a blast, a rival's hit, whatever comes next. It is a
   decaying impulse *added* to velocity rather than a write to it, because
@@ -122,9 +166,23 @@ node with a strength on their scene, nothing more.
   dash requirement, sounds) are `EnemyStats` resources in `data/enemies/`.
   Death *reactions* stay in the owner script, hooked to the `killed` signal
   — golem petrifies into a platform, slime leaves a trampoline.
-- **Attacks** — `Strike` and `Shockwave` put their hitbox in the `"strike"`
-  group and stamp `owner_peer` metadata on it; enemies react to the group
-  and credit the metadata, so neither side knows the other's scenes. They also
+- **Bullet** (`scenes/Bullet.tscn`, `scripts/bullet.gd`) — Tessa's shot, and the
+  only ranged thing in the game. Spawned by the same kind of `call_local` RPC a
+  Strike is, then flat and straight at a fixed speed from a muzzle position every
+  machine agrees on, through geometry every machine rebuilt from the same seed —
+  so it needs no replication of its own. It dies on the first surface, and one
+  physics frame after touching an enemy rather than inside the overlap callback,
+  because an enemy resolves its own kills in `_physics_process` and would
+  otherwise sometimes find the hitbox already gone.
+- **Attacks** — `Strike`, `SwordStrike` and `Shockwave` put their hitbox in the
+  `"strike"` group and stamp `owner_peer` metadata on it; enemies react to the
+  group and credit the metadata, so neither side knows the other's scenes. The
+  first two are the *same script* with different exports: dwell, how far out it
+  sits, reach, shape and frames are all authored per scene, and which one a
+  climber swings is a field on their `CharacterDef`. Cyn's is one drawing spun
+  and scaled by an `AnimationPlayer` clip rather than a frame sequence, which is
+  the same rule as everywhere else: a transform that moves over time is a clip,
+  never a `sin()` in `_physics_process`. They also
   stamp `hit_reach`, how far the hitbox extends from its own centre, so anything
   that cares *how squarely* it was hit can ask — the bomb throws roughly twice as
   far for a dead-centre catch. A Shockwave updates it as the ring grows; a blast's
@@ -201,19 +259,50 @@ Three layers, deliberately separate:
 - **UI** actions (`pause`, `restart`, `music_toggle`, `debug_toggle`,
   `upgrade_1..4`) — bound to *logical* keycodes: a key advertised on screen
   as "R" must be the key that types R.
+- **Spectating** (`spectate_toggle`, `spectate_zoom_in/out`) and `revive` —
+  physical, like the gameplay actions they sit next to. `revive` and
+  `spectate_zoom_in` share E on purpose: you can only be doing one of the two,
+  because reviving needs an avatar and spectating means not having one.
 - **`UIInputHandler`** (`scripts/ui_input.gd`) — a node in World.tscn with
   `process_mode = ALWAYS`, so R and ESC keep working while the tree is
   paused. It consumes the event *before* dispatch, because `restart` frees
   the handler mid-call. It drives World's public API only.
 
+## Spectating
+
+**`SpectatorCam`** (`src/core/spectator_cam.gd`, a node in World.tscn) drives
+World's existing `Camera2D` rather than owning one, so screen shake, the 2D
+audio listener and `Fx.listener_position` still come from the same node they
+always did — a spectator hears the pit from where they are looking. Two modes,
+one key apart: follow a chosen climber, or fly free. Both zoom out, which is the
+point once the pit is eight levels deep.
+
+Two ways in, and neither is a mode the game is in: a peer that picked nothing in
+the lobby simply never gets an avatar, and a peer whose avatar is down has one
+lying on a platform. Both are the same code path — `World.player` is null or
+`is_downed`, so the camera has nothing to sit on.
+
+Nothing about it replicates. Where somebody's camera is pointing is their own
+business, and a spectator changes nothing about the run.
+
 ## UI
 
-All layout is authored: `scenes/ui/` (HUD, UpgradeMenu with all four
-buttons, PauseOverlay, EndScreen used twice with per-instance overrides),
+All layout is authored: `scenes/ui/` (HUD, UpgradeMenu, PauseOverlay, EndScreen
+used twice with per-instance overrides, CharacterSelect + CharacterStand),
 `scenes/MainMenu.tscn`, `scenes/Lobby.tscn`, with one shared `Theme`
 (`assets/ui/pit_theme.tres`) carrying button/panel/progress-bar styles.
 Scripts only feed data in (`src/ui/*.gd`). `tools/ui_check.tscn`
 screenshots every surface for eyeballing.
+
+Two surfaces build their children rather than authoring a fixed set, because the
+count is not fixed: the upgrade menu instances one `UpgradeButton.tscn` per
+remaining upgrade, and the character select one `CharacterStand.tscn` per roster
+entry. That is still "author it in a scene" — what the rule forbids is
+`Button.new()` plus a hand-built `StyleBoxFlat`, not instancing a scene.
+
+`CharacterSelect.tscn` is a panel, not a scene of its own, instanced into both
+the main menu and the lobby: it is the same question in both places and the
+answer goes to the same place.
 
 ## Presentation rules
 

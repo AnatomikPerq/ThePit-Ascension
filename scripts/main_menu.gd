@@ -5,6 +5,8 @@ extends Control
 
 @onready var title: Label = $UI/Title
 @onready var best_label: Label = $UI/BestScore
+@onready var character_btn: Button = $UI/CharacterBtn
+@onready var character_select: CharacterSelect = $CharacterSelect
 
 
 func _ready() -> void:
@@ -13,9 +15,16 @@ func _ready() -> void:
 		best_label.text = "BEST SCORE  %d" % Game.best_score
 		best_label.visible = true
 	$UI/StartBtn.pressed.connect(_start_game)
+	character_btn.pressed.connect(character_select.open)
+	character_select.closed.connect(_refresh_character)
 	$UI/MultiplayerBtn.pressed.connect(Router.to_lobby)
 	$UI/QuitBtn.pressed.connect(func() -> void: get_tree().quit())
+	_refresh_character()
 	_pulse_title()
+
+
+func _refresh_character() -> void:
+	character_btn.text = "CHARACTER: %s" % Game.character_def().display_name
 
 
 func _pulse_title() -> void:
@@ -33,7 +42,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# rebound and could not be driven by anything outside a real keyboard —
 	# the end-to-end suite could boot the menu and then had no way to leave it.
 	# ui_accept and ui_cancel are Godot's built-ins, so a gamepad works too.
-	if event.is_echo():
+	if event.is_echo() or character_select.visible:
 		return
 	if event.is_action_pressed(&"ui_accept"):
 		_start_game()

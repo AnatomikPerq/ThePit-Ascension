@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="CharacterRoster" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://src/defs/character_roster.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/defs/character_def.gd" id="2_character"]
+[ext_resource type="Resource" path="res://data/characters/cyn.tres" id="3_cyn"]
+[ext_resource type="Resource" path="res://data/characters/tessa.tres" id="4_tessa"]
+
+[resource]
+resource_name = "roster"
+script = ExtResource("1_script")
+characters = Array[ExtResource("2_character")]([ExtResource("3_cyn"), ExtResource("4_tessa")])

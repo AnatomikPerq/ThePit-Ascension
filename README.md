@@ -2,7 +2,7 @@
 
 ![The PIT: Ascension](docs/images/menu.png)
 
-**A seeded vertical platformer for Godot 4.7. You start at depth 8000.
+**A seeded vertical platformer for Godot 4.7. You start at depth 16000.
 The surface does not expect you.**
 
 Solo · Co-op · Race — plain ENet, no accounts, no services.
@@ -11,9 +11,9 @@ Solo · Co-op · Race — plain ENet, no accounts, no services.
 
 ---
 
-You are **Cyn**, at the bottom of a trash pit where broken worker drones are
-dumped. The Absolute Solver is active. Their heads are falling past you on the
-way down. Climb out.
+You are **Cyn** — or **Tessa** — at the bottom of a trash pit where broken worker
+drones are dumped. The Absolute Solver is active. Their heads are falling past
+you on the way down. Climb out.
 
 A fan project inspired by ***Murder Drones*** (GLITCH), episode 5. Open source,
 non-commercial, unaffiliated. The theme and the full content inventory are in
@@ -25,7 +25,8 @@ non-commercial, unaffiliated. The theme and the full content inventory are in
 
 | | Who | What it does | How it dies | What it leaves |
 | :-- | :--- | :--- | :--- | :--- |
-| 1 | **Cyn** | you | falling, mostly | — |
+| 1 | **Cyn** | you: five hearts, a heavy jump, everything earned on the way up | falling, mostly | — |
+| 1b | **Tessa** | you, harder: one heart, a shorter jump, but the second one from the start — and a blade, and a pistol | one mistake | — |
 | 2 | **Golem** | a broken drone head, falling straight down | any stomp, or a strike | a petrified platform |
 | 3 | **Slime** | falls while drifting sideways | any stomp, or a strike | a trampoline |
 | 4 | **Pursuer** | chases along the ground, jumps walls and gaps | any stomp, or a strike | — |
@@ -81,13 +82,17 @@ platforms, walls, level dividers, enemy pacing. The same seed builds the same
 world on every machine, which is what lets multiplayer send a number instead
 of a level.
 
-At 75%, 50% and 25% of the way up, the climb pays out:
+The pit is **eight levels**, 2000 deep each, and at the top of every other one
+the climb pays out:
 
 ![Choosing an upgrade](docs/images/upgrades.png)
 
-Double Jump, Sideways Strike, Shockwave Blast — or +1 max HP with a full heal
-if you would rather survive than show off. Chained kills within three seconds
-multiply the score, and the best run persists between sessions.
+Cyn is offered Double Jump, Sideways Strike, Shockwave Blast and +1 max HP;
+Tessa, a Sword Slash, a Pistol and a Triple Jump. Each is a one-time pick — the menu only
+ever shows what you have not taken, the last one left is simply handed to you,
+and a milestone with nothing left to give pays experience instead. Chained kills
+within three seconds multiply the score, and the best run persists between
+sessions.
 
 ## Multiplayer
 
@@ -100,6 +105,16 @@ joins by address. The host picks the mode and starts the climb for all of them.
 - **Race** — exactly one winner, and the other climbers are in your way for
   real: rivals are solid, so you can stand on a head, and Strike, Shockwave and
   dash-stomp all land on them.
+
+Everyone picks their own climber in the lobby — or picks **SPECTATOR** and comes
+along to watch.
+
+**Running out of hearts is not the end of you.** Your body drops where it fell
+and stays there; anyone still climbing can walk up and spend one of their own
+hearts to put you back on your feet with one of yours. You cannot pay on your
+last heart, and while you wait you watch the pit — following whoever you like,
+or flying the camera yourself. It works in every mode, race included. Solo death
+is exactly what it always was.
 
 The host can restart the run for everyone at any time. Anyone can leave for the
 main menu at any time. **Single-player never opens a socket.**
@@ -114,9 +129,14 @@ rules the model stands on — is [docs/NETWORKING.md](docs/NETWORKING.md).
 | Move left / right | `A` / `D`, `←` / `→` |
 | Jump | `Space`, `W` |
 | Dash down | `S`, `↓` |
-| Strike (when unlocked) | `Z`, `LMB` |
+| Strike / Sword (when unlocked) | `Z`, `LMB` |
+| Tessa's pistol (when unlocked) | `RMB`, `X` |
 | Shockwave (when unlocked) | `C` |
+| Revive a downed teammate | `E` |
 | Upgrade menu picks | `Z / X / C / V` |
+| Spectating: follow ↔ free camera | `TAB` |
+| Spectating: switch who you watch | `A` / `D` |
+| Spectating: zoom | mouse wheel, `Q` / `E` |
 | Pause / back | `ESC` |
 | Restart | `R` (in a session, host only — restarts for everyone) |
 | Music on/off | `M` |

@@ -32,8 +32,15 @@ const ENTITIES: Array = [
 	["res://scenes/MovingPlatform.tscn", Vector2(700, 520)],
 	["res://scenes/Projectile.tscn", Vector2(1100, 520)],
 	["res://scenes/Strike.tscn", Vector2(1300, 520)],
+	["res://scenes/SwordStrike.tscn", Vector2(1560, 520)],
+	["res://scenes/Bullet.tscn", Vector2(1760, 520)],
 	["res://scenes/Shockwave.tscn", Vector2(960, 820)],
 ]
+
+## Every climber, standing on the same baseline as the Player instance above so
+## a size or alignment change between two of them is visible side by side.
+const CHARACTERS_AT := Vector2(1490, 820)
+const CHARACTER_SPACING: float = 180.0
 
 var _out_path: String = "user://visual_check.png"
 var _player: Node
@@ -64,12 +71,31 @@ func _spawn_all() -> void:
 		if String(entry[0]).ends_with("Player.tscn"):
 			_player = node
 
+	spawned.append_array(_spawn_characters())
+
 	for node in spawned:
 		if node != _player and node.has_method("set_player_ref"):
 			node.set_player_ref(_player)
 		# Freeze: _ready() has run, nothing else will.
 		node.process_mode = Node.PROCESS_MODE_DISABLED
 		_freeze_animations(node)
+
+
+## One avatar per playable climber, on a shared baseline. The point is the
+## comparison: the art is authored on a taller canvas than the collision box, so
+## a character whose feet do not land where everybody else's do is a bug you can
+## see here and nowhere else.
+func _spawn_characters() -> Array[Node]:
+	var out: Array[Node] = []
+	var roster: CharacterRoster = load("res://data/characters/roster.tres")
+	var packed: PackedScene = load("res://scenes/Player.tscn")
+	for i in roster.characters.size():
+		var node: CharacterBody2D = packed.instantiate()
+		node.character = roster.characters[i]
+		add_child(node)
+		node.global_position = CHARACTERS_AT + Vector2(i * CHARACTER_SPACING, 0.0)
+		out.append(node)
+	return out
 
 
 ## Stop every AnimatedSprite2D so the capture always shows frame 0, and every

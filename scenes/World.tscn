@@ -1,7 +1,8 @@
-[gd_scene load_steps=10 format=3 uid="uid://cworld01"]
+[gd_scene load_steps=11 format=3 uid="uid://cworld01"]
 
 [ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui_input.gd" id="2_uiinput"]
+[ext_resource type="Script" path="res://src/core/spectator_cam.gd" id="10_spectator"]
 [ext_resource type="Resource" path="res://data/worlds/pit.tres" id="3_profile"]
 [ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="4_embers"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="5_hud"]
@@ -29,6 +30,9 @@ drag_bottom_margin = 0.25
 [node name="Platforms" type="Node2D" parent="." unique_id=1146815044]
 
 [node name="Enemies" type="Node2D" parent="." unique_id=83102023]
+
+[node name="Spectator" type="Node" parent="."]
+script = ExtResource("10_spectator")
 
 [node name="Trampolines" type="Node2D" parent="." unique_id=1972712193 groups=["trampoline_container"]]
 

@@ -111,8 +111,8 @@ func _shoot_run() -> void:
 	cyn.global_position.y = world.max_depth * SHOT_DEPTH_FRACTION
 	cyn.health = 999
 	# The HUD's ability icons only exist for abilities you own.
-	cyn.has_double_jump = true
-	cyn.has_strike = true
+	cyn.max_jumps = 2
+	cyn.has_attack = true
 	cyn.has_shockwave = true
 
 	await _frames(SPAWN_FRAMES)

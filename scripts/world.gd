@@ -5,9 +5,19 @@ extends Node2D
 ## tuning numbers live in the profile. Coordinates are ×2 scaled from the
 ## legacy Pygame FINAL.py.
 
-const CAMERA_BASE_OFFSET := Vector2(0, -120)
+## How far above the avatar the camera looks. The climb is upward, so the useful
+## half of the screen is the half above you.
+const CAMERA_BASE_OFFSET := Vector2(0, -180)
 const PLAYER_SCENE: PackedScene = preload("res://scenes/Player.tscn")
 const CONFETTI_BURST: BurstPreset = preload("res://data/fx/confetti.tres")
+
+## How close a climber has to be to a body before the pick-up is offered. The
+## host allows some slack on top when it checks, because it is judging two
+## replicated positions rather than the two the presser could see.
+const REVIVE_RANGE: float = 260.0
+const REVIVE_HOST_SLACK: float = 1.6
+## What a milestone pays once there is nothing left to unlock.
+const SPENT_MILESTONE_BONUS: int = 500
 
 ## Every number the world is built and paced from. One .tres per world.
 @export var profile: WorldProfile
@@ -15,7 +25,7 @@ const CONFETTI_BURST: BurstPreset = preload("res://data/fx/confetti.tres")
 ## exactly — the fingerprint harness does, and the multiplayer host will.
 @export var world_seed: int = 0
 
-var max_depth: float = 8000.0
+var max_depth: float = 16000.0
 
 # ── State ───────────────────────────────────────────────────────────────────
 enum GameState {PLAYING, UPGRADE_MENU, GAME_OVER, VICTORY, PAUSED}
@@ -24,7 +34,8 @@ var state: int = GameState.PLAYING
 ## peer_id -> avatar. The "player" group is how enemies discover targets;
 ## this dictionary is the authority for identity. Solo play is one entry.
 var players: Dictionary[int, CharacterBody2D] = {}
-## The avatar this machine steers: camera, HUD, input, end screens.
+## The avatar this machine steers: camera, HUD, input, end screens. Null for a
+## peer that joined to watch rather than climb.
 var player: CharacterBody2D
 
 var spawn_timer: float = 0.0
@@ -33,13 +44,24 @@ var current_spawn_interval: float = 2.0
 ## and its own zone crossings.
 var _upgrade_milestones: Dictionary[int, Array] = {}
 var _zone_milestones: Dictionary[int, Array] = {}
+## What the LOCAL climber has not taken yet, in menu order. Each upgrade leaves
+## the pool when it is taken, so the menu never offers the same thing twice; one
+## left is granted without asking and none left pays score instead.
+##
+## Only the local pool exists here. The host detects the milestone and tells the
+## peer that earned it; what that peer is still missing is that peer's business.
+var _my_upgrades: Array[UpgradeDef] = []
+## Host only: bodies a revive has already been granted for, waiting for the
+## owning machine to say it stood up. See _resolve_revive.
+var _revive_granted: Dictionary[int, bool] = {}
 
 var show_debug: bool = false
 var debug_free_zones: Array[Rect2] = []
 
 var bg_time: float = 0.0
 ## Set on every machine when the session's run ends (someone reached the
-## surface). Stops the host simulation and further milestones.
+## surface, or everybody went down). Stops the host simulation and further
+## milestones.
 var _session_over: bool = false
 
 # ── Node references ─────────────────────────────────────────────────────────
@@ -47,6 +69,7 @@ var _session_over: bool = false
 @onready var platforms_node: Node2D = $Platforms
 @onready var enemies_node: Node2D = $Enemies
 @onready var trampolines_node: Node2D = $Trampolines
+@onready var spectator: SpectatorCam = $Spectator
 @onready var hud: RunHud = $CanvasLayer/HUD
 @onready var upgrade_menu: UpgradeMenu = $CanvasLayer/UpgradeMenu
 @onready var pause_overlay: PauseOverlay = $CanvasLayer/PauseOverlay
@@ -58,7 +81,7 @@ func _ready() -> void:
 	max_depth = profile.max_depth()
 	current_spawn_interval = profile.spawn_interval_start
 
-	Game.new_run(Net.session_peers)
+	Game.new_run(_playing_peers())
 	Game.score_changed.connect(hud.on_score_changed)
 	upgrade_menu.chosen.connect(choose_upgrade)
 	# Every way out of a run, from every screen that offers one, lands on the
@@ -89,18 +112,28 @@ func _ready() -> void:
 	debug_free_zones = plan.free_zones
 
 	_spawn_players()
-	hud.build_hp_bar(player.max_health, player.health)
+	if is_instance_valid(player):
+		hud.build_hp_bar(player.max_health, player.health)
+	else:
+		# Nobody to climb with: this peer joined to watch.
+		_enter_spectator(Vector2(profile.world_width / 2.0, max_depth - 400.0))
 	# Before the first frame, so anything that goes off on frame one is judged
 	# from where the avatar actually is rather than from the world origin.
-	Fx.listener_position = player.global_position
+	Fx.listener_position = _eye_position()
 
 	# Camera limits — keep within world bounds
 	camera.limit_left = int(-profile.wall_thickness)
 	camera.limit_right = int(profile.world_width + profile.wall_thickness)
 	camera.limit_top = int(profile.camera_top_limit)
 	camera.limit_bottom = int(max_depth + profile.camera_bottom_margin)
-	# Offset player slightly below center so we see more above
+	# Offset player well below centre so most of the screen is the climb ahead
+	# rather than the drop behind.
 	camera.offset = CAMERA_BASE_OFFSET
+	# On the avatar from frame one. Without reset_smoothing() the camera starts
+	# at the world origin — the top-left corner of the shaft — and eases across,
+	# which reads as spawning off to one side.
+	camera.global_position = _eye_position()
+	camera.reset_smoothing()
 
 	# Set background
 	RenderingServer.set_default_clear_color(profile.theme.background_by_ascent.sample(0.0))
@@ -130,27 +163,51 @@ func _process(delta: float) -> void:
 		_check_milestones()
 		_check_zones()
 		_check_victory()
+	# Outside the block above on purpose: a wipe is exactly the case where
+	# nobody is left to simulate for.
+	_check_wipe()
+
+	_update_camera(delta)
+	_update_revive_prompts()
 
 	if state == GameState.GAME_OVER:
 		if not Net.active and Input.is_action_just_pressed("jump"):
 			restart()
 		return
 
+	if spectator.active:
+		hud.update_spectator(spectator.status_text())
+		return
+
 	if not is_instance_valid(player):
 		return
 
-	# Update camera to follow player (+ screen shake). The camera is also this
-	# machine's ear and eye: Fx measures how far away an event was from here, and
-	# the Camera2D is the 2D audio listener, so both kinds of distance come from
-	# the same place — the avatar this machine steers.
-	camera.global_position = player.global_position
-	camera.offset = CAMERA_BASE_OFFSET + Fx.get_shake_offset()
-	Fx.listener_position = player.global_position
+	if Net.active and state == GameState.PLAYING \
+			and Input.is_action_just_pressed(&"revive"):
+		_try_revive()
 
 	hud.update(player, max_depth, delta)
 
 	if show_debug:
 		queue_redraw()
+
+
+## The camera is also this machine's ear and eye: Fx measures how far away an
+## event was from here, and the Camera2D is the 2D audio listener, so both kinds
+## of distance come from the same place — whatever this machine is looking at.
+func _update_camera(delta: float) -> void:
+	if spectator.active:
+		spectator.step(delta)
+	elif is_instance_valid(player):
+		camera.global_position = player.global_position
+	camera.offset = CAMERA_BASE_OFFSET + Fx.get_shake_offset()
+	Fx.listener_position = camera.global_position
+
+
+func _eye_position() -> Vector2:
+	if is_instance_valid(player):
+		return player.global_position
+	return camera.global_position
 
 
 ## Solo: the run state machine gates everything. Session: the host simulates
@@ -163,9 +220,11 @@ func _should_simulate() -> bool:
 	return state == GameState.PLAYING
 
 
+## A body lying on a platform is not an avatar that is alive — it is one waiting
+## for somebody to spend a heart on it.
 func _any_avatar_alive() -> bool:
 	for avatar in players.values():
-		if is_instance_valid(avatar):
+		if is_instance_valid(avatar) and not avatar.is_downed:
 			return true
 	return false
 
@@ -174,9 +233,8 @@ func _any_avatar_alive() -> bool:
 func _update_background() -> void:
 	if state == GameState.VICTORY:
 		return
-	var ascent := 0.0
-	if is_instance_valid(player):
-		ascent = clampf(1.0 - player.global_position.y / max_depth, 0.0, 1.0)
+	var eye := _eye_position()
+	var ascent := clampf(1.0 - eye.y / max_depth, 0.0, 1.0)
 	# Sample the theme's palette by ascent progress.
 	var c := profile.theme.background_by_ascent.sample(ascent)
 	# Subtle slow "breathing" of the depths.
@@ -205,13 +263,14 @@ func is_choosing_upgrade() -> bool:
 	return state == GameState.UPGRADE_MENU
 
 
-## Index into the upgrade menu's four buttons, left to right.
+## Index into the buttons the upgrade menu is showing, left to right. Those are
+## whatever the local climber has not taken yet, so the index means nothing on
+## its own — it is only ever read against the same list the menu was built from.
 func choose_upgrade(index: int) -> void:
-	match index:
-		0: _on_double_jump_chosen()
-		1: _on_strike_chosen()
-		2: _on_shockwave_chosen()
-		3: _on_heal_chosen()
+	if index < 0 or index >= _my_upgrades.size():
+		return
+	_apply_upgrade(_my_upgrades[index])
+	_close_upgrade_menu()
 
 
 func show_notification(text: String) -> void:
@@ -229,7 +288,7 @@ func _reports_this_run(avatar: CharacterBody2D) -> bool:
 func _check_milestones() -> void:
 	for peer_id in players:
 		var avatar := players[peer_id]
-		if not _reports_this_run(avatar):
+		if not _reports_this_run(avatar) or avatar.is_downed:
 			continue
 		var milestones: Array = _upgrade_milestones[peer_id]
 		for i in range(milestones.size() - 1, -1, -1):
@@ -253,7 +312,7 @@ func _offer_upgrade() -> void:
 func _check_zones() -> void:
 	for peer_id in players:
 		var avatar := players[peer_id]
-		if not _reports_this_run(avatar):
+		if not _reports_this_run(avatar) or avatar.is_downed:
 			continue
 		var milestones: Array = _zone_milestones[peer_id]
 		for i in range(milestones.size() - 1, -1, -1):
@@ -280,7 +339,8 @@ func _check_victory() -> void:
 	if Net.active:
 		for peer_id in players:
 			var avatar := players[peer_id]
-			if _reports_this_run(avatar) and avatar.global_position.y < profile.victory_y:
+			if _reports_this_run(avatar) and not avatar.is_downed \
+					and avatar.global_position.y < profile.victory_y:
 				# Host-authoritative: the surface bonus lands before the
 				# broadcast so every end screen shows the final number.
 				Game.add_score(2000, Vector2.INF, Color.WHITE, peer_id)
@@ -293,11 +353,33 @@ func _check_victory() -> void:
 		_show_victory()
 
 
+## Everybody is on the floor and nobody is left to pick anyone up. The host
+## calls it; nothing else can, because nothing else can see every avatar.
+func _check_wipe() -> void:
+	if not Net.active or _session_over or not Net.is_sim_authority():
+		return
+	if players.is_empty() or _any_avatar_alive():
+		return
+	_end_session_wiped.rpc()
+
+
+@rpc("authority", "call_local", "reliable")
+func _end_session_wiped() -> void:
+	if _session_over:
+		return
+	_session_over = true
+	_leave_spectator()
+	state = GameState.GAME_OVER
+	game_over_screen.get_node(^"Title").text = "EVERYBODY IS DOWN"
+	game_over_screen.show_with(_stats_text(Game.finish_run()))
+
+
 ## The shared run is over: somebody reached the surface. In co-op that is a
 ## win for the team; in a race it is a win for exactly one machine.
 @rpc("authority", "call_local", "reliable")
 func _end_session(winner_peer: int) -> void:
 	_session_over = true
+	_leave_spectator()
 	if is_instance_valid(player):
 		player.can_input = false
 	var won := winner_peer == Game.local_peer_id
@@ -332,74 +414,192 @@ func _pause_game() -> void:
 func _resume_game() -> void:
 	state = GameState.PLAYING
 	if Net.active:
-		if is_instance_valid(player) and not _session_over:
+		if is_instance_valid(player) and not _session_over and not player.is_downed:
 			player.can_input = true
 	else:
 		get_tree().paused = false
 	pause_overlay.visible = false
 
 
+# ── Upgrades ────────────────────────────────────────────────────────────────
+## A milestone was crossed by the local climber. What happens depends on what
+## they have left: several to choose from opens the menu, exactly one is granted
+## without asking (there is no choice to make), and none pays score.
 func _show_upgrade_menu() -> void:
+	if not is_instance_valid(player):
+		return
+	if _my_upgrades.is_empty():
+		Game.add_score(SPENT_MILESTONE_BONUS, player.global_position, Color(0.98, 0.8, 0.3))
+		show_notification("EVERYTHING UNLOCKED  ·  +%d" % SPENT_MILESTONE_BONUS)
+		Audio.play(&"upgrade")
+		return
+	if _my_upgrades.size() == 1:
+		# Nothing to choose between. It still gets the sound the menu would have
+		# had, so the milestone is not silently swallowed.
+		Audio.play(&"upgrade")
+		_apply_upgrade(_my_upgrades[0])
+		return
 	state = GameState.UPGRADE_MENU
 	if not Net.active:
 		get_tree().paused = true
-	upgrade_menu.visible = true
+	upgrade_menu.open(_my_upgrades)
 	Audio.play(&"upgrade")
 
 
-func _on_double_jump_chosen() -> void:
-	if not player.has_double_jump:
-		player.has_double_jump = true
-		show_notification("UNLOCKED: DOUBLE JUMP")
-	else:
-		show_notification("ALREADY OWNED (XP BONUS)")
-		Game.add_score(300)
-	_close_upgrade_menu()
-
-
-func _on_strike_chosen() -> void:
-	if not player.has_strike:
-		player.has_strike = true
-		show_notification("UNLOCKED: SIDEWAYS STRIKE")
-	else:
-		show_notification("ALREADY OWNED (XP BONUS)")
-		Game.add_score(300)
-	_close_upgrade_menu()
-
-
-func _on_shockwave_chosen() -> void:
-	if not player.has_shockwave:
-		player.has_shockwave = true
-		show_notification("UNLOCKED: SHOCKWAVE BLAST")
-	else:
-		show_notification("ALREADY OWNED (XP BONUS)")
-		Game.add_score(300)
-	_close_upgrade_menu()
-
-
-func _on_heal_chosen() -> void:
-	player.max_health += 1
-	player.health = player.max_health
-	hud.build_hp_bar(player.max_health, player.health)
-	Audio.play(&"heal")
-	show_notification("MAX HP +1, FULLY HEALED")
-	_close_upgrade_menu()
+func _apply_upgrade(def: UpgradeDef) -> void:
+	if def == null or not is_instance_valid(player):
+		return
+	_my_upgrades.erase(def)
+	match def.effect:
+		UpgradeDef.Effect.EXTRA_JUMP:
+			player.max_jumps += 1
+		UpgradeDef.Effect.ATTACK:
+			player.has_attack = true
+		UpgradeDef.Effect.SHOCKWAVE:
+			player.has_shockwave = true
+		UpgradeDef.Effect.RANGED:
+			player.has_ranged = true
+		UpgradeDef.Effect.MAX_HP:
+			player.max_health += 1
+			player.health = player.max_health
+			hud.build_hp_bar(player.max_health, player.health)
+			Audio.play(&"heal")
+	show_notification("UNLOCKED: %s" % def.title)
 
 
 func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
-	state = GameState.PLAYING
-	if not Net.active:
-		get_tree().paused = false
+	if state == GameState.UPGRADE_MENU:
+		state = GameState.PLAYING
+		if not Net.active:
+			get_tree().paused = false
 	Audio.play(&"ui_click")
+
+
+# ── Reviving (multiplayer) ──────────────────────────────────────────────────
+## Every machine decides for itself which bodies its own climber is standing
+## close enough to pick up. Nothing about the sign crosses the wire.
+func _update_revive_prompts() -> void:
+	if not Net.active:
+		return
+	var can_pay: bool = is_instance_valid(player) and not player.is_downed \
+			and player.health > 1 and state == GameState.PLAYING
+	for peer_id in players:
+		var avatar := players[peer_id]
+		if not is_instance_valid(avatar):
+			continue
+		if not avatar.is_downed:
+			_revive_granted.erase(peer_id)
+		avatar.set_revive_prompt(can_pay and avatar.is_downed \
+				and avatar != player \
+				and avatar.global_position.distance_to(player.global_position) <= REVIVE_RANGE)
+
+
+## The nearest body this machine is currently offering to pick up.
+func _revive_target() -> CharacterBody2D:
+	if not is_instance_valid(player) or player.is_downed or player.health <= 1:
+		return null
+	var best: CharacterBody2D = null
+	var best_distance := REVIVE_RANGE
+	for peer_id in players:
+		var avatar := players[peer_id]
+		if not is_instance_valid(avatar) or not avatar.is_downed or avatar == player:
+			continue
+		var d := avatar.global_position.distance_to(player.global_position)
+		if d <= best_distance:
+			best_distance = d
+			best = avatar
+	return best
+
+
+func _try_revive() -> void:
+	var body := _revive_target()
+	if body == null:
+		return
+	# The host owns consequences, so it is the one that decides a revive
+	# happened — otherwise two climbers reaching the same body on the same frame
+	# both pay a heart for one pick-up.
+	if Net.is_host():
+		_resolve_revive(Game.local_peer_id, body.peer_id)
+	else:
+		_request_revive.rpc_id(1, body.peer_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _request_revive(target_peer: int) -> void:
+	if not Net.is_host():
+		return
+	_resolve_revive(multiplayer.get_remote_sender_id(), target_peer)
+
+
+## Host only. Judged from replicated state, with slack on the distance: the
+## presser saw two positions on their own screen and the host is looking at two
+## slightly older ones.
+func _resolve_revive(reviver_peer: int, target_peer: int) -> void:
+	if _session_over:
+		return
+	var body: CharacterBody2D = players.get(target_peer)
+	var reviver: CharacterBody2D = players.get(reviver_peer)
+	if not _reports_this_run(body) or not _reports_this_run(reviver):
+		return
+	if not body.is_downed or reviver.is_downed or reviver.health <= 1:
+		return
+	if body.global_position.distance_to(reviver.global_position) \
+			> REVIVE_RANGE * REVIVE_HOST_SLACK:
+		return
+	# `is_downed` clears on the body's OWN machine and takes a few frames to
+	# arrive back here, so without this latch two climbers reaching the same body
+	# on the same frame would both be charged for one pick-up. It is dropped
+	# again the moment that avatar is seen standing (or goes down afresh).
+	if _revive_granted.get(target_peer, false):
+		return
+	_revive_granted[target_peer] = true
+	_ask_to_revive(body)
+	_ask_to_pay(reviver)
+
+
+## Health belongs to the machine steering the avatar, so both halves of a revive
+## are requests to that machine — which the host may itself be.
+func _ask_to_revive(body: CharacterBody2D) -> void:
+	if body.is_multiplayer_authority():
+		body.stand_up.rpc()
+	else:
+		body.rpc_id(body.get_multiplayer_authority(), &"remote_revive")
+
+
+func _ask_to_pay(reviver: CharacterBody2D) -> void:
+	if reviver.is_multiplayer_authority():
+		reviver.pay_revive.rpc()
+	else:
+		reviver.rpc_id(reviver.get_multiplayer_authority(), &"remote_pay_revive")
+
+
+# ── Spectating ──────────────────────────────────────────────────────────────
+func _enter_spectator(at: Vector2) -> void:
+	if spectator.active:
+		return
+	spectator.begin(self, camera, at)
+	hud.enter_spectator()
+
+
+func _leave_spectator() -> void:
+	if not spectator.active:
+		return
+	spectator.end()
+	hud.exit_spectator()
+	if is_instance_valid(player):
+		hud.build_hp_bar(player.max_health, player.health)
 
 
 # ── End of run ──────────────────────────────────────────────────────────────
 func _stats_text(new_record: bool) -> String:
+	var run := Game.local_run()
+	if run == null:
+		# A peer that joined to watch has no run of its own to report.
+		return "TIME %s" % Game.run_time_text()
 	var depth_now := 0
 	if is_instance_valid(player):
 		depth_now = int(player.global_position.y)
-	var run := Game.local_run()
 	var text := "SCORE %d\nKILLS %d      MAX COMBO x%d\nDEPTH %d      TIME %s\n" % [
 		run.score, run.kills, run.max_combo, depth_now, Game.run_time_text(),
 	]
@@ -429,23 +629,47 @@ func _confetti() -> void:
 
 
 func _confetti_burst() -> void:
-	if is_instance_valid(player):
-		var pos := player.global_position + Vector2(randf_range(-500, 500), randf_range(-450, 150))
-		Fx.burst(pos, CONFETTI_BURST, Color.from_hsv(randf(), 0.8, 1.0))
+	var at := _eye_position()
+	var pos := at + Vector2(randf_range(-500, 500), randf_range(-450, 150))
+	Fx.burst(pos, CONFETTI_BURST, Color.from_hsv(randf(), 0.8, 1.0))
 
 
 # ── Player ──────────────────────────────────────────────────────────────────
+## Which climber a peer picked. Null means "watching", which is a real answer:
+## that peer gets no avatar and no run of its own.
+func _character_for(peer_id: int) -> CharacterDef:
+	if not Net.active:
+		return Game.character_def()
+	var id: StringName = Net.session_characters.get(peer_id, CharacterRoster.SPECTATOR)
+	if id == CharacterRoster.SPECTATOR:
+		return null
+	return Game.roster.resolve(id)
+
+
+## The session roster minus its spectators, in roster order. Solo is one entry.
+func _playing_peers() -> Array[int]:
+	if not Net.active:
+		return [Game.local_peer_id] as Array[int]
+	var out: Array[int] = []
+	for peer_id in Net.session_peers:
+		if _character_for(peer_id) != null:
+			out.append(peer_id)
+	return out
+
+
 ## Every machine builds the same avatar set from the session roster (solo:
 ## just the local player), spread around the spawn point. Deterministic, so
 ## node paths agree on every peer and the synchronizers line up.
 func _spawn_players() -> void:
-	var roster := Net.session_peers if Net.active else ([Game.local_peer_id] as Array[int])
+	var roster := _playing_peers()
 	for i in roster.size():
 		var avatar := _spawn_avatar(roster[i], i - (roster.size() - 1) * 0.5)
 		if roster[i] == Game.local_peer_id:
 			player = avatar
 			player.player_died.connect(_on_player_died)
 			player.player_damaged.connect(_on_player_damaged)
+			player.player_downed.connect(_on_player_downed)
+			player.player_revived.connect(_on_player_revived)
 
 
 ## One avatar, its identity and its personal milestone ladders.
@@ -453,11 +677,18 @@ func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	var avatar: CharacterBody2D = PLAYER_SCENE.instantiate()
 	avatar.name = "Avatar%d" % peer_id
 	avatar.peer_id = peer_id
+	# Before add_child, so the character is in place when _ready() reads it.
+	var def := _character_for(peer_id)
+	if def != null:
+		avatar.character = def
 	avatar.set_multiplayer_authority(peer_id)
 	# Only for the avatar this machine steers. A puppet keeps -1 until its owner
 	# says which run it is reporting from — see Player.run_seed.
 	if peer_id == Game.local_peer_id:
 		avatar.run_seed = world_seed
+		_my_upgrades.clear()
+		if def != null:
+			_my_upgrades.assign(def.upgrades)
 	avatar.global_position = Vector2(
 		profile.world_width / 2.0 + slot_offset * 90.0,
 		max_depth - profile.player_spawn_height)
@@ -494,6 +725,19 @@ func _on_player_died() -> void:
 	game_over_screen.show_with(_stats_text(Game.finish_run()))
 
 
+## Out of hearts in a session. The run is not over — the body is lying on a
+## platform waiting for a teammate — so the camera comes off it and this machine
+## watches the pit until somebody spends a heart.
+func _on_player_downed() -> void:
+	_enter_spectator(player.global_position)
+	show_notification("YOU ARE DOWN — SOMEONE CAN STILL PICK YOU UP")
+
+
+func _on_player_revived() -> void:
+	_leave_spectator()
+	show_notification("BACK ON YOUR FEET")
+
+
 func _on_player_damaged(new_health: int) -> void:
 	hud.update_hp(new_health)
 
@@ -519,10 +763,28 @@ func go_to_menu() -> void:
 
 
 # ── Enemy Spawning ──────────────────────────────────────────────────────────
+## Whose altitude the spawner works from. The local avatar whenever there is
+## one, which is every case that existed before spectators did; a host that
+## joined to watch has to pick somebody, and the climber nearest the surface is
+## the one the pit should be keeping busy.
+func _spawn_reference() -> CharacterBody2D:
+	if is_instance_valid(player) and not player.is_downed:
+		return player
+	var best: CharacterBody2D = null
+	for avatar in players.values():
+		if not is_instance_valid(avatar) or avatar.is_downed:
+			continue
+		if best == null or avatar.global_position.y < best.global_position.y:
+			best = avatar
+	return best
+
 
 func _spawn_enemy() -> void:
+	var reference := _spawn_reference()
+	if reference == null:
+		return
 	# Ascent progress: 0.0 at the bottom of the pit, 1.0 at the surface.
-	var current_depth := maxf(0.0, minf(max_depth, player.global_position.y))
+	var current_depth := maxf(0.0, minf(max_depth, reference.global_position.y))
 	var progress := 1.0 - (current_depth / max_depth)
 
 	# Weighted roll over the profile's spawn table.
@@ -556,13 +818,12 @@ func _spawn_enemy() -> void:
 		enemy.add_to_group(chosen.group)
 	# Position before add_child so the spawn packet carries it, and readable
 	# names (add_child(_, true)) so the MultiplayerSpawner can mirror it.
-	enemy.position = _spawn_position(chosen)
+	enemy.position = _spawn_position(chosen, reference.global_position.y)
 	enemies_node.add_child(enemy, true)
-	enemy.set_player_ref(player)
+	enemy.set_player_ref(reference)
 
 
-func _spawn_position(entry: SpawnEntry) -> Vector2:
-	var player_y := player.global_position.y
+func _spawn_position(entry: SpawnEntry, player_y: float) -> Vector2:
 	match entry.placement:
 		SpawnEntry.Placement.WALL:
 			var x := profile.wall_spawn_inset_left if randf() < 0.5 \

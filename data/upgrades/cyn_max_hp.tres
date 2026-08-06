@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="UpgradeDef" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/defs/upgrade_def.gd" id="1_script"]
+
+[resource]
+resource_name = "cyn_max_hp"
+script = ExtResource("1_script")
+id = &"max_hp"
+title = "+1 MAX HP"
+subtitle = "and a full heal with it"
+effect = 3

@@ -7,9 +7,11 @@
 # that the two machines agree on what matters: same world geometry from the
 # shared seed, both avatars with the right authorities, enemies mirrored to
 # the client, a host-credited kill visible in the client's run mirror, a host
-# restart landing both machines in the same new world, a race in which the
-# client's strike costs the host a heart on the host's own machine, and a bomb
-# the host sets off taking the same platform out of the CLIENT's world.
+# restart landing both machines in the same new world, both machines building
+# the two DIFFERENT climbers the two peers picked, a race in which the client's
+# strike costs the host a heart on the host's own machine, the client running
+# out of hearts and the host paying one of its own to stand it back up, and a
+# bomb the host sets off taking the same platform out of the CLIENT's world.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -66,4 +68,4 @@ if [ "$fail" -ne 0 ]; then
   echo "--- client log ---"; tail -30 "$CLIENT_LOG"
   exit 1
 fi
-echo "net probe ok: same world, both avatars, mirrored enemies, replicated score, host restart, race PvP, replicated destruction"
+echo "net probe ok: same world, both avatars, mirrored enemies, replicated score, host restart, character roster, race PvP, revive, replicated destruction"

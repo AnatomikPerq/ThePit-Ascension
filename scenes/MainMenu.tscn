@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://cmainmenu01"]
+[gd_scene load_steps=5 format=3 uid="uid://cmainmenu01"]
 
 [ext_resource type="Script" path="res://scripts/main_menu.gd" id="1_script"]
 [ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
 [ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="3_embers"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CharacterSelect.tscn" id="4_select"]
 
 [sub_resource type="Gradient" id="Gradient_menu_embers"]
 offsets = PackedFloat32Array(0, 0.15, 0.75, 1)
@@ -81,6 +82,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 28
 text = "START  (SPACE)"
 
+[node name="CharacterBtn" type="Button" parent="UI"]
+custom_minimum_size = Vector2(360, 64)
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "CHARACTER: CYN"
+
 [node name="MultiplayerBtn" type="Button" parent="UI"]
 custom_minimum_size = Vector2(360, 64)
 layout_mode = 2
@@ -109,5 +116,8 @@ horizontal_alignment = 1
 modulate = Color(1, 1, 1, 0.35)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "You start at depth 8000. The surface does not expect you."
+text = "You start at depth 16000. The surface does not expect you."
 horizontal_alignment = 1
+
+[node name="CharacterSelect" parent="." instance=ExtResource("4_select")]
+visible = false

@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CharacterDef" load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://src/defs/character_def.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/defs/upgrade_def.gd" id="2_upgrade"]
+[ext_resource type="SpriteFrames" path="res://data/animations/tessa_frames.tres" id="3_frames"]
+[ext_resource type="PackedScene" path="res://scenes/SwordStrike.tscn" id="4_attack"]
+[ext_resource type="Resource" path="res://data/upgrades/tessa_sword.tres" id="5_sword"]
+[ext_resource type="Resource" path="res://data/upgrades/tessa_triple_jump.tres" id="6_jump"]
+[ext_resource type="PackedScene" path="res://scenes/Bullet.tscn" id="7_bullet"]
+[ext_resource type="Resource" path="res://data/upgrades/tessa_gun.tres" id="8_gun"]
+
+[resource]
+resource_name = "tessa"
+script = ExtResource("1_script")
+id = &"tessa"
+display_name = "TESSA"
+blurb = "One heart, a shorter jump than Cyn's —
+but the second jump is free."
+accent = Color(0.72, 0.82, 0.88, 1)
+frames = ExtResource("3_frames")
+max_health = 1
+jump_scale = 0.92
+base_jumps = 2
+attack_scene = ExtResource("4_attack")
+attack_cooldown = 0.35
+attack_sound = &"strike"
+ranged_scene = ExtResource("7_bullet")
+ranged_cooldown = 2.0
+ranged_sound = &"strike"
+ranged_pose = 0.18
+muzzle_offset = Vector2(28, -10)
+upgrades = Array[ExtResource("2_upgrade")]([ExtResource("5_sword"), ExtResource("8_gun"), ExtResource("6_jump")])

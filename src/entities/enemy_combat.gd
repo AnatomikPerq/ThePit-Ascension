@@ -116,7 +116,8 @@ func _resolve_kills() -> void:
 	# 1. Strike or shockwave. Both add their hitbox to the "strike" group, so
 	#    neither this component nor any enemy knows those scenes exist. The
 	#    hitbox carries its owner's peer id as metadata for kill credit.
-	var areas: Array[Area2D] = stomp_area.get_overlapping_areas()
+	var top_areas: Array[Area2D] = stomp_area.get_overlapping_areas()
+	var areas: Array[Area2D] = top_areas.duplicate()
 	if damage_area:
 		areas.append_array(damage_area.get_overlapping_areas())
 	for area in areas:
@@ -124,7 +125,23 @@ func _resolve_kills() -> void:
 			_kill(true, area.get_meta(&"owner_peer", 0))
 			return
 
-	# 2. Stomp from above.
+	# 2. A dash-down box on the strip on top. It is the avatar's body grown a
+	#    couple of art pixels on every side and it exists only while the dive
+	#    does, so a dash that clips the shoulder still lands — and no dash-only
+	#    enemy needs asking, because a dash is what made the box.
+	#
+	#    Only the strip counts, never the body volume: a dive into the SIDE of a
+	#    spitter is not a stomp, and damage_area covers its whole shape.
+	for area in top_areas:
+		if not area.is_in_group(&"dash_stomp"):
+			continue
+		var diver := area.get_parent() as CharacterBody2D
+		if diver == null or not diver.is_in_group(&"player") or diver.velocity.y < 0.0:
+			continue
+		_stomp(diver)
+		return
+
+	# 3. A plain landing from above.
 	for body in stomp_area.get_overlapping_bodies():
 		if not body.is_in_group(&"player") or body.velocity.y < 0.0:
 			continue
@@ -132,22 +149,26 @@ func _resolve_kills() -> void:
 			# Landing on this one without a dash is a mistake, not an attack.
 			_hurt(body)
 			return
-		# The rebound and the sound both belong to the avatar's own machine. The
-		# sound used to play right here, which meant the host heard every client's
-		# boots: a stomp is a sound your own avatar makes, not an event in the pit
-		# that the lobby overhears.
-		if not Net.active or body.is_multiplayer_authority():
-			body.velocity.y = stats.stomp_rebound
-			body.dashing_down = false
-			if stats.stomp_sound != &"":
-				Audio.play(stats.stomp_sound)
-		else:
-			# The invincibility window on that machine absorbs the duplicate if
-			# its damage path also fired.
-			body.rpc_id(body.get_multiplayer_authority(), &"remote_stomp",
-				stats.stomp_rebound, stats.stomp_sound)
-		_kill(false, body.get("peer_id"))
+		_stomp(body)
 		return
+
+
+## A successful stomp: the rebound and the sound both belong to the avatar's own
+## machine. The sound used to play in _resolve_kills, which meant the host heard
+## every client's boots — a stomp is a sound your own avatar makes, not an event
+## in the pit that the lobby overhears.
+func _stomp(body: CharacterBody2D) -> void:
+	if not Net.active or body.is_multiplayer_authority():
+		body.velocity.y = stats.stomp_rebound
+		body.dashing_down = false
+		if stats.stomp_sound != &"":
+			Audio.play(stats.stomp_sound)
+	else:
+		# The invincibility window on that machine absorbs the duplicate if its
+		# damage path also fired.
+		body.rpc_id(body.get_multiplayer_authority(), &"remote_stomp",
+			stats.stomp_rebound, stats.stomp_sound)
+	_kill(false, body.get("peer_id"))
 
 
 ## Contact damage. Every machine runs this, but each hurts only ITS OWN

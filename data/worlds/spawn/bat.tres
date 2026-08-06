@@ -7,7 +7,7 @@
 resource_name = "bat"
 script = ExtResource("1_script")
 scene = ExtResource("2_scene")
-weight_start = 0.0
+weight_start = 6.0
 weight_end = 40.0
 placement = 0
 above_player_min = 1200.0

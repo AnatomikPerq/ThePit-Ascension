@@ -1,0 +1,84 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_attacking_1.png" id="1_0kt60"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_died.png" id="2_nksh7"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_falling_1.png" id="3_0wili"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_jumping_1.png" id="4_faxgt"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_running_1.png" id="5_15jcy"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_running_2.png" id="6_1yhgw"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_running_3.png" id="7_j4j20"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_shooting_1.png" id="8_octld"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_shooting_2.png" id="9_33voe"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_standing_1.png" id="10_er8x6"]
+[ext_resource type="Texture2D" path="res://assets/sprites/tessa/tessa_standing_2.png" id="11_3phqm"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_0kt60")
+}],
+"loop": 0,
+"name": &"attacking",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_nksh7")
+}],
+"loop": 1,
+"name": &"died",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_0wili")
+}],
+"loop": 1,
+"name": &"falling",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_faxgt")
+}],
+"loop": 1,
+"name": &"jumping",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("5_15jcy")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_1yhgw")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_j4j20")
+}],
+"loop": 1,
+"name": &"running",
+"speed": 6.666666666666667
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_octld")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_33voe")
+}],
+"loop": 0,
+"name": &"shooting",
+"speed": 14.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("10_er8x6")
+}, {
+"duration": 1.0,
+"texture": ExtResource("11_3phqm")
+}],
+"loop": 1,
+"name": &"standing",
+"speed": 3.3333333333333335
+}]
