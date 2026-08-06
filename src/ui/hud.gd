@@ -107,8 +107,8 @@ func update_spectator(text: String) -> void:
 	spectator_bar.text = text
 
 
-## Connected to Game.score_changed, which reports every peer; the HUD only
-## ever shows the local player's run.
+## Connected to the world's RunLedger, which reports every peer in the room;
+## the HUD only ever shows the local player's run.
 func on_score_changed(peer_id: int, score: int, combo: int) -> void:
 	if peer_id != Game.local_peer_id:
 		return

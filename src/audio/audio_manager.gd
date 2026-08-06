@@ -30,6 +30,12 @@ var music_enabled: bool = true:
 			_music_player.stream_paused = not value
 		music_toggled.emit(value)
 
+## Turned off wholesale by a dedicated server. A headless process has a dummy
+## audio driver, so nothing was ever heard — but every gameplay event still did
+## the bank lookup, rolled a pitch and pushed a stream into a polyphonic
+## playback, per room, per frame. A server says once that it has no ears.
+var enabled: bool = true
+
 ## Where positional sounds live, registered by the active scene the same way
 ## Fx.effects_root is (World does both in _ready). Without one, play_at falls
 ## back to the flat mix — a world sound in a menu is then merely
@@ -95,7 +101,7 @@ func _start_music() -> void:
 ## flavour — the kill sound rises with the combo multiplier. Pass 0.0 to use the
 ## bank's own pitch range.
 func play(id: StringName, pitch_override: float = 0.0) -> void:
-	if bank == null:
+	if not enabled or bank == null:
 		return
 	var def: SoundDef = bank.get_sound(id)
 	if def == null or def.stream == null:
@@ -119,7 +125,7 @@ func play(id: StringName, pitch_override: float = 0.0) -> void:
 ## each machine's own camera on its own avatar, so the same replicated event is
 ## loud for the player standing in it and inaudible for the one three levels up.
 func play_at(id: StringName, pos: Vector2, pitch_override: float = 0.0) -> void:
-	if bank == null:
+	if not enabled or bank == null:
 		return
 	var def: SoundDef = bank.get_sound(id)
 	if def == null or def.stream == null:

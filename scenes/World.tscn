@@ -1,8 +1,9 @@
-[gd_scene load_steps=11 format=3 uid="uid://cworld01"]
+[gd_scene load_steps=13 format=3 uid="uid://cworld01"]
 
 [ext_resource type="Script" uid="uid://ufqom876s6hm" path="res://scripts/world.gd" id="1_script"]
 [ext_resource type="Script" path="res://scripts/ui_input.gd" id="2_uiinput"]
 [ext_resource type="Script" path="res://src/core/spectator_cam.gd" id="10_spectator"]
+[ext_resource type="Script" path="res://src/core/run_ledger.gd" id="11_run"]
 [ext_resource type="Resource" path="res://data/worlds/pit.tres" id="3_profile"]
 [ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="4_embers"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HUD.tscn" id="5_hud"]
@@ -10,10 +11,14 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/PauseOverlay.tscn" id="7_pause"]
 [ext_resource type="PackedScene" path="res://scenes/ui/EndScreen.tscn" id="8_end"]
 [ext_resource type="PackedScene" path="res://scenes/fx/BlastFlash.tscn" id="9_flash"]
+[ext_resource type="PackedScene" path="res://scenes/ui/server/AdminPanel.tscn" id="12_admin"]
 
-[node name="World" type="Node2D" unique_id=1323789333]
+[node name="World" type="Node2D" groups=["net_session"] unique_id=1323789333]
 script = ExtResource("1_script")
 profile = ExtResource("3_profile")
+
+[node name="Run" type="Node" parent="."]
+script = ExtResource("11_run")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1636867807]
 position_smoothing_enabled = true
@@ -81,3 +86,5 @@ theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
 
 [node name="SubTitle" parent="CanvasLayer/VictoryScreen" index="1"]
 text = "It's solver time"
+
+[node name="AdminPanel" parent="." instance=ExtResource("12_admin")]

@@ -34,7 +34,7 @@ func _on_body_entered(body: Node2D) -> void:
 	# landed. Writing the velocity on a puppet only ever did nothing — its
 	# owner's next packet overwrote it — but the sound was real, and it meant a
 	# lobby heard every bounce anybody made.
-	if Net.active and int(body.get("peer_id")) != Game.local_peer_id:
+	if NetSession.of(self).active and int(body.get("peer_id")) != Game.local_peer_id:
 		return
 	body.velocity.y = LAUNCH_VELOCITY
 	body.jump_count = 0

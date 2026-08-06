@@ -36,11 +36,22 @@ func _on_visibility_changed() -> void:
 		restart_btn.release_focus()
 		menu_btn.release_focus()
 		return
-	var may_restart := not Net.active or Net.is_host()
+	# On a dedicated server the button is always offered; whether this player may
+	# restart the room is the server's call (`rooms/who_may_restart`) and it says
+	# so rather than the client guessing on its behalf.
+	var may_restart := not Net.active or Net.is_host() or Hub.on_server()
 	restart_btn.visible = may_restart
 	restart_btn.text = "RESTART FOR EVERYONE" if Net.active else "RESTART"
-	menu_btn.text = "LEAVE SESSION" if Net.active else "MAIN MENU"
+	menu_btn.text = _leave_text()
 	help.text = "ESC — resume      R — restart      M — music" if may_restart \
 		else "ESC — resume      M — music      (only the host can restart)"
 	# Keyboard first: RESUME takes focus, so Enter is always the safe answer.
 	resume_btn.grab_focus()
+
+
+## On a server you leave the ROOM and go back to the browser; the connection and
+## the conversation survive it. Anywhere else, leaving is leaving.
+func _leave_text() -> String:
+	if Hub.on_server():
+		return "BACK TO THE ROOMS"
+	return "LEAVE SESSION" if Net.active else "MAIN MENU"

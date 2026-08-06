@@ -36,7 +36,12 @@ static func targets(from: Node, epicentre: Vector2, def: BlastDef) -> PackedStri
 	var doomed := PackedStringArray()
 	if def == null or from == null or not from.is_inside_tree():
 		return doomed
-	for node in from.get_tree().get_nodes_in_group(Destructible.GROUP):
+	# This room's breakables, not the tree's. Every pit a dedicated server hosts
+	# is built in the same coordinate space, so a bomb going off at (900, 7000)
+	# in room 1 is at (900, 7000) in room 3 as well — and the tree-wide group
+	# would hand it every platform standing there, in pits its own players
+	# cannot see.
+	for node: Node in NetSession.in_world(from, Destructible.GROUP):
 		var breakable := node as Destructible
 		if breakable == null or not breakable.breakable():
 			continue
@@ -60,20 +65,29 @@ static func detonate(from: Node, epicentre: Vector2, def: BlastDef,
 		return
 	var tree := from.get_tree()
 	var point_blank := point_blank_peer > 0 and point_blank_peer == Game.local_peer_id
-	_show(epicentre, def, credited_peer, point_blank)
+	# Where the wave's own hitbox goes. The world, NOT `Fx.effects_root`: that
+	# hitbox is the thing that kills the enemies caught in the blast, which makes
+	# it simulation and not decoration — and a dedicated server deliberately
+	# registers no effects root, so hanging it there would have meant bombs
+	# quietly killing nothing on every server in existence. On a player's machine
+	# the two are the same node, so nothing changes there.
+	var host := NetSession.world_of(from)
+	if host == null:
+		host = Fx.effects_root
+	_show(host, epicentre, def, credited_peer, point_blank)
 	_break(tree, epicentre, doomed)
-	_hurt(tree, epicentre, def, point_blank)
+	_hurt(from, epicentre, def, point_blank)
 	# Score is the sim authority's call, exactly like a kill; add_score
 	# broadcasts the resulting number, so the popup lands everywhere.
 	if Net.is_sim_authority() and credited_peer > 0 and def.score > 0:
-		Game.add_score(def.score, epicentre, def.score_color, credited_peer)
+		RunLedger.of(from).add_score(def.score, epicentre, def.score_color, credited_peer)
 
 
 ## Fireball, noise, and the two pieces of feedback that fade with distance —
 ## which is what stops a bomb on the far side of the pit from shaking a screen
 ## it is nowhere near. Unless it went off against us, in which case distance is
 ## not a thing that applies.
-static func _show(epicentre: Vector2, def: BlastDef, credited_peer: int,
+static func _show(host: Node, epicentre: Vector2, def: BlastDef, credited_peer: int,
 		point_blank: bool) -> void:
 	if point_blank:
 		if def.point_blank_sound != &"":
@@ -92,11 +106,10 @@ static func _show(epicentre: Vector2, def: BlastDef, credited_peer: int,
 	# joins the "strike" group — so every enemy in the blast dies through the
 	# same path a punch kills them by, and the acid blobs fizzle, and neither
 	# EnemyCombat nor any enemy scene has to learn that bombs exist.
-	var root := Fx.effects_root
-	if not is_instance_valid(root):
+	if not is_instance_valid(host):
 		return
 	var boom: FxExplosion = EXPLOSION_SCENE.instantiate()
-	root.add_child(boom)
+	host.add_child(boom)
 	boom.global_position = epicentre
 	boom.fire(def, credited_peer)
 
@@ -116,9 +129,9 @@ static func _break(tree: SceneTree, epicentre: Vector2, doomed: PackedStringArra
 ## The shove reaches further than the damage does, so a bomb going off nearby
 ## moves you even when it did not hurt you, and it is applied whether the heart
 ## came off or not — being invincible does not make you heavy.
-static func _hurt(tree: SceneTree, epicentre: Vector2, def: BlastDef,
+static func _hurt(from: Node, epicentre: Vector2, def: BlastDef,
 		point_blank: bool) -> void:
-	for node in tree.get_nodes_in_group(&"player"):
+	for node: Node in NetSession.avatars_of(from):
 		var avatar := node as CharacterBody2D
 		if avatar == null or int(avatar.get("peer_id")) != Game.local_peer_id:
 			continue

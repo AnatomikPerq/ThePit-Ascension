@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ProtocolStamp" format=3]
+
+[ext_resource type="Script" path="res://src/net/protocol_stamp.gd" id="1_74sdr"]
+
+[resource]
+script = ExtResource("1_74sdr")
+content_hash = "47af80c4447d91bab1a2cf8532735c2742502c8e9ef40f6efb80633a2e3e773a"
+file_count = 91
+generated_at = "2026-08-06T11:58:20"
+sources = PackedStringArray("res://src/core", "res://src/defs", "res://src/entities", "res://src/net", "res://src/world", "res://scripts", "res://scenes", "res://data/characters", "res://data/enemies", "res://data/upgrades", "res://data/worlds", "res://data/animations")

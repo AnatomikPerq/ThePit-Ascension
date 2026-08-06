@@ -46,14 +46,19 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Returns the action to run for this event, or an empty Callable if we do not
 ## handle it.
 func _resolve(event: InputEvent) -> Callable:
-	if event.is_action_pressed(&"restart"):
-		return world.restart
-	if event.is_action_pressed(&"pause"):
-		return world.cancel_pressed
-	if event.is_action_pressed(&"music_toggle"):
-		return _toggle_music
-	if event.is_action_pressed(&"debug_toggle"):
-		return world.toggle_debug
+	# A table rather than a ladder of ifs: the ladder was one `return` over
+	# gdlint's limit and, more to the point, this is the list somebody reads to
+	# find out what the game does with a key.
+	var bound := {
+		&"restart": world.restart,
+		&"pause": world.cancel_pressed,
+		&"music_toggle": _toggle_music,
+		&"debug_toggle": world.toggle_debug,
+		&"admin_panel": world.toggle_admin_panel,
+	}
+	for action: StringName in bound:
+		if event.is_action_pressed(action):
+			return bound[action]
 
 	if world.is_choosing_upgrade():
 		for i in UPGRADE_ACTIONS.size():

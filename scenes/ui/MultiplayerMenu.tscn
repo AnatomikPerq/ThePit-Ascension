@@ -1,0 +1,147 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/ui/multiplayer_menu.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+[ext_resource type="Script" path="res://src/directory/server_finder.gd" id="3_finder"]
+[ext_resource type="PackedScene" path="res://scenes/fx/Embers.tscn" id="4_embers"]
+
+[node name="MultiplayerMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="Embers" parent="." instance=ExtResource("4_embers")]
+position = Vector2(960, 1140)
+amount = 40
+lifetime = 12.0
+preprocess = 12.0
+local_coords = true
+emission_rect_extents = Vector2(1000, 30)
+spread = 12.0
+gravity = Vector2(0, -22)
+initial_velocity_min = 30.0
+initial_velocity_max = 90.0
+scale_amount_min = 1.5
+scale_amount_max = 3.5
+
+[node name="Finder" type="Node" parent="."]
+script = ExtResource("3_finder")
+
+[node name="UI" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 120.0
+offset_top = 60.0
+offset_right = -120.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 60
+text = "MULTIPLAYER"
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="UI"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Servers on the internet, servers on your own network, and the ones you saved.
+A badge next to a name is a server the developer has checked — hover it to read why."
+horizontal_alignment = 1
+
+[node name="Toolbar" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RefreshBtn" type="Button" parent="UI/Toolbar"]
+custom_minimum_size = Vector2(180, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "REFRESH"
+
+[node name="FilterEdit" type="LineEdit" parent="UI/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 22
+placeholder_text = "filter by name, address, region or tag"
+clear_button_enabled = true
+
+[node name="VerifiedBtn" type="Button" parent="UI/Toolbar"]
+custom_minimum_size = Vector2(230, 50)
+layout_mode = 2
+toggle_mode = true
+theme_override_font_sizes/font_size = 22
+text = "VERIFIED ONLY"
+
+[node name="Body" type="Control" parent="UI"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Scroll" type="ScrollContainer" parent="UI/Body"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="UI/Body/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="EmptyLabel" type="Label" parent="UI/Body"]
+modulate = Color(1, 1, 1, 0.5)
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 22
+text = "LOOKING…"
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="StatusLabel" type="Label" parent="UI"]
+modulate = Color(1, 1, 1, 0.7)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.72, 0.35, 1)
+theme_override_font_sizes/font_size = 20
+horizontal_alignment = 1
+
+[node name="Footer" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="DirectBtn" type="Button" parent="UI/Footer"]
+custom_minimum_size = Vector2(330, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "CONNECT BY ADDRESS"
+
+[node name="LanBtn" type="Button" parent="UI/Footer"]
+custom_minimum_size = Vector2(330, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "OPEN MY OWN GAME"
+
+[node name="BackBtn" type="Button" parent="UI/Footer"]
+custom_minimum_size = Vector2(240, 56)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "BACK  (ESC)"

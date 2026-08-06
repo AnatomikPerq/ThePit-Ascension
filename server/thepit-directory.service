@@ -1,0 +1,38 @@
+# A systemd unit for the SERVER DIRECTORY — the service that lists dedicated
+# servers. Copy to /etc/systemd/system/, edit the paths, then:
+#
+#   systemctl daemon-reload && systemctl enable --now thepit-directory
+#   journalctl -u thepit-directory -f
+#
+# It is a different program from the game server and keeps different files under
+# the same names, so it gets its own data directory and its own unit. There is no
+# typed console under a service manager, which matters more here than it does for
+# a game server: `key issue` is a console command. Issue keys by stopping it and
+# running it attached to a terminal for a minute, or on a copy of its data
+# directory — a key is only ever read from keys.json.
+
+[Unit]
+Description=The PIT: Ascension server directory
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thepit
+Group=thepit
+WorkingDirectory=/opt/thepit
+ExecStart=/opt/thepit/thepit-server --directory --data /var/lib/thepit-directory
+Environment=TERM=dumb
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/thepit-directory
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,12 @@
 # Godot 4+ specific ignores
 .godot/
 *.translation
-export_presets.cfg
+
+# export_presets.cfg IS committed, against Godot's default advice. That advice
+# exists because the file can carry machine-specific paths; ours carries none,
+# and what it does carry is the dedicated-server build. A server built by hand
+# each time is a server eventually built wrong — and "wrong" here means a build
+# whose fingerprint does not match the clients it is meant to serve.
 **/*.blend1
 .vscode
 output.md
@@ -21,3 +26,16 @@ tests_e2e/__pycache__/
 # .claude/settings.json IS committed — it carries the lint hook, and the point
 # is that a clone gets it. Only the personal override is ignored.
 .claude/settings.local.json
+
+# What a running server writes. `storage/dir` decides where; these are the
+# defaults and the names the probes use. The directory service keeps its own,
+# because the two programs write different files under the same names.
+server-data/
+directory-data/
+.probe-server-data/
+.probe-directory-data/
+.probe-directory-server-data/
+.server-test/
+
+# Exported builds.
+build/

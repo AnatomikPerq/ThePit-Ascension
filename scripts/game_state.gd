@@ -1,30 +1,28 @@
 extends Node
-## Game — autoload holding run state, one PlayerRun per peer. Enemies report
-## kills here with the killer's peer id; the HUD listens to score_changed and
-## shows the local peer's numbers. Solo play is a single run for peer 1.
+## Game — autoload for what belongs to this MACHINE rather than to a run: the
+## climber roster, the pick this machine plays, the best score it has ever set,
+## and which peer it is.
+##
+## The run itself — score, kills, combo — moved out to `RunLedger`, a node inside
+## each World. There is one per room, because a dedicated server hosts several
+## runs at once and a single table keyed by nothing would have them overwriting
+## each other (see RunLedger for the whole reasoning). What is left here is the
+## facade: the active world registers its ledger and the old questions keep
+## their old answers, exactly the way `Fx.effects_root` works.
+##
+## A dedicated server registers nothing, because it is looking at no world. That
+## is deliberate: on a server, `Game.local_run()` has no correct answer, and it
+## returning the fallback ledger's empty run is better than it returning some
+## arbitrary room's.
 
 signal score_changed(peer_id: int, score: int, combo: int)
 
-const COMBO_WINDOW: float = 3.0
 const SAVE_PATH := "user://thepit_save.cfg"
-## Camera kick on a kill, and what each further step of the combo adds.
-## CLAUDE.md §4 has said since the hitstop was removed that kill feedback is
-## "screen shake, particles, the score popup and the sound" — the shake was
-## the one of the four nobody actually wired up.
-const KILL_SHAKE: float = 0.3
-const KILL_SHAKE_PER_COMBO: float = 0.05
-const KILL_SHAKE_MAX: float = 0.6
-## Kills are broadcast, so their feedback fades over this distance. Without it
-## every player's screen jumps for everybody else's fights, anywhere in the pit.
-const KILL_FEEDBACK_RANGE: float = 2600.0
 
-## Per-player run state for the current run, keyed by peer id.
-var runs: Dictionary[int, PlayerRun] = {}
-## The peer whose run this machine's HUD and end screens follow. 1 in solo
-## and for a multiplayer host; the Net layer sets the real id on join.
+## The peer whose run this machine's HUD and end screens follow. 1 in solo and
+## for a peer-to-peer host; the Net layer sets the real id on join.
 var local_peer_id: int = 1
 var best_score: int = 0
-var run_start_ms: int = 0
 
 ## Every playable climber, in the order the select screen shows them.
 var roster: CharacterRoster
@@ -33,18 +31,46 @@ var roster: CharacterRoster
 ## character this one does not) simply falls back instead of failing to load.
 var selected_character: StringName = &""
 
-var _kill_burst: BurstPreset
+## The run this machine is watching. A World registers its own on entering the
+## tree and puts this back on the way out — so between runs, and in every test
+## that never builds a world, it is the standalone one below.
+var ledger: RunLedger:
+	set(value):
+		if ledger == value:
+			return
+		if ledger != null and ledger.score_changed.is_connected(_relay_score):
+			ledger.score_changed.disconnect(_relay_score)
+		ledger = value if value != null else _fallback
+		if ledger != null and not ledger.score_changed.is_connected(_relay_score):
+			ledger.score_changed.connect(_relay_score)
+
+## The ledger for code that is not inside a world: the unit suites that build an
+## enemy and a player under a bare Node2D, and the probes. It is a real node so
+## that combo decay still runs.
+var _fallback: RunLedger
 
 
 func _ready() -> void:
-	# load, not preload consts: an autoload's preloads pin resources past
-	# shutdown (same lesson as the sound bank).
-	_kill_burst = load("res://data/fx/kill.tres")
 	roster = load("res://data/characters/roster.tres")
+	_fallback = RunLedger.new()
+	_fallback.name = "Run"
+	add_child(_fallback)
+	ledger = _fallback
 	var cf := ConfigFile.new()
 	if cf.load(SAVE_PATH) == OK:
 		best_score = cf.get_value("run", "best_score", 0)
 		selected_character = StringName(cf.get_value("run", "character", ""))
+
+
+func _relay_score(peer_id: int, score: int, combo: int) -> void:
+	score_changed.emit(peer_id, score, combo)
+
+
+## Put the facade back on the standalone ledger. A world calls this on its way
+## out so that a freed ledger is never the one `Game.local_run()` answers from.
+func release_ledger(leaving: RunLedger) -> void:
+	if ledger == leaving:
+		ledger = _fallback
 
 
 # ── Character choice ────────────────────────────────────────────────────────
@@ -54,8 +80,8 @@ func character_def() -> CharacterDef:
 	return roster.resolve(selected_character)
 
 
-## The id a peer is assumed to have picked when it never said. Used by Net when
-## it locks the session roster.
+## The id a peer is assumed to have picked when it never said. Used when a
+## session roster is locked.
 func default_character_id() -> StringName:
 	var fallback := roster.fallback()
 	return fallback.id if fallback != null else CharacterRoster.SPECTATOR
@@ -68,25 +94,39 @@ func select_character(id: StringName) -> void:
 	_save()
 
 
-## Start a fresh run for the given peers. Empty means "just the local peer",
-## which is what solo play and every test uses.
+# ── The run, through whichever ledger is active ─────────────────────────────
+var runs: Dictionary[int, PlayerRun]:
+	get:
+		return ledger.runs
+
+
 func new_run(peer_ids: Array[int] = []) -> void:
-	runs.clear()
-	var ids := peer_ids if not peer_ids.is_empty() else ([local_peer_id] as Array[int])
-	for id in ids:
-		var run := PlayerRun.new()
-		run.peer_id = id
-		runs[id] = run
-		score_changed.emit(id, 0, 0)
-	run_start_ms = Time.get_ticks_msec()
+	ledger.new_run(peer_ids)
 
 
 func run_of(peer_id: int) -> PlayerRun:
-	return runs.get(peer_id)
+	return ledger.run_of(peer_id)
 
 
 func local_run() -> PlayerRun:
-	return runs.get(local_peer_id)
+	return ledger.local_run()
+
+
+func enemy_killed(pos: Vector2, base_points: int, color: Color, killer_peer: int = 0) -> void:
+	ledger.enemy_killed(pos, base_points, color, killer_peer)
+
+
+func add_score(points: int, pos: Vector2 = Vector2.INF, color: Color = Color.WHITE,
+		peer_id: int = 0) -> void:
+	ledger.add_score(points, pos, color, peer_id)
+
+
+func run_time_seconds() -> float:
+	return ledger.run_time_seconds()
+
+
+func run_time_text() -> String:
+	return ledger.run_time_text()
 
 
 ## Called once at the end of a run. Persists a new record for THIS machine's
@@ -105,111 +145,3 @@ func _save() -> void:
 	cf.set_value("run", "best_score", best_score)
 	cf.set_value("run", "character", String(selected_character))
 	cf.save(SAVE_PATH)
-
-
-func _process(delta: float) -> void:
-	for run in runs.values():
-		if run.combo > 0:
-			run.combo_time -= delta
-			if run.combo_time <= 0.0:
-				run.combo = 0
-				score_changed.emit(run.peer_id, run.score, 0)
-
-
-## Called by enemies when a player kills/converts them — only where the sim
-## authority lives (solo, or the host). `killer_peer` 0 means "the local
-## player". Chained kills within COMBO_WINDOW multiply the reward for that
-## player only. In a session the resulting numbers are broadcast as an EVENT;
-## every machine fires its own cosmetics from it.
-func enemy_killed(pos: Vector2, base_points: int, color: Color, killer_peer: int = 0) -> void:
-	if Net.active and not multiplayer.is_server():
-		return # kills are the host's call
-	var run := run_of(killer_peer if killer_peer != 0 else local_peer_id)
-	if run == null:
-		return
-	run.kills += 1
-	run.combo += 1
-	run.max_combo = maxi(run.max_combo, run.combo)
-	run.combo_time = COMBO_WINDOW
-	var gained := base_points * run.combo
-	run.score += gained
-	score_changed.emit(run.peer_id, run.score, run.combo)
-	_kill_feedback(pos, gained, run.combo, color)
-	if Net.is_host():
-		_remote_kill.rpc(run.peer_id, pos, gained, color,
-			run.score, run.kills, run.combo, run.max_combo)
-
-
-## Clients mirror the host's authoritative numbers and fire local cosmetics.
-@rpc("authority", "call_remote", "reliable")
-func _remote_kill(peer_id: int, pos: Vector2, gained: int, color: Color,
-		score: int, kills: int, combo: int, max_combo: int) -> void:
-	var run := run_of(peer_id)
-	if run == null:
-		return
-	run.score = score
-	run.kills = kills
-	run.combo = combo
-	run.max_combo = max_combo
-	run.combo_time = COMBO_WINDOW
-	score_changed.emit(peer_id, run.score, run.combo)
-	_kill_feedback(pos, gained, combo, color)
-
-
-func _kill_feedback(pos: Vector2, gained: int, combo: int, color: Color) -> void:
-	var text := "+%d" % gained
-	if combo > 1:
-		text += "  x%d" % combo
-	Fx.popup(pos + Vector2(0, -50), text, color)
-	Fx.burst(pos, _kill_burst, color, 14 + mini(combo * 2, 16))
-	Fx.shake_from(pos, minf(KILL_SHAKE + combo * KILL_SHAKE_PER_COMBO, KILL_SHAKE_MAX),
-		KILL_FEEDBACK_RANGE)
-	Audio.play_at(&"kill", pos, clampf(0.9 + combo * 0.07, 0.9, 1.7))
-
-
-## Flat score without combo (projectiles, milestones). `peer_id` 0 = local.
-## Clients route through the host so the host's numbers stay authoritative.
-func add_score(points: int, pos: Vector2 = Vector2.INF, color: Color = Color.WHITE,
-		peer_id: int = 0) -> void:
-	var target := peer_id if peer_id != 0 else local_peer_id
-	if Net.active and not multiplayer.is_server():
-		_request_score.rpc_id(1, points, pos, color, target)
-		return
-	var run := run_of(target)
-	if run == null:
-		return
-	run.score += points
-	score_changed.emit(run.peer_id, run.score, run.combo)
-	if pos != Vector2.INF:
-		Fx.popup(pos + Vector2(0, -40), "+%d" % points, color, 24)
-	if Net.is_host():
-		_remote_score.rpc(run.peer_id, run.score, run.combo, points, pos, color)
-
-
-## A client may only ask for score on its own behalf.
-@rpc("any_peer", "call_remote", "reliable")
-func _request_score(points: int, pos: Vector2, color: Color, peer_id: int) -> void:
-	if multiplayer.get_remote_sender_id() != peer_id:
-		return
-	add_score(points, pos, color, peer_id)
-
-
-@rpc("authority", "call_remote", "reliable")
-func _remote_score(peer_id: int, score: int, combo: int, points: int,
-		pos: Vector2, color: Color) -> void:
-	var run := run_of(peer_id)
-	if run == null:
-		return
-	run.score = score
-	score_changed.emit(peer_id, score, combo)
-	if pos != Vector2.INF:
-		Fx.popup(pos + Vector2(0, -40), "+%d" % points, color, 24)
-
-
-func run_time_seconds() -> float:
-	return float(Time.get_ticks_msec() - run_start_ms) / 1000.0
-
-
-func run_time_text() -> String:
-	var total := int(run_time_seconds())
-	return "%d:%02d" % [total / 60, total % 60]

@@ -50,8 +50,34 @@ step "world fingerprint"
 step "net probe (host + client over a localhost socket)"
 bash tools/run_net_probe.sh "$GODOT" | tail -1 || fail=1
 
+step "server probe (a dedicated server + two clients in two rooms)"
+bash tools/run_server_probe.sh "$GODOT" | tail -1 || fail=1
+
+step "directory probe (a directory + an announcing server + a real browser)"
+bash tools/run_directory_probe.sh "$GODOT" | tail -1 || fail=1
+
 step "conventions"
 bash tools/check_conventions.sh || fail=1
+
+# Not a gate — a notice. The fingerprint is what a client and a dedicated server
+# compare before they will play together, so a commit that moves it is a commit
+# that obliges you to rebuild and redeploy the server. Regenerating it here means
+# it is always committed WITH the change that moved it, instead of being
+# remembered later.
+step "protocol fingerprint"
+before=$(grep -o 'content_hash = "[^"]*"' data/net/protocol_stamp.tres || true)
+"$GODOT" --headless --path . -s tools/build_protocol_stamp.gd 2>&1 | grep "protocol stamp" || fail=1
+after=$(grep -o 'content_hash = "[^"]*"' data/net/protocol_stamp.tres || true)
+if [ "$before" != "$after" ]; then
+  printf '
+  *** THE GAME CHANGED. THE DEDICATED SERVER MUST BE REBUILT AND RESTARTED
+'
+  printf '  *** FROM THIS COMMIT, OR IT WILL REFUSE EVERY CLIENT BUILT FROM IT.
+'
+  printf '  *** data/net/protocol_stamp.tres has been regenerated — commit it.
+
+'
+fi
 
 if [ "$fail" -ne 0 ]; then
   printf '\nVERIFICATION FAILED\n'; exit 1

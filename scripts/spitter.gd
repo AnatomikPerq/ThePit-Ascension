@@ -65,4 +65,5 @@ func fire() -> void:
 	var muzzle: Vector2 = global_position + Vector2(28.0 if _facing_right else -28.0, -10.0)
 	proj.setup(muzzle, combat.player.global_position, combat.player)
 	# add_child(_, true): readable names let the MultiplayerSpawner mirror it.
+	NetSession.of(self).scope(proj)
 	get_parent().add_child(proj, true)

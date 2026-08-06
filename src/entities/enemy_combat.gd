@@ -56,6 +56,10 @@ var player: CharacterBody2D
 var is_dead: bool = false
 
 @onready var _owner_2d: Node2D = get_parent()
+## Resolved lazily rather than @onready: an enemy spawned by a MultiplayerSpawner
+## is added to the tree by the engine, and this component is asked about the room
+## it is in long before anything guarantees the world above it is settled.
+var _cached_session: NetSession
 @onready var stomp_area: Area2D = get_node_or_null(stomp_area_path)
 @onready var damage_area: Area2D = get_node_or_null(damage_area_path)
 
@@ -65,7 +69,18 @@ func _ready() -> void:
 		# Nobody assigned one, so fall back to a player in the scene. The sim
 		# authority re-targets to the nearest living avatar every frame anyway;
 		# this only seeds the reference.
-		player = get_tree().get_first_node_in_group(&"player") as CharacterBody2D
+		var found := NetSession.avatars_of(self)
+		player = found[0] as CharacterBody2D if not found.is_empty() else null
+
+
+## The room this enemy belongs to. Cached on first ask rather than resolved in
+## _ready(): a spawner-created enemy is parented by the engine and this is the
+## first thing that has to be true about it, so asking once it is settled is
+## cheaper and safer than asking early and being wrong.
+func _session() -> NetSession:
+	if _cached_session == null:
+		_cached_session = NetSession.of(self)
+	return _cached_session
 
 
 func _physics_process(_delta: float) -> void:
@@ -96,7 +111,7 @@ func _physics_process(_delta: float) -> void:
 func _nearest_target() -> CharacterBody2D:
 	var best: CharacterBody2D = null
 	var best_distance := INF
-	for node in get_tree().get_nodes_in_group(&"player"):
+	for node: Node in NetSession.avatars_of(self):
 		var avatar := node as CharacterBody2D
 		if avatar == null or not is_instance_valid(avatar) or avatar.get("health") <= 0:
 			continue
@@ -158,7 +173,7 @@ func _resolve_kills() -> void:
 ## every client's boots — a stomp is a sound your own avatar makes, not an event
 ## in the pit that the lobby overhears.
 func _stomp(body: CharacterBody2D) -> void:
-	if not Net.active or body.is_multiplayer_authority():
+	if not _session().active or body.is_multiplayer_authority():
 		body.velocity.y = stats.stomp_rebound
 		body.dashing_down = false
 		if stats.stomp_sound != &"":
@@ -202,7 +217,7 @@ func _resolve_local_damage() -> void:
 
 
 func _hurt(body: Node) -> void:
-	if not Net.active or body.is_multiplayer_authority():
+	if not _session().active or body.is_multiplayer_authority():
 		body.take_damage()
 	else:
 		body.rpc_id(body.get_multiplayer_authority(), &"remote_hurt")
@@ -210,10 +225,7 @@ func _hurt(body: Node) -> void:
 
 func _kill(by_strike: bool, killer_peer: Variant = 0) -> void:
 	var peer: int = killer_peer if killer_peer is int else 0
-	if Net.active:
-		_kill_everywhere.rpc(by_strike, peer)
-	else:
-		_kill_everywhere(by_strike, peer)
+	_session().broadcast(self, &"_kill_everywhere", [by_strike, peer])
 
 
 ## The death happens on every machine — golems must petrify into platforms
@@ -224,7 +236,8 @@ func _kill_everywhere(by_strike: bool, killer_peer: int) -> void:
 		return
 	is_dead = true
 	if Net.is_sim_authority():
-		Game.enemy_killed(_owner_2d.global_position, stats.score, stats.score_color, killer_peer)
+		RunLedger.of(self).enemy_killed(
+			_owner_2d.global_position, stats.score, stats.score_color, killer_peer)
 	killed.emit(by_strike)
 	# The owner may have disposed of itself already (the slime becomes a
 	# trampoline). Only the sim authority frees: the MultiplayerSpawner mirrors

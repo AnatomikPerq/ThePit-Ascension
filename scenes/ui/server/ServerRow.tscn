@@ -1,0 +1,147 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/ui/server_row.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_row"]
+bg_color = Color(1, 1, 1, 0.04)
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_official"]
+bg_color = Color(0.98, 0.8, 0.3, 1)
+content_margin_left = 10.0
+content_margin_top = 3.0
+content_margin_right = 10.0
+content_margin_bottom = 3.0
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_partner"]
+bg_color = Color(0.6, 0.45, 0.95, 1)
+content_margin_left = 10.0
+content_margin_top = 3.0
+content_margin_right = 10.0
+content_margin_bottom = 3.0
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_verified"]
+bg_color = Color(0.45, 0.82, 0.5, 1)
+content_margin_left = 10.0
+content_margin_top = 3.0
+content_margin_right = 10.0
+content_margin_bottom = 3.0
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="LabelSettings" id="LabelSettings_badge_dark"]
+font_size = 17
+font_color = Color(0.13, 0.08, 0.05, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_badge_light"]
+font_size = 17
+font_color = Color(0.99, 0.97, 1, 1)
+
+[node name="ServerRow" type="PanelContainer"]
+offset_right = 1180.0
+offset_bottom = 76.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_row")
+script = ExtResource("1_script")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Text" type="VBoxContainer" parent="Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="TitleRow" type="HBoxContainer" parent="Row/Text"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NameLabel" type="Label" parent="Row/Text/TitleRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "A PIT SERVER"
+
+[node name="Official" type="PanelContainer" parent="Row/Text/TitleRow"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "An official server, run by the developer of the game."
+theme_override_styles/panel = SubResource("StyleBoxFlat_official")
+
+[node name="Label" type="Label" parent="Row/Text/TitleRow/Official"]
+layout_mode = 2
+mouse_filter = 2
+text = "OFFICIAL"
+label_settings = SubResource("LabelSettings_badge_dark")
+
+[node name="Partner" type="PanelContainer" parent="Row/Text/TitleRow"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "A community server the developer vouches for."
+theme_override_styles/panel = SubResource("StyleBoxFlat_partner")
+
+[node name="Label" type="Label" parent="Row/Text/TitleRow/Partner"]
+layout_mode = 2
+mouse_filter = 2
+text = "PARTNER"
+label_settings = SubResource("LabelSettings_badge_light")
+
+[node name="Verified" type="PanelContainer" parent="Row/Text/TitleRow"]
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "The person running this server has been identified by the developer."
+theme_override_styles/panel = SubResource("StyleBoxFlat_verified")
+
+[node name="Label" type="Label" parent="Row/Text/TitleRow/Verified"]
+layout_mode = 2
+mouse_filter = 2
+text = "VERIFIED"
+label_settings = SubResource("LabelSettings_badge_dark")
+
+[node name="DetailLabel" type="Label" parent="Row/Text"]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "127.0.0.1:24565"
+
+[node name="Players" type="Label" parent="Row"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 22
+text = "0 / 0"
+horizontal_alignment = 2
+
+[node name="SaveBtn" type="Button" parent="Row"]
+custom_minimum_size = Vector2(120, 46)
+layout_mode = 2
+size_flags_vertical = 4
+toggle_mode = true
+theme_override_font_sizes/font_size = 18
+text = "SAVE"
+
+[node name="JoinBtn" type="Button" parent="Row"]
+custom_minimum_size = Vector2(180, 46)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 20
+text = "CONNECT"

@@ -5,6 +5,13 @@ extends Node2D
 ## tuning numbers live in the profile. Coordinates are ×2 scaled from the
 ## legacy Pygame FINAL.py.
 
+## The shared run is over — somebody reached the surface, or everybody went down.
+## Emitted on every machine, but only a dedicated server listens: its room manager
+## needs to know to stop calling the room RUNNING and to put it back in its lobby
+## after `rooms/end_to_lobby_seconds`. Without it a finished room would stay
+## "running" for the rest of the server's life.
+signal run_ended
+
 ## How far above the avatar the camera looks. The climb is upward, so the useful
 ## half of the screen is the half above you.
 const CAMERA_BASE_OFFSET := Vector2(0, -180)
@@ -24,6 +31,24 @@ const SPENT_MILESTONE_BONUS: int = 500
 ## 0 = roll a fresh seed. Setting a value before add_child reproduces a world
 ## exactly — the fingerprint harness does, and the multiplayer host will.
 @export var world_seed: int = 0
+
+## The room this world is: who is in it, what each of them picked, which mode.
+## Set BEFORE add_child, exactly like world_seed — by Router from Net on a
+## player's machine, by the room manager on a dedicated server.
+##
+## Nothing below reads the session fields off the Net autoload any more. Net
+## describes THIS MACHINE's connection, and a machine can be in one room; a
+## server is in none and hosts several, so "the" session is a question only a
+## world can answer.
+var session: NetSession = NetSession.new()
+
+## A world with nobody looking at it. A dedicated server sets this before
+## add_child, and it turns off exactly one thing: presentation. No camera, no
+## HUD, no upgrade menu, no particles, no positional audio, no ledger registered
+## with Game. The simulation underneath is untouched — the server runs the same
+## world the players do, which is the whole reason the server is a build of this
+## project rather than a reimplementation of it.
+var simulation_only: bool = false
 
 var max_depth: float = 16000.0
 
@@ -65,6 +90,9 @@ var bg_time: float = 0.0
 var _session_over: bool = false
 
 # ── Node references ─────────────────────────────────────────────────────────
+## This room's score, kills and combo. One per world — see RunLedger for why it
+## is not on the Game autoload any more.
+@onready var run: RunLedger = $Run
 @onready var camera: Camera2D = $Camera2D
 @onready var platforms_node: Node2D = $Platforms
 @onready var enemies_node: Node2D = $Enemies
@@ -75,14 +103,18 @@ var _session_over: bool = false
 @onready var pause_overlay: PauseOverlay = $CanvasLayer/PauseOverlay
 @onready var game_over_screen: EndScreen = $CanvasLayer/GameOverScreen
 @onready var victory_screen: EndScreen = $CanvasLayer/VictoryScreen
+## The server administration panel, on its own layer above everything. It refuses
+## to open unless this machine is on a dedicated server and holds the right, so
+## it costs a hidden node and nothing else in solo play. A moderator should not
+## have to leave the pit to deal with somebody who is in it.
+@onready var admin_panel: CanvasLayer = $AdminPanel
 
 
 func _ready() -> void:
 	max_depth = profile.max_depth()
 	current_spawn_interval = profile.spawn_interval_start
 
-	Game.new_run(_playing_peers())
-	Game.score_changed.connect(hud.on_score_changed)
+	run.new_run(_playing_peers())
 	upgrade_menu.chosen.connect(choose_upgrade)
 	# Every way out of a run, from every screen that offers one, lands on the
 	# same three methods.
@@ -92,18 +124,23 @@ func _ready() -> void:
 	for screen: EndScreen in [game_over_screen, victory_screen]:
 		screen.restart_pressed.connect(restart)
 		screen.menu_pressed.connect(go_to_menu)
-	if Net.active:
-		Net.peers_changed.connect(_prune_disconnected)
+	if session.active and not simulation_only:
+		Net.peers_changed.connect(prune_disconnected)
 		Net.session_closed.connect(_on_session_closed)
 		# "Press SPACE to Restart" is a solo promise; in a session the end
 		# screen's own hint line says who may do what.
 		game_over_screen.get_node(^"SubTitle").text = ""
 
-	# World-space effects (bursts, popups, ghosts, rubble, fireballs) spawn under
-	# this scene and die with it — and so do positional sounds, which need to be
-	# in the 2D world for distance to mean anything.
-	Fx.effects_root = self
-	Audio.world_root = self
+	if not simulation_only:
+		run.score_changed.connect(hud.on_score_changed)
+		# The facade the rest of the machine asks "how is the run going": this
+		# world's ledger while this world is the one being looked at.
+		Game.ledger = run
+		# World-space effects (bursts, popups, ghosts, rubble, fireballs) spawn
+		# under this scene and die with it — and so do positional sounds, which
+		# need to be in the 2D world for distance to mean anything.
+		Fx.effects_root = self
+		Audio.world_root = self
 
 	while world_seed == 0:
 		world_seed = randi()
@@ -112,6 +149,10 @@ func _ready() -> void:
 	debug_free_zones = plan.free_zones
 
 	_spawn_players()
+	if simulation_only:
+		_strip_presentation()
+		return
+
 	if is_instance_valid(player):
 		hud.build_hp_bar(player.max_health, player.health)
 	else:
@@ -139,19 +180,42 @@ func _ready() -> void:
 	RenderingServer.set_default_clear_color(profile.theme.background_by_ascent.sample(0.0))
 
 
+## Everything a room on a dedicated server has no use for. Turned off rather
+## than deleted: the node paths under this world are the addresses the
+## replication layer uses, and a server whose tree has a different shape from a
+## client's is a server whose packets land nowhere.
+##
+## The camera is the exception that has to stay awake — it is where `Fx` thinks
+## this machine's eyes are, and the 2D audio listener. On a server neither is
+## consulted, but leaving the node in place keeps `_update_camera` honest rather
+## than making it a branch.
+func _strip_presentation() -> void:
+	var ui := get_node_or_null(^"CanvasLayer") as CanvasLayer
+	if ui != null:
+		ui.visible = false
+		ui.process_mode = Node.PROCESS_MODE_DISABLED
+	camera.enabled = false
+	spectator.process_mode = Node.PROCESS_MODE_DISABLED
+	admin_panel.visible = false
+	admin_panel.process_mode = Node.PROCESS_MODE_DISABLED
+
+
 func _exit_tree() -> void:
 	if Fx.effects_root == self:
 		Fx.effects_root = null
 	if Audio.world_root == self:
 		Audio.world_root = null
+	Game.release_ledger(run)
 
 
 func _process(delta: float) -> void:
-	bg_time += delta
-	_update_background()
+	if not simulation_only:
+		bg_time += delta
+		_update_background()
 
-	# World simulation: spawning, milestones, victory. On the host this keeps
-	# running even when the local avatar is dead — the other players are not.
+	# World simulation: spawning, milestones, victory. On the authority this
+	# keeps running even when the local avatar is dead — the other players are
+	# not. It is also the ONLY half of this function a dedicated server runs.
 	if _should_simulate():
 		spawn_timer += delta
 		if spawn_timer >= current_spawn_interval:
@@ -167,11 +231,15 @@ func _process(delta: float) -> void:
 	# nobody is left to simulate for.
 	_check_wipe()
 
+	# Below this line is presentation and local input. A server has neither.
+	if simulation_only:
+		return
+
 	_update_camera(delta)
 	_update_revive_prompts()
 
 	if state == GameState.GAME_OVER:
-		if not Net.active and Input.is_action_just_pressed("jump"):
+		if not session.active and Input.is_action_just_pressed("jump"):
 			restart()
 		return
 
@@ -182,7 +250,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 
-	if Net.active and state == GameState.PLAYING \
+	if session.active and state == GameState.PLAYING \
 			and Input.is_action_just_pressed(&"revive"):
 		_try_revive()
 
@@ -215,7 +283,7 @@ func _eye_position() -> Vector2:
 func _should_simulate() -> bool:
 	if not Net.is_sim_authority():
 		return false
-	if Net.active:
+	if session.active:
 		return not _session_over and _any_avatar_alive()
 	return state == GameState.PLAYING
 
@@ -252,6 +320,14 @@ func cancel_pressed() -> void:
 			_resume_game()
 		GameState.GAME_OVER, GameState.VICTORY:
 			go_to_menu()
+
+
+## F8. Silently does nothing off a dedicated server, or without the right.
+func toggle_admin_panel() -> void:
+	if admin_panel.visible:
+		admin_panel.close()
+	else:
+		admin_panel.open()
 
 
 func toggle_debug() -> void:
@@ -294,12 +370,12 @@ func _check_milestones() -> void:
 		for i in range(milestones.size() - 1, -1, -1):
 			if avatar.global_position.y < milestones[i]:
 				milestones.remove_at(i)
-				Game.add_score(500, avatar.global_position, Color(0.98, 0.8, 0.3), peer_id)
+				run.add_score(500, avatar.global_position, Color(0.98, 0.8, 0.3), peer_id)
 				# The choice is each player's own input; the menu opens on the
 				# machine of whoever earned it.
 				if peer_id == Game.local_peer_id:
 					_show_upgrade_menu()
-				elif Net.active:
+				elif session.active:
 					_offer_upgrade.rpc_id(peer_id)
 				break
 
@@ -318,13 +394,13 @@ func _check_zones() -> void:
 		for i in range(milestones.size() - 1, -1, -1):
 			if avatar.global_position.y < milestones[i]:
 				milestones.remove_at(i)
-				Game.add_score(250, Vector2.INF, Color.WHITE, peer_id)
+				run.add_score(250, Vector2.INF, Color.WHITE, peer_id)
 				var level := clampi(
 					int((max_depth - avatar.global_position.y) / profile.level_height) + 1,
 					1, profile.level_count)
 				if peer_id == Game.local_peer_id:
 					_zone_notice(level)
-				elif Net.active:
+				elif session.active:
 					_zone_notice.rpc_id(peer_id, level)
 				break
 
@@ -336,15 +412,15 @@ func _zone_notice(level: int) -> void:
 
 
 func _check_victory() -> void:
-	if Net.active:
+	if session.active:
 		for peer_id in players:
 			var avatar := players[peer_id]
 			if _reports_this_run(avatar) and not avatar.is_downed \
 					and avatar.global_position.y < profile.victory_y:
 				# Host-authoritative: the surface bonus lands before the
 				# broadcast so every end screen shows the final number.
-				Game.add_score(2000, Vector2.INF, Color.WHITE, peer_id)
-				_end_session.rpc(peer_id)
+				run.add_score(2000, Vector2.INF, Color.WHITE, peer_id)
+				session.broadcast(self, &"_end_session", [peer_id])
 				return
 		return
 	if player.global_position.y < profile.victory_y:
@@ -356,11 +432,11 @@ func _check_victory() -> void:
 ## Everybody is on the floor and nobody is left to pick anyone up. The host
 ## calls it; nothing else can, because nothing else can see every avatar.
 func _check_wipe() -> void:
-	if not Net.active or _session_over or not Net.is_sim_authority():
+	if not session.active or _session_over or not Net.is_sim_authority():
 		return
 	if players.is_empty() or _any_avatar_alive():
 		return
-	_end_session_wiped.rpc()
+	session.broadcast(self, &"_end_session_wiped")
 
 
 @rpc("authority", "call_local", "reliable")
@@ -368,6 +444,9 @@ func _end_session_wiped() -> void:
 	if _session_over:
 		return
 	_session_over = true
+	run_ended.emit()
+	if simulation_only:
+		return
 	_leave_spectator()
 	state = GameState.GAME_OVER
 	game_over_screen.get_node(^"Title").text = "EVERYBODY IS DOWN"
@@ -379,11 +458,14 @@ func _end_session_wiped() -> void:
 @rpc("authority", "call_local", "reliable")
 func _end_session(winner_peer: int) -> void:
 	_session_over = true
+	run_ended.emit()
+	if simulation_only:
+		return
 	_leave_spectator()
 	if is_instance_valid(player):
 		player.can_input = false
 	var won := winner_peer == Game.local_peer_id
-	if Net.mode == Net.Mode.RACE and not won:
+	if session.is_versus() and not won:
 		state = GameState.GAME_OVER
 		game_over_screen.get_node(^"Title").text = "RACE OVER"
 		game_over_screen.show_with(
@@ -403,7 +485,7 @@ func _end_session(winner_peer: int) -> void:
 ## stops listening to input while it is up.
 func _pause_game() -> void:
 	state = GameState.PAUSED
-	if Net.active:
+	if session.active:
 		if is_instance_valid(player):
 			player.can_input = false
 	else:
@@ -413,7 +495,7 @@ func _pause_game() -> void:
 
 func _resume_game() -> void:
 	state = GameState.PLAYING
-	if Net.active:
+	if session.active:
 		if is_instance_valid(player) and not _session_over and not player.is_downed:
 			player.can_input = true
 	else:
@@ -429,7 +511,7 @@ func _show_upgrade_menu() -> void:
 	if not is_instance_valid(player):
 		return
 	if _my_upgrades.is_empty():
-		Game.add_score(SPENT_MILESTONE_BONUS, player.global_position, Color(0.98, 0.8, 0.3))
+		run.add_score(SPENT_MILESTONE_BONUS, player.global_position, Color(0.98, 0.8, 0.3))
 		show_notification("EVERYTHING UNLOCKED  ·  +%d" % SPENT_MILESTONE_BONUS)
 		Audio.play(&"upgrade")
 		return
@@ -440,7 +522,7 @@ func _show_upgrade_menu() -> void:
 		_apply_upgrade(_my_upgrades[0])
 		return
 	state = GameState.UPGRADE_MENU
-	if not Net.active:
+	if not session.active:
 		get_tree().paused = true
 	upgrade_menu.open(_my_upgrades)
 	Audio.play(&"upgrade")
@@ -471,7 +553,7 @@ func _close_upgrade_menu() -> void:
 	upgrade_menu.visible = false
 	if state == GameState.UPGRADE_MENU:
 		state = GameState.PLAYING
-		if not Net.active:
+		if not session.active:
 			get_tree().paused = false
 	Audio.play(&"ui_click")
 
@@ -480,7 +562,7 @@ func _close_upgrade_menu() -> void:
 ## Every machine decides for itself which bodies its own climber is standing
 ## close enough to pick up. Nothing about the sign crosses the wire.
 func _update_revive_prompts() -> void:
-	if not Net.active:
+	if not session.active:
 		return
 	var can_pay: bool = is_instance_valid(player) and not player.is_downed \
 			and player.health > 1 and state == GameState.PLAYING
@@ -562,14 +644,14 @@ func _resolve_revive(reviver_peer: int, target_peer: int) -> void:
 ## are requests to that machine — which the host may itself be.
 func _ask_to_revive(body: CharacterBody2D) -> void:
 	if body.is_multiplayer_authority():
-		body.stand_up.rpc()
+		session.broadcast(body, &"stand_up")
 	else:
 		body.rpc_id(body.get_multiplayer_authority(), &"remote_revive")
 
 
 func _ask_to_pay(reviver: CharacterBody2D) -> void:
 	if reviver.is_multiplayer_authority():
-		reviver.pay_revive.rpc()
+		session.broadcast(reviver, &"pay_revive")
 	else:
 		reviver.rpc_id(reviver.get_multiplayer_authority(), &"remote_pay_revive")
 
@@ -593,15 +675,15 @@ func _leave_spectator() -> void:
 
 # ── End of run ──────────────────────────────────────────────────────────────
 func _stats_text(new_record: bool) -> String:
-	var run := Game.local_run()
-	if run == null:
+	var mine := run.local_run()
+	if mine == null:
 		# A peer that joined to watch has no run of its own to report.
-		return "TIME %s" % Game.run_time_text()
+		return "TIME %s" % run.run_time_text()
 	var depth_now := 0
 	if is_instance_valid(player):
 		depth_now = int(player.global_position.y)
 	var text := "SCORE %d\nKILLS %d      MAX COMBO x%d\nDEPTH %d      TIME %s\n" % [
-		run.score, run.kills, run.max_combo, depth_now, Game.run_time_text(),
+		mine.score, mine.kills, mine.max_combo, depth_now, run.run_time_text(),
 	]
 	if new_record:
 		text += "NEW RECORD!"
@@ -613,7 +695,7 @@ func _stats_text(new_record: bool) -> String:
 
 
 func _show_victory() -> void:
-	Game.add_score(2000)
+	run.add_score(2000)
 	victory_screen.show_with(_stats_text(Game.finish_run()))
 	Audio.play(&"win")
 	_confetti()
@@ -638,9 +720,9 @@ func _confetti_burst() -> void:
 ## Which climber a peer picked. Null means "watching", which is a real answer:
 ## that peer gets no avatar and no run of its own.
 func _character_for(peer_id: int) -> CharacterDef:
-	if not Net.active:
+	if not session.active:
 		return Game.character_def()
-	var id: StringName = Net.session_characters.get(peer_id, CharacterRoster.SPECTATOR)
+	var id: StringName = session.characters.get(peer_id, CharacterRoster.SPECTATOR)
 	if id == CharacterRoster.SPECTATOR:
 		return null
 	return Game.roster.resolve(id)
@@ -648,10 +730,10 @@ func _character_for(peer_id: int) -> CharacterDef:
 
 ## The session roster minus its spectators, in roster order. Solo is one entry.
 func _playing_peers() -> Array[int]:
-	if not Net.active:
+	if not session.active:
 		return [Game.local_peer_id] as Array[int]
 	var out: Array[int] = []
-	for peer_id in Net.session_peers:
+	for peer_id in session.peers:
 		if _character_for(peer_id) != null:
 			out.append(peer_id)
 	return out
@@ -692,6 +774,9 @@ func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	avatar.global_position = Vector2(
 		profile.world_width / 2.0 + slot_offset * 90.0,
 		max_depth - profile.player_spawn_height)
+	# Before add_child, so the very first packet about this avatar is already
+	# addressed to this room and to nobody else. See NetSession.scope().
+	session.scope(avatar)
 	add_child(avatar)
 	players[peer_id] = avatar
 
@@ -703,12 +788,15 @@ func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	return avatar
 
 
-## A peer dropped mid-run: remove its avatar everywhere.
-func _prune_disconnected() -> void:
-	if not Net.active:
+## A peer dropped mid-run: remove its avatar. Driven by `Net` on a player's
+## machine and called directly by the room manager on a dedicated server, which
+## is why it is public — a server watches its own socket, not this world's idea
+## of one.
+func prune_disconnected() -> void:
+	if not session.active:
 		return
 	for peer_id in players.keys():
-		if peer_id == Game.local_peer_id or peer_id in Net.session_peers:
+		if peer_id == Game.local_peer_id or peer_id in session.peers:
 			continue
 		var avatar: CharacterBody2D = players[peer_id]
 		if is_instance_valid(avatar):
@@ -747,8 +835,13 @@ func _on_player_damaged(new_health: int) -> void:
 ## the bottom of a fresh pit — it used to be silently ignored, which left
 ## rejoining as the only way to play a second round.
 func restart() -> void:
-	if not Net.active:
+	if not session.active:
 		Router.restart_run()
+		return
+	if Hub.on_server():
+		# On a dedicated server it is the room's decision, and who may make it is
+		# `rooms/who_may_restart`. The server answers with a notice if not.
+		Hub.ask(&"request_restart")
 		return
 	if Net.is_host():
 		Net.restart_session()
@@ -756,8 +849,15 @@ func restart() -> void:
 		show_notification("ONLY THE HOST CAN RESTART")
 
 
+## The way out of a run. On a dedicated server that means leaving the ROOM and
+## going back to the browser — the connection, the account and the chat all
+## survive it. Everywhere else it means ending the session.
 func go_to_menu() -> void:
-	if Net.active:
+	if Hub.on_server():
+		Hub.ask(&"request_leave")
+		Router.to_server_lobby()
+		return
+	if session.active:
 		Net.leave()
 	Router.to_menu()
 
@@ -819,6 +919,7 @@ func _spawn_enemy() -> void:
 	# Position before add_child so the spawn packet carries it, and readable
 	# names (add_child(_, true)) so the MultiplayerSpawner can mirror it.
 	enemy.position = _spawn_position(chosen, reference.global_position.y)
+	session.scope(enemy)
 	enemies_node.add_child(enemy, true)
 	enemy.set_player_ref(reference)
 

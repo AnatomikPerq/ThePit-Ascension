@@ -1,0 +1,44 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/admin_row.gd" id="1_script"]
+
+[node name="AdminRow" type="HBoxContainer"]
+theme_override_constants/separation = 14
+script = ExtResource("1_script")
+
+[node name="Primary" type="Label" parent="."]
+custom_minimum_size = Vector2(280, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+vertical_alignment = 1
+
+[node name="Secondary" type="Label" parent="."]
+custom_minimum_size = Vector2(360, 40)
+modulate = Color(1, 1, 1, 0.68)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+vertical_alignment = 1
+clip_text = true
+
+[node name="Actions" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="A" type="Button" parent="Actions"]
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+visible = false
+
+[node name="B" type="Button" parent="Actions"]
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+visible = false
+
+[node name="C" type="Button" parent="Actions"]
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 17
+visible = false

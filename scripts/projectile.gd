@@ -47,7 +47,9 @@ func _physics_process(delta: float) -> void:
 
 	# Despawn far away from the player.
 	if is_instance_valid(_player):
-		if global_position.y > _player.global_position.y + 1400.0 or global_position.distance_to(_player.global_position) > 2200.0:
+		var below := global_position.y > _player.global_position.y + 1400.0
+		var far := global_position.distance_to(_player.global_position) > 2200.0
+		if below or far:
 			queue_free()
 
 
@@ -69,7 +71,7 @@ func _on_area_entered(area: Area2D) -> void:
 		return
 	if area.is_in_group("strike"):
 		Fx.burst(global_position, FIZZLE_BURST)
-		Game.add_score(10, global_position, Color(0.45, 0.95, 0.3),
+		RunLedger.of(self).add_score(10, global_position, Color(0.45, 0.95, 0.3),
 			area.get_meta(&"owner_peer", 0))
 		queue_free()
 

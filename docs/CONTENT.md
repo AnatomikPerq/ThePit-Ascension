@@ -336,6 +336,38 @@ something to invent.
 The bomb's `falling` animation is complete: three frames at half a second each,
 the core lighting up as it comes down.
 
+## What the dedicated server added, and what it did not
+
+Added on the owner's instruction on **6 August 2026**: server software for the
+game, with moderation and administration, rooms with different modes, control
+over players, a domain, accounts and a protection scheme. He delegated the design
+in the same message ("планирование за тобой", "тут планирование за тобой") and
+asked explicitly for the game itself to be fixed wherever it got in the way.
+
+**The inventory above is unchanged.** No enemy, ability, character, world,
+structure or mechanic went in with it. What did go in is two player-facing
+things that are not game content but are visible, and they are listed here so
+that nobody has to guess later whether they were asked for:
+
+| | What | Why it is there |
+| :--- | :--- | :--- |
+| **Chat** | a line of text, to the room you are in or to the whole server | moderation without it is a set of verbs with nothing to apply them to — you cannot mute somebody who cannot speak. Rate-limited, length-capped, word-filtered, and `moderation/chat` turns all of it off |
+| **An administration panel** | in the game, on `F8`, for whoever the server gave the right to | he asked for the settings to be in the server's interface in the game. Its buttons build the same command lines the console takes, so there is no second implementation of moderation |
+
+Neither appears in a solo game, and neither exists without a server: the panel
+refuses to open, and there is nobody to chat to.
+
+Three things about the *game* changed, all of them fixing something that was
+already wrong and only became visible once a second room existed — a blast's
+hitbox hanging off the cosmetics root, tree-wide group queries answering with
+another room's pit, and run state being a global that a second run cleared. They
+are in CLAUDE.md §7 with the rest of the fixed bugs.
+
+The server's own tuning surface is **not** in `data/`. It is `server.cfg`, an INI
+the server writes itself, because it is edited by an operator on a headless
+machine with no Godot on it — see `src/server/setting_def.gd` for why that is a
+deliberate departure from "numbers live in a `.tres`" and not an oversight.
+
 ## Deliberate history
 
 Bugs fixed on the owner's instruction that must not be "restored", plus the

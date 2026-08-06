@@ -11,13 +11,20 @@ feature would use.
 ```
 autoloads   Fx        cosmetics: shake, pooled bursts, popups, ghosts
             Audio     SoundBank playback over AudioStreamPolyphonic
-            Game      per-player run state (PlayerRun), score events, save,
-                      the character roster and this machine's pick
+            Game      this MACHINE: roster, the climber it picked, best score
             Router    the only place scenes swap; runs start seeded here
-            Net       ENet session lifecycle; inert until host()/join()
+            Net       this machine's CONNECTION; inert until host()/join()
+            Hub       the one door between a client and a dedicated server
 
-scene flow  MainMenu ──► Lobby ──► World        (Router.start_run(seed))
-                └────────────────► World        (solo, fresh seed)
+scene flow  MainMenu ──► MultiplayerMenu ──► Lobby ──► World  (peer-to-peer)
+                │              └► ServerConnect ─► ServerLobby ─► World
+                └──────────────────────► World      (solo, fresh seed)
+
+server      PitServer ─► RoomManager ─► Room ─► World  (one per room,
+            (--server)   AuthService    NetSession      simulation_only)
+
+directory   PitDirectory ─► HttpListener ─► DirectoryStore ─► VerifyKeyStore
+            (--directory)   lists servers; the only thing that grants a badge
 
 world       WorldProfile ─► WorldGenerator ─► WorldPlan ─► WorldBuilder
 pipeline    (.tres numbers)  (seeded draws)    (records)    (nodes)
@@ -51,18 +58,63 @@ events      Blast     the one explosion: decide once, replay everywhere
   sounds attenuate is an inspector decision. The 2D listener is the active
   `Camera2D`, i.e. each machine's own avatar, which is the whole of the
   multiplayer story for audio distance.
-- **`Game`** (`scripts/game_state.gd`) — `runs: Dictionary[int, PlayerRun]`,
-  one entry per *playing* peer; solo play is the single-entry case, and a peer
-  that joined to watch has none. Kills and score carry the credited peer. Emits
-  `score_changed(peer_id, score, combo)`. Also holds the `CharacterRoster` and
-  the climber this machine picked, and persists both that and the best score.
+- **`Game`** (`scripts/game_state.gd`) — what belongs to this MACHINE rather
+  than to a run: the `CharacterRoster`, the climber this machine picked, the best
+  score it has ever set, and which peer it is. It answers the old run questions
+  (`Game.local_run()`, `Game.add_score()`) by forwarding to whichever `RunLedger`
+  the active world registered, the same "the active scene registers itself"
+  arrangement `Fx.effects_root` uses.
+- **`RunLedger`** (`src/core/run_ledger.gd`) — the score, kills and combo of ONE
+  run, authored into `World.tscn` as `Run`. It moved out of `Game` for two
+  reasons and the second is the one that forced it: `new_run()` clears the table,
+  so a fourth room starting a climb wiped three others; and the score and kill
+  events are `@rpc`s, addressed by node path, and the autoload's path is one path
+  shared by every room. Inside the world it is `World3/Run` — a path that exists
+  only for that room's peers.
+- **`Hub`** (`src/net/hub.gd`) — every message between a client and a dedicated
+  server, in one node at one path. Not tidiness: it is where the sender is
+  resolved, rate-limited and checked, and a server with twenty doors to guard
+  will eventually leave one unguarded. In-run traffic does not come through it —
+  once a room starts, the room's own world replicates.
 - **`Router`** (`src/core/router.gd`) — the only place scenes swap.
   `start_run(seed)` instantiates World and sets `world_seed` **before**
   `_ready()` generates the level — the same seam used by the fingerprint
   harness and the multiplayer host. Every transition lands unpaused.
 - **`Net`** (`src/net/net.gd`) — see [NETWORKING.md](NETWORKING.md).
   `Net.active` is false until the lobby opens a session; with no session,
-  every networked code path is skipped and the game is the solo game.
+  every networked code path is skipped and the game is the solo game. It
+  describes this MACHINE's connection; **which room a thing is in** is a
+  `NetSession`, one per run, held by the world — a distinction that did not
+  matter until one process hosted several runs.
+
+## The dedicated server
+
+`src/server/`, and it is a build of this project rather than a separate program:
+it runs the same `WorldGenerator` and the same entities, with presentation turned
+off (`World.simulation_only`). A server written separately would diverge from the
+game on the first patch, and the divergence would show as players falling through
+platforms rather than as a compile error.
+
+```
+PitServer          boot, the socket, the gatekeeper, who is connected, the tick
+  AuthService      the handshake, on Godot's own auth hook
+  RoomManager      rooms; each running one holds a World at /root/World<id>
+  ChatService      chat, and the reason mute exists
+  Moderation       kick / ban / mute / warn / move — the verbs, in one place
+  MovementGuard    a tripwire on client-authoritative movement, not a wall
+  RconService      the same commands over TCP
+  StatusEndpoint   one line of JSON for a monitor
+  CommandRegistry  one command set; the console, rcon and the in-game panel
+                   all dispatch through it, permission check included
+  ServerSettings   the schema; server.cfg, `set`/`get` and the panel's editor
+                   are all generated from it
+```
+
+*Seam:* a new setting is one line in `ServerSettings._declare()`. A new command
+is one `ServerCommand.make(...)` and it appears in all three front-ends with its
+right enforced. A new moderation verb goes in `Moderation` and gets a command.
+Operating it is [SERVER.md](SERVER.md); the rule that it must be rebuilt with the
+game is [CLAUDE.md §8](../CLAUDE.md).
 
 ## World pipeline
 
@@ -303,6 +355,12 @@ entry. That is still "author it in a scene" — what the rule forbids is
 `CharacterSelect.tscn` is a panel, not a scene of its own, instanced into both
 the main menu and the lobby: it is the same question in both places and the
 answer goes to the same place.
+
+`MultiplayerMenu.tscn` is the one door out of the main menu, and it instances one
+`ServerRow.tscn` per server found. Each row carries three verification badges
+authored into the scene, one visible at a time — three pills a designer can open
+and restyle, rather than a colour computed in GDScript and a `StyleBoxFlat` built
+in a function, which is what §2 of CLAUDE.md is about.
 
 ## Presentation rules
 

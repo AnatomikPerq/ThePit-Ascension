@@ -17,7 +17,12 @@ func _ready() -> void:
 	$UI/StartBtn.pressed.connect(_start_game)
 	character_btn.pressed.connect(character_select.open)
 	character_select.closed.connect(_refresh_character)
-	$UI/MultiplayerBtn.pressed.connect(Router.to_lobby)
+	# One button, not two. It used to be MULTIPLAYER (open a port on your own
+	# machine) and JOIN A SERVER (somebody else's dedicated one) side by side —
+	# a distinction a player had to already understand in order to choose between
+	# them. Both live inside the browser now, under the list of servers, which is
+	# the thing somebody opening the game for the first time can actually use.
+	$UI/MultiplayerBtn.pressed.connect(Router.to_multiplayer)
 	$UI/QuitBtn.pressed.connect(func() -> void: get_tree().quit())
 	_refresh_character()
 	_pulse_title()

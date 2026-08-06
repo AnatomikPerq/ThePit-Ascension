@@ -1,0 +1,239 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/ui/server_lobby.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CharacterSelect.tscn" id="3_select"]
+[ext_resource type="PackedScene" path="res://scenes/ui/server/AdminPanel.tscn" id="4_admin"]
+
+[node name="ServerLobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_script")
+
+[node name="UI" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 60.0
+offset_top = 40.0
+offset_right = -60.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 14
+
+[node name="Header" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ServerLabel" type="Label" parent="UI/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 30
+
+[node name="AccountLabel" type="Label" parent="UI/Header"]
+modulate = Color(1, 1, 1, 0.75)
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+vertical_alignment = 1
+
+[node name="AdminBtn" type="Button" parent="UI/Header"]
+custom_minimum_size = Vector2(180, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "ADMIN  (F8)"
+visible = false
+
+[node name="LeaveServerBtn" type="Button" parent="UI/Header"]
+custom_minimum_size = Vector2(190, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "DISCONNECT"
+
+[node name="Body" type="HBoxContainer" parent="UI"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 24
+
+[node name="Left" type="VBoxContainer" parent="UI/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+
+[node name="Browser" type="VBoxContainer" parent="UI/Body/Left"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="BrowserTitle" type="Label" parent="UI/Body/Left/Browser"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "ROOMS"
+
+[node name="EmptyLabel" type="Label" parent="UI/Body/Left/Browser"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "No rooms are open yet. Make one below."
+
+[node name="Scroll" type="ScrollContainer" parent="UI/Body/Left/Browser"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RoomList" type="VBoxContainer" parent="UI/Body/Left/Browser/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="Create" type="VBoxContainer" parent="UI/Body/Left/Browser"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CreateTitle" type="Label" parent="UI/Body/Left/Browser/Create"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "OPEN A ROOM"
+
+[node name="NameRow" type="HBoxContainer" parent="UI/Body/Left/Browser/Create"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NameEdit" type="LineEdit" parent="UI/Body/Left/Browser/Create/NameRow"]
+custom_minimum_size = Vector2(380, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 21
+placeholder_text = "room name"
+max_length = 28
+
+[node name="ModeSelect" type="OptionButton" parent="UI/Body/Left/Browser/Create/NameRow"]
+custom_minimum_size = Vector2(180, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+
+[node name="OptionsRow" type="HBoxContainer" parent="UI/Body/Left/Browser/Create"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SeatsLabel" type="Label" parent="UI/Body/Left/Browser/Create/OptionsRow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "SEATS"
+vertical_alignment = 1
+
+[node name="Seats" type="SpinBox" parent="UI/Body/Left/Browser/Create/OptionsRow"]
+custom_minimum_size = Vector2(120, 48)
+layout_mode = 2
+min_value = 1.0
+max_value = 16.0
+value = 8.0
+theme_override_font_sizes/font_size = 21
+
+[node name="PasswordEdit" type="LineEdit" parent="UI/Body/Left/Browser/Create/OptionsRow"]
+custom_minimum_size = Vector2(260, 48)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 21
+placeholder_text = "password (optional)"
+secret = true
+
+[node name="CreateBtn" type="Button" parent="UI/Body/Left/Browser/Create/OptionsRow"]
+custom_minimum_size = Vector2(180, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "OPEN"
+
+[node name="RoomPanel" type="VBoxContainer" parent="UI/Body/Left"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+visible = false
+
+[node name="RoomTitle" type="Label" parent="UI/Body/Left/RoomPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 30
+
+[node name="MembersTitle" type="Label" parent="UI/Body/Left/RoomPanel"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "IN THIS ROOM"
+
+[node name="Members" type="Label" parent="UI/Body/Left/RoomPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 24
+
+[node name="Controls" type="HBoxContainer" parent="UI/Body/Left/RoomPanel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CharacterBtn" type="Button" parent="UI/Body/Left/RoomPanel/Controls"]
+custom_minimum_size = Vector2(300, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "CHARACTER"
+
+[node name="SpectatorBtn" type="Button" parent="UI/Body/Left/RoomPanel/Controls"]
+custom_minimum_size = Vector2(250, 52)
+layout_mode = 2
+toggle_mode = true
+theme_override_font_sizes/font_size = 21
+text = "SPECTATOR: OFF"
+
+[node name="StartBtn" type="Button" parent="UI/Body/Left/RoomPanel/Controls"]
+custom_minimum_size = Vector2(230, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "START CLIMB"
+
+[node name="LeaveBtn" type="Button" parent="UI/Body/Left/RoomPanel/Controls"]
+custom_minimum_size = Vector2(180, 52)
+layout_mode = 2
+theme_override_font_sizes/font_size = 21
+text = "LEAVE"
+
+[node name="Right" type="VBoxContainer" parent="UI/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="ChatTitle" type="Label" parent="UI/Body/Right"]
+modulate = Color(1, 1, 1, 0.55)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "CHAT   —   a line starting with / is a command"
+
+[node name="ChatLog" type="RichTextLabel" parent="UI/Body/Right"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+theme_override_font_sizes/normal_font_size = 19
+
+[node name="ChatInput" type="LineEdit" parent="UI/Body/Right"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+max_length = 200
+
+[node name="StatusLabel" type="Label" parent="UI"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.72, 0.35, 1)
+theme_override_font_sizes/font_size = 21
+horizontal_alignment = 1
+autowrap_mode = 3
+visible = false
+
+[node name="CharacterSelect" parent="." instance=ExtResource("3_select")]
+visible = false
+
+[node name="AdminPanel" parent="." instance=ExtResource("4_admin")]

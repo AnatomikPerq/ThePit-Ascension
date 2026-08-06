@@ -167,10 +167,8 @@ func _explode(credited_peer: int, point_blank_peer: int) -> void:
 		return
 	var epicentre := global_position
 	var doomed := Blast.targets(self, epicentre, stats.blast)
-	if Net.active:
-		_boom.rpc(epicentre, doomed, credited_peer, point_blank_peer)
-	else:
-		_boom(epicentre, doomed, credited_peer, point_blank_peer)
+	NetSession.of(self).broadcast(self, &"_boom",
+		[epicentre, doomed, credited_peer, point_blank_peer])
 
 
 ## The event. The epicentre travels rather than being read from our replicated
@@ -210,7 +208,7 @@ func _despawn_if_left_behind() -> void:
 func _nearest_avatar() -> CharacterBody2D:
 	var best: CharacterBody2D = null
 	var best_distance := INF
-	for node in get_tree().get_nodes_in_group(&"player"):
+	for node: Node in NetSession.avatars_of(self):
 		var avatar := node as CharacterBody2D
 		if avatar == null or not is_instance_valid(avatar) or int(avatar.get("health")) <= 0:
 			continue

@@ -8,6 +8,14 @@ extends Node
 ## effects die with it. Cosmetics stay local — in a networked session these
 ## are triggered by replicated events, never replicated as state.
 
+## Turned off wholesale by a dedicated server, which has no screen to shake and
+## no window to flash. Every entry point below is already a no-op without an
+## `effects_root`, but "already a no-op" still costs a group lookup, a dictionary
+## read and a tween per event, on every room, sixty times a second. A server is
+## the one process that runs the whole simulation and presents none of it, so it
+## says so once here rather than being asked to prove it at each call site.
+var enabled: bool = true
+
 var _trauma: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -66,6 +74,8 @@ func _process(delta: float) -> void:
 # ── Screen shake ────────────────────────────────────────────────────────────
 ## Add trauma (0..1). The camera owner reads get_shake_offset() every frame.
 func shake(amount: float) -> void:
+	if not enabled:
+		return
 	_trauma = clampf(_trauma + amount, 0.0, 1.0)
 
 
@@ -102,7 +112,7 @@ func shake_from(pos: Vector2, amount: float, range_px: float) -> void:
 ## for the one player who set a bomb off with their own body. Everybody else gets
 ## the wash, which covers the frame and does not care where it came from.
 func screen_flash(strength: float, world_pos: Vector2, close: bool = false) -> void:
-	if strength <= 0.0:
+	if not enabled or strength <= 0.0:
 		return
 	var flasher := get_tree().get_first_node_in_group(FxBlastFlash.GROUP) as FxBlastFlash
 	if flasher != null:
@@ -115,7 +125,7 @@ func screen_flash(strength: float, world_pos: Vector2, close: bool = false) -> v
 ## `count` overrides the preset amount when > 0 (combo-scaled kills).
 ## Bursts are pooled and returned on their `finished` signal.
 func burst(pos: Vector2, preset: BurstPreset, tint: Color = Color.WHITE, count: int = 0) -> void:
-	if preset == null or not is_instance_valid(effects_root):
+	if not enabled or preset == null or not is_instance_valid(effects_root):
 		return
 	var b := _acquire_burst()
 	b.global_position = pos
@@ -151,7 +161,7 @@ func _on_burst_finished(b: FxBurst) -> void:
 ## and each burst carries a different texture and a different emission box.
 func debris(pos: Vector2, chunk: Texture2D, extents: Vector2, away: Vector2,
 		preset: BurstPreset, tint: Color = Color.WHITE) -> void:
-	if not is_instance_valid(effects_root):
+	if not enabled or not is_instance_valid(effects_root):
 		return
 	var d: FxDebris = _debris_scene.instantiate()
 	effects_root.add_child(d)
@@ -174,7 +184,7 @@ func debris(pos: Vector2, chunk: Texture2D, extents: Vector2, away: Vector2,
 ## position, the ×2 scale, any rotation (a bomb is usually spinning) and the flip.
 func shards(sprite: Node2D, preset: ShardPreset, away: Vector2 = Vector2.ZERO,
 		tint: Color = Color.WHITE) -> void:
-	if not is_instance_valid(effects_root) or sprite == null or preset == null:
+	if not enabled or not is_instance_valid(effects_root) or sprite == null or preset == null:
 		return
 	var tex := texture_of(sprite)
 	if tex == null:
@@ -219,7 +229,7 @@ func shards(sprite: Node2D, preset: ShardPreset, away: Vector2 = Vector2.ZERO,
 # ── Floating popups ─────────────────────────────────────────────────────────
 ## Floating text in world space ("+300 x3"). Rises and fades out.
 func popup(pos: Vector2, text: String, color: Color = Color.WHITE, font_size: int = 30) -> void:
-	if not is_instance_valid(effects_root):
+	if not enabled or not is_instance_valid(effects_root):
 		return
 	var p: Node2D = _popup_scene.instantiate()
 	effects_root.add_child(p)
@@ -232,7 +242,7 @@ func popup(pos: Vector2, text: String, color: Color = Color.WHITE, font_size: in
 ## Accepts either a Sprite2D or an AnimatedSprite2D — the ghost only ever needs
 ## the texture that is on screen right now.
 func ghost(src: Node2D, tint: Color = Color(1.0, 1.0, 1.0, 0.4)) -> void:
-	if not is_instance_valid(effects_root) or src == null:
+	if not enabled or not is_instance_valid(effects_root) or src == null:
 		return
 	var tex := texture_of(src)
 	if tex == null:
@@ -261,7 +271,7 @@ func texture_of(src: Node2D) -> Texture2D:
 # ── Flash ───────────────────────────────────────────────────────────────────
 ## Quick color flash on any CanvasItem (damage feedback).
 func flash(item: CanvasItem, color: Color = Color(1.0, 0.25, 0.25), time: float = 0.18) -> void:
-	if not is_instance_valid(item):
+	if not enabled or not is_instance_valid(item):
 		return
 	item.modulate = color
 	var tw := item.create_tween()

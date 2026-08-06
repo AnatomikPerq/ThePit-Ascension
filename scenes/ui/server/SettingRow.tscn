@@ -1,0 +1,62 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/setting_row.gd" id="1_script"]
+
+[node name="SettingRow" type="VBoxContainer"]
+theme_override_constants/separation = 2
+script = ExtResource("1_script")
+
+[node name="Head" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="KeyLabel" type="Label" parent="Head"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 20
+
+[node name="RestartLabel" type="Label" parent="Head"]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "(restart)"
+visible = false
+
+[node name="Description" type="Label" parent="."]
+modulate = Color(1, 1, 1, 0.6)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+autowrap_mode = 3
+
+[node name="Editor" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TextEdit" type="LineEdit" parent="Editor"]
+custom_minimum_size = Vector2(420, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+
+[node name="ChoiceEdit" type="OptionButton" parent="Editor"]
+custom_minimum_size = Vector2(260, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+visible = false
+
+[node name="ToggleEdit" type="Button" parent="Editor"]
+custom_minimum_size = Vector2(140, 40)
+layout_mode = 2
+toggle_mode = true
+theme_override_font_sizes/font_size = 19
+visible = false
+
+[node name="ApplyBtn" type="Button" parent="Editor"]
+custom_minimum_size = Vector2(120, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "APPLY"
+
+[node name="Gap" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2

@@ -5,7 +5,7 @@
 **A seeded vertical platformer for Godot 4.7. You start at depth 16000.
 The surface does not expect you.**
 
-Solo · Co-op · Race — plain ENet, no accounts, no services.
+Solo · Co-op · Race · a dedicated server with rooms, accounts and moderation.
 
 </div>
 
@@ -98,8 +98,16 @@ sessions.
 
 ![The multiplayer lobby](docs/images/lobby.png)
 
-One player forwards a UDP port (default **24565**) and hosts; everyone else
-joins by address. The host picks the mode and starts the climb for all of them.
+**MULTIPLAYER** on the main menu is a list of somewhere to play. It fills from
+three places at once — a directory on the internet, a shout on your own network
+that needs no infrastructure at all, and the servers you have played on before —
+and a coloured badge next to a name is a server the developer has checked, with
+the reason on hover. Under the list: **CONNECT BY ADDRESS**, for a server
+somebody gave you, and **OPEN MY OWN GAME**.
+
+That last one is the peer-to-peer half, pictured above. One player forwards a UDP
+port (default **24565**) and hosts; everyone else joins by address. The host picks
+the mode and starts the climb for all of them.
 
 - **Co-op** — the first to the surface wins it for the team.
 - **Race** — exactly one winner, and the other climbers are in your way for
@@ -121,6 +129,39 @@ main menu at any time. **Single-player never opens a socket.**
 
 Which parts of the game are simulated where — element by element, with the
 rules the model stands on — is [docs/NETWORKING.md](docs/NETWORKING.md).
+
+## A dedicated server
+
+The other way to play: a console program that hosts **several rooms at once** and
+keeps them going whether or not the person who started them is playing. It is a
+build of this same repository with its presentation turned off, so it cannot be
+wrong about the game — it runs the same generator and the same entities.
+
+```bash
+godot --headless --path . -- --server      # from a checkout
+thepit --server                            # from a build
+```
+
+- **Rooms**, each with its own mode, seats, password and owner. One UDP port for
+  all of them, and players move between them without reconnecting.
+- **Found without being typed** — it answers discovery probes on its own network
+  out of the box, and can announce itself to a directory to appear in the browser
+  everywhere. A third mode of the same binary, `--directory`, *is* that service.
+- **Accounts**, or guests, or neither — `auth/mode` decides. The password never
+  leaves the player's machine.
+- **Moderation**: kick, ban (timed or not, by account or address), mute, warn,
+  move, close a room, announce. From the console, from a remote console over TCP,
+  or from an administration panel **inside the game** on `F8` — the same commands
+  with the same permission check in front of all three.
+- **Rights are named, not ranked**, so somebody can be given the ability to kick
+  and nothing else. `op` makes an admin; the first account on a fresh server
+  becomes the owner.
+- **Around ninety settings**, in a `server.cfg` the server writes itself with a
+  comment above every key explaining it — and editable live from the panel.
+
+Everything an operator needs, including a domain, running it as a service, what
+the protection actually covers and what it does not, is
+[docs/SERVER.md](docs/SERVER.md).
 
 ## Controls
 
@@ -171,21 +212,47 @@ a path.
 
 ### Multiplayer quickstart
 
-1. Host: forward the UDP port, then **MULTIPLAYER → HOST**.
-2. Everyone else: enter the host's address and port, **JOIN**.
-3. Host: pick **CO-OP** or **RACE** and start. The roster locks at that moment
-   — there is no join-in-progress.
+One button on the main menu, **MULTIPLAYER**, and everything is behind it: a
+list of servers, a box to type an address into, and your own game.
+
+1. The list finds servers three ways — a directory on the internet, a shout on
+   your own network, and the ones you have played on before. A coloured badge
+   next to a name is a server the developer has checked; hover it to read why.
+2. **OPEN MY OWN GAME** is the peer-to-peer half: forward the UDP port, **HOST**,
+   everyone else **JOIN**s by address. The host picks **CO-OP** or **RACE** and
+   starts; the roster locks at that moment, so there is no join-in-progress.
+
+### Dedicated server quickstart
+
+1. `godot --headless --path . -- --server`, then read the `server.cfg` it wrote.
+2. `account register yourname a-good-password` on its console — the first
+   account is the owner.
+3. Players find it on their own network at once. To be in the list on the
+   internet, set `directory/announce` and `directory/url` — see
+   [Being found](docs/SERVER.md#being-found).
+4. `F8` in the game opens the administration panel for anybody you have given
+   `server.panel` to.
+
+### Server list quickstart
+
+The same binary again, third job: the service that lists servers.
+
+1. `godot --headless --path . -- --directory`.
+2. `key issue official "My server" "Run by me."` prints two lines to paste into
+   a host's `server.cfg`. That, and only that, is what puts a badge on a name.
+3. Point players at it by setting the URL in `data/net/directory.tres`.
 
 ## How it is put together
 
 ```
-src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/)
+src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/,
+           server/ — the dedicated server, directory/ — the server list)
 scripts/   entity controllers and the older autoloads
 data/      .tres resources — the tuning surface (audio/, animations/, enemies/, fx/, worlds/)
-scenes/    .tscn by category (fx/, ui/, entities at the top level)
+scenes/    .tscn by category (fx/, ui/, ui/server/, server/, entities at the top level)
 assets/    sprites/, audio/ (+ CREDITS.md), ui/
 tools/     headless probes, one-shot generators, the test harness, setup_claude.sh
-docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
+docs/      ARCHITECTURE, CONTENT, NETWORKING, SERVER, TESTING
 test/      GdUnit4 suites
 addons/    AsepriteWizard, gdUnit4, godot_mcp — committed with the project
 ```
@@ -204,12 +271,17 @@ project is meant to grow into next.
 bash tools/run_tests.sh
 ```
 
-Everything headless, one command: the GdUnit4 suites, a 55-check smoke test, an
+Everything headless, one command: the GdUnit4 suites, a 73-check smoke test, an
 input/state probe driving real key events, the world-generation fingerprint, a
 two-instance multiplayer probe over a localhost socket — including a host
 restart, a race hit landing across machines, and a bomb the host sets off taking
-the same platform out of the client's world — and the convention gates.
-See [docs/TESTING.md](docs/TESTING.md).
+the same platform out of the client's world — a **three-process server probe**
+putting two clients in two different rooms of one real dedicated server, and the
+convention gates. See [docs/TESTING.md](docs/TESTING.md).
+
+The run also regenerates the build fingerprint the game and the server compare,
+and says loudly when it moved: a commit that changes the simulation is a commit
+that obliges you to redeploy the server, and that is not left to memory.
 
 The images in this README are generated by
 `tools/build_readme_shots.tscn`: the project's own scenes, its own renderer, a

@@ -105,7 +105,7 @@ func _on_start() -> void:
 
 func _on_back() -> void:
 	Net.leave()
-	Router.to_menu()
+	Router.to_multiplayer()
 
 
 func _on_session_closed(reason: String) -> void:

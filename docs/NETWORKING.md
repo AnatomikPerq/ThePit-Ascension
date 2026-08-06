@@ -1,8 +1,18 @@
 # Networking
 
-Plain ENet (UDP) over an open port. One player hosts; the rest join by
-address. No accounts, no relays, no service integration. The host forwards
-one UDP port (default **24565**) and everyone connects directly.
+Plain ENet (UDP) over an open port. Two ways to play together:
+
+- **Peer-to-peer** — one player hosts, the rest join by address. No accounts, no
+  relays. The host forwards one UDP port (default **24565**).
+- **A dedicated server** — a build of this project with its presentation turned
+  off, hosting several rooms at once on one port, with accounts, moderation and
+  administration. Operating it is [SERVER.md](SERVER.md); how it fits the model
+  below is [the section at the end](#a-dedicated-server-several-rooms-one-socket).
+
+Everything in this document applies to both unless it says otherwise. The
+authority model is the same one in each: the machine steering an avatar
+simulates it, and the **sim authority** — solo, the peer-to-peer host, or the
+dedicated server — simulates the world.
 
 **Single-player never opens a socket.** `Net.active` is false until the
 lobby calls `Net.host()` or `Net.join()`; every networked code path in the
@@ -188,10 +198,104 @@ neither: teammates pass through each other and cannot do each other harm.
   tracks each spawned node individually, and freeing the spawner only trades
   this line for a null-spawner one.)
 
+## A dedicated server: several rooms, one socket
+
+The model above does not change. What changes is that there is more than one of
+it at a time, and two things had to become explicit for that to work.
+
+**`Net` is a machine; a `NetSession` is a room.** `Net` answers "am I connected,
+am I the server, who am I talking to" — a fact about this process. A
+`NetSession` answers "who is in this run, in which mode, at which room id". A
+player's machine has one of each and they used to be one object; a server has one
+socket and several runs. Nothing under `src/server/` may read `Net.mode`,
+`Net.session_peers` or `Net.is_versus()`, because those describe whichever room
+wrote last — a convention gate enforces it, and every one of them has a per-room
+answer on the world's own session.
+
+**Every message is addressed.** `node.rpc(...)` reaches every peer the socket
+knows about, which on a server is three other rooms as well, on a node path they
+do not have. Gameplay uses `NetSession.of(node).broadcast(...)`, which sends to
+that room's members and nobody else. Also gated.
+
+### How the rooms stay apart
+
+Two halves, and both were measured before they were relied on.
+
+1. **Node paths.** A room's world is `/root/World<id>` — on the server and on
+   every client in that room, derived from the room id by a pure function so that
+   both sides agree without a handshake. Room 0 is solo play and a peer-to-peer
+   host: one unnamed room, and the plain `World` the game has always used, so
+   nothing about the existing addressing moved.
+2. **Visibility.** Every `MultiplayerSynchronizer` in a room gets
+   `public_visibility = false` plus an explicit yes per member, applied **before**
+   the node enters the tree — so the spawn packet itself is already addressed
+   rather than being sent and retracted a frame later.
+
+The second half rests on a property Godot's documentation states and does not
+demonstrate: that synchronizer visibility gates the `MultiplayerSpawner`'s SPAWN
+packet and not merely the sync stream. It was checked with three real processes
+over a real socket before any of the server was written, and
+`tools/run_server_probe.sh` re-checks it on every test run.
+
+### The thing that bit, and will bite again
+
+Every room's pit is built in the **same coordinate space**, starting at the same
+origin. So a tree-wide group query — "the nearest player", "the destructibles
+within the blast", "the trampoline container" — answers with things in other
+rooms, standing at the same height in a pit these players cannot see. With one
+room it is indistinguishable from correct.
+
+`NetSession.avatars_of(node)` and `NetSession.in_world(node, group)` are the
+scoped answers. Both fall back to the plain group when there is no world above,
+which is solo play and every unit suite.
+
+### What the server is authority for
+
+Exactly what the peer-to-peer host was, per room, plus the things a host was
+never responsible for: who may connect at all, who may do what, and which room
+anybody is in. Avatar movement is still **client-authoritative** —
+`protection/movement_guard` is a tripwire on it and deliberately not a wall, for
+the reason set out in [SERVER.md](SERVER.md#what-the-movement-guard-is-not).
+
+### Finding a server in the first place
+
+Two paths, neither of which is game traffic and neither of which any of the
+above depends on.
+
+**A directory** — an HTTP service (`--directory`, `src/directory/`) that servers
+POST a description to and clients GET a list from. It is the only thing that can
+say a server is *verified*: a key it issued signs the announce, the signature
+covers the name and address, and a server's own claim to a badge is discarded
+before it is ever stored. It speaks HTTP rather than ENet on purpose — the
+readers are `HTTPRequest`, curl, and an nginx doing TLS in front.
+
+**A shout on the local network** — the browser broadcasts one UDP packet to
+24568–24570 and every `LanBeacon` that hears it answers with one packet. Request
+and response, never a periodic broadcast: an idle server should be silent, and a
+client not looking at the browser should not be listening. The address of a LAN
+answer comes from the packet and never from its contents.
+
+Both feed `ServerFinder`, which merges them with what the player has saved. Rows
+are merged on the server's own instance id and not on its address, because a
+machine answers a local probe down every interface it has — three answers about
+one server, which without this is three rows.
+
+None of it is in the content fingerprint below: a client that cannot find a
+server has a worse day than one that can, not a different pit.
+
+### The build fingerprint
+
+A client and a server state their build in the first packet either sends, and a
+mismatch is refused before it can become a desync. This is the single most
+important operational rule the server adds and it has its own section in
+[SERVER.md](SERVER.md#the-rule-the-server-moves-with-the-game).
+
 ## Verifying
 
 ```bash
-bash tools/run_net_probe.sh   # part of tools/run_tests.sh
+bash tools/run_net_probe.sh        # part of tools/run_tests.sh
+bash tools/run_server_probe.sh     # ditto
+bash tools/run_directory_probe.sh  # ditto
 ```
 
 boots a real headless host and client over a localhost socket and asserts:
@@ -226,6 +330,16 @@ platform and keep a control platform three radii away. The bomb is held still
 while the spawn packet travels — a live one falls 600 px a second, and the first
 version of this stage moved the epicentre a quarter of a blast below its target
 and reported that destruction does not replicate.
+
+`tools/run_server_probe.sh` is the three-process one: a real dedicated server and
+two clients that end up in DIFFERENT rooms of it. It is the only harness that can
+check room isolation, because one process always agrees with itself. It asserts
+registering and the first account becoming the owner, two rooms running at once
+with each client holding exactly one world — its own, named after its own room,
+carrying only its own avatar — two different pits, enemies mirrored into each
+room separately, chat that does not carry between rooms, the admin path over the
+game socket, the refusals an ordinary player gets, and no replication errors in
+either client log.
 
 `test/net_session_test.gd` pins the mode semantics (co-op = shared victory,
 race = one winner, ending stops the simulation).

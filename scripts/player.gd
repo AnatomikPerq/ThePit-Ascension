@@ -153,6 +153,13 @@ var _shove_x: float = 0.0
 ## bodies ITS player could pick up, and World decides that every frame.
 @onready var revive_prompt: RevivePrompt = $RevivePrompt
 
+## The run this avatar is climbing in, resolved from the world above it rather
+## than read off the Net autoload. On a player's machine the two are the same
+## thing; on a dedicated server hosting a race in one room and a co-op climb in
+## the next, only this one is right. With no world above — which is how every
+## unit suite builds an avatar — it falls back to this machine's own session.
+@onready var session: NetSession = NetSession.of(self)
+
 # ── Signals ─────────────────────────────────────────────────────────────────
 signal player_damaged(new_health: int)
 signal player_died
@@ -167,11 +174,11 @@ func _ready() -> void:
 	# Race: rivals are solid, so you can stand on a head — and their strikes
 	# reach you. Co-op and solo: nothing changes, players pass through each
 	# other and the hurt box never wakes up.
-	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus())
+	set_collision_mask_value(Layers.BIT_PLAYER, session.is_versus())
 	# Only the machine steering this avatar watches for incoming hits. Damage
 	# belongs to the victim; a puppet's overlap test here would be somebody
 	# else's opinion about our health.
-	hurt_box.monitoring = Net.is_versus() and is_multiplayer_authority()
+	hurt_box.monitoring = session.is_versus() and is_multiplayer_authority()
 	hurt_box.area_entered.connect(_on_hostile_area)
 	_arm_dash_box(dashing_down)
 
@@ -214,7 +221,7 @@ func _apply_character() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if Net.active and not is_multiplayer_authority():
+	if session.active and not is_multiplayer_authority():
 		_puppet_process(delta)
 		return
 
@@ -241,7 +248,7 @@ func _physics_process(delta: float) -> void:
 
 	# Before the landing bookkeeping below clears the dash: in a race, coming
 	# down on a rival's head is an attack, not a landing.
-	if was_dashing and Net.is_versus():
+	if was_dashing and session.is_versus():
 		_resolve_versus_stomp()
 
 	if was_on_floor and not now_on_floor and velocity.y >= 0:
@@ -432,10 +439,7 @@ func _try_strike() -> void:
 	# spawns on every machine — so every punch anyone threw played in every
 	# lobby, wherever in the pit it happened.
 	Audio.play(character.attack_sound)
-	if Net.active:
-		_spawn_strike.rpc()
-	else:
-		_spawn_strike()
+	session.broadcast(self, &"_spawn_strike")
 
 
 @rpc("authority", "call_local", "reliable")
@@ -466,10 +470,7 @@ func _try_shoot() -> void:
 	shot_pose_timer.start()
 	# Ours to hear, like the swing: the RPC below runs on every machine.
 	Audio.play(character.ranged_sound)
-	if Net.active:
-		_spawn_bullet.rpc(facing_right, muzzle_position())
-	else:
-		_spawn_bullet(facing_right, muzzle_position())
+	session.broadcast(self, &"_spawn_bullet", [facing_right, muzzle_position()])
 
 
 ## Spawned on every machine, exactly like a Strike, and for the same reasons:
@@ -493,10 +494,7 @@ func _try_shockwave() -> void:
 		return
 	shockwave_cd_timer.start()
 	Audio.play(&"shockwave")
-	if Net.active:
-		_spawn_shockwave.rpc()
-	else:
-		_spawn_shockwave()
+	session.broadcast(self, &"_spawn_shockwave")
 
 
 @rpc("authority", "call_local", "reliable")
@@ -573,7 +571,7 @@ func _resolve_versus_stomp() -> void:
 ## Only the machine steering this avatar may push it: velocity is its business,
 ## and a puppet's position arrives already moved.
 func shove(from: Vector2, strength: float) -> void:
-	if Net.active and not is_multiplayer_authority():
+	if session.active and not is_multiplayer_authority():
 		return
 	if strength <= 0.0 or is_crushed or is_downed:
 		return
@@ -599,7 +597,7 @@ func _apply_shove(delta: float) -> void:
 ## takes two, which is the only reason this is a parameter.
 func take_damage(amount: int = 1) -> bool:
 	# Health belongs to the owning machine; puppets never take damage locally.
-	if Net.active and not is_multiplayer_authority():
+	if session.active and not is_multiplayer_authority():
 		return false
 	if invincible or flying or not can_input or is_downed:
 		return false
@@ -681,7 +679,7 @@ func _end_crush(force: bool = false) -> void:
 ## and in a race the rival who may be standing right where you popped out.
 func _set_phasing(on: bool) -> void:
 	set_collision_mask_value(Layers.BIT_WORLD, not on)
-	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus() and not on)
+	set_collision_mask_value(Layers.BIT_PLAYER, session.is_versus() and not on)
 
 
 func _floor_limit() -> float:
@@ -696,8 +694,8 @@ func _floor_limit() -> float:
 ## it fell and anyone still climbing can spend a heart on it. Solo, it is the
 ## end of the run, exactly as it always was.
 func _die() -> void:
-	if Net.active:
-		_go_down.rpc()
+	if session.active:
+		session.broadcast(self, &"_go_down")
 	else:
 		_die_everywhere()
 
@@ -714,7 +712,7 @@ func _die_everywhere() -> void:
 	_lay_down(true)
 	collision_mask = Layers.NONE
 	hurt_box.monitoring = false
-	var mine := not Net.active or is_multiplayer_authority()
+	var mine := not session.active or is_multiplayer_authority()
 	# Announced everywhere, so it is a world sound with a long range rather than
 	# a private one: ours plays at zero distance and full volume, and somebody
 	# going down three levels up is not something we can hear.
@@ -770,13 +768,13 @@ func _go_down() -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func remote_revive() -> void:
 	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
-		stand_up.rpc()
+		session.broadcast(self, &"stand_up")
 
 
 @rpc("any_peer", "call_remote", "reliable")
 func remote_pay_revive() -> void:
 	if is_multiplayer_authority() and multiplayer.get_remote_sender_id() == 1:
-		pay_revive.rpc()
+		session.broadcast(self, &"pay_revive")
 
 
 ## Somebody paid a heart for this body. It stands up where it fell with one
@@ -794,7 +792,7 @@ func stand_up() -> void:
 	_lay_down(false)
 	_squash(Vector2(1.5, 2.6))
 	_restore_collision()
-	hurt_box.monitoring = Net.is_versus() and is_multiplayer_authority()
+	hurt_box.monitoring = session.is_versus() and is_multiplayer_authority()
 	revive_prompt.show_sign(false)
 	sprite.play(&"standing")
 	_puppet_anim = &"standing"
@@ -829,7 +827,7 @@ func _lay_down(on: bool) -> void:
 func _restore_collision() -> void:
 	collision_layer = Layers.PLAYER
 	collision_mask = Layers.WORLD
-	set_collision_mask_value(Layers.BIT_PLAYER, Net.is_versus())
+	set_collision_mask_value(Layers.BIT_PLAYER, session.is_versus())
 
 
 ## World decides, every frame, which bodies this machine's player could pick up.
@@ -850,7 +848,7 @@ func set_revive_prompt(on: bool) -> void:
 func remote_hurt() -> void:
 	if not is_multiplayer_authority():
 		return
-	if multiplayer.get_remote_sender_id() == 1 or Net.is_versus():
+	if multiplayer.get_remote_sender_id() == 1 or session.is_versus():
 		take_damage()
 
 

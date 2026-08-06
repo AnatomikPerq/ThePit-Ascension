@@ -35,11 +35,36 @@ func _run() -> void:
 	await _shot("characters.png")
 	menu.free()
 
+	# The one door out of the main menu. Given long enough for both discovery
+	# paths to answer — the LAN scan alone runs for two and a half seconds — so
+	# that running this with a directory and a server up shows the populated
+	# list, and running it with neither shows the empty state honestly.
+	var browser: Node = load("res://scenes/ui/MultiplayerMenu.tscn").instantiate()
+	get_tree().root.add_child(browser)
+	await _frames(200)
+	await _shot("multiplayer.png")
+	browser.free()
+
 	var lobby: Node = load("res://scenes/Lobby.tscn").instantiate()
 	get_tree().root.add_child(lobby)
 	await _frames(10)
 	await _shot("lobby.png")
 	lobby.free()
+
+	# The dedicated server's two client surfaces. The lobby is shot with nobody
+	# connected, which is the state it is in for the half-second before the room
+	# list lands — and the state that is hardest to notice looking wrong.
+	var connect_screen: Node = load("res://scenes/ui/ServerConnect.tscn").instantiate()
+	get_tree().root.add_child(connect_screen)
+	await _frames(10)
+	await _shot("server_connect.png")
+	connect_screen.free()
+
+	var server_lobby: Node = load("res://scenes/ui/ServerLobby.tscn").instantiate()
+	get_tree().root.add_child(server_lobby)
+	await _frames(10)
+	await _shot("server_lobby.png")
+	server_lobby.free()
 
 	var world: Node = load("res://scenes/World.tscn").instantiate()
 	world.world_seed = 20260728

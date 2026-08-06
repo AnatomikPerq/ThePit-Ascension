@@ -1,0 +1,176 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/ui/admin_panel.gd" id="1_script"]
+[ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+
+[node name="AdminPanel" type="CanvasLayer"]
+layer = 64
+script = ExtResource("1_script")
+
+[node name="Shade" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.78)
+
+[node name="Panel" type="PanelContainer" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 90.0
+offset_top = 60.0
+offset_right = -90.0
+offset_bottom = -60.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+
+[node name="Layout" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Head" type="HBoxContainer" parent="Panel/Layout"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="Panel/Layout/Head"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.98, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 30
+text = "SERVER"
+
+[node name="FilterEdit" type="LineEdit" parent="Panel/Layout/Head"]
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+placeholder_text = "filter"
+
+[node name="RefreshBtn" type="Button" parent="Panel/Layout/Head"]
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "REFRESH"
+
+[node name="CloseBtn" type="Button" parent="Panel/Layout/Head"]
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+text = "CLOSE  (ESC)"
+
+[node name="Tabs" type="TabContainer" parent="Panel/Layout"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 20
+
+[node name="OVERVIEW" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/OVERVIEW"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/OVERVIEW/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="PLAYERS" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/PLAYERS"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/PLAYERS/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ROOMS" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/ROOMS"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/ROOMS/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="SETTINGS" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/SETTINGS"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/SETTINGS/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="BANS" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/BANS"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/BANS/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ACCOUNTS" type="MarginContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Scroll" type="ScrollContainer" parent="Panel/Layout/Tabs/ACCOUNTS"]
+layout_mode = 2
+
+[node name="Rows" type="VBoxContainer" parent="Panel/Layout/Tabs/ACCOUNTS/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="CONSOLE" type="VBoxContainer" parent="Panel/Layout/Tabs"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Log" type="RichTextLabel" parent="Panel/Layout/Tabs/CONSOLE"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+scroll_following = true
+theme_override_font_sizes/normal_font_size = 17
+
+[node name="Input" type="LineEdit" parent="Panel/Layout/Tabs/CONSOLE"]
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 19
+placeholder_text = "a command — try 'help'"
+
+[node name="Ticker" type="Timer" parent="."]
+wait_time = 4.0

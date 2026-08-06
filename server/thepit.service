@@ -1,0 +1,37 @@
+# A systemd unit for the dedicated server. Copy to /etc/systemd/system/,
+# edit the three paths, then:
+#
+#   systemctl daemon-reload && systemctl enable --now thepit
+#   journalctl -u thepit -f
+#
+# There is no typed console under a service manager — the server says so at boot
+# and carries on. Administer it through rcon (tunnelled: see docs/SERVER.md) or
+# the panel inside the game.
+
+[Unit]
+Description=The PIT: Ascension dedicated server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thepit
+Group=thepit
+WorkingDirectory=/opt/thepit
+ExecStart=/opt/thepit/thepit-server --data /var/lib/thepit
+# Colour is escape codes in the journal, and the journal already timestamps.
+Environment=TERM=dumb
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# The server needs its data directory and nothing else on the machine.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/thepit
+
+[Install]
+WantedBy=multi-user.target

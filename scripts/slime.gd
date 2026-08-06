@@ -47,11 +47,15 @@ func _leave_trampoline() -> void:
 	var t := TRAMPOLINE_SCENE.instantiate()
 	# Our own parent is the Enemies container, so parenting the trampoline there
 	# left World.tscn's Trampolines node empty for the whole life of the project.
-	var container := get_tree().get_first_node_in_group(&"trampoline_container")
+	# This room's container, not the first one in the tree: a dedicated server
+	# has one per room and they all answer to the same group.
+	var found := NetSession.in_world(self, &"trampoline_container")
+	var container: Node = found[0] if not found.is_empty() else null
 	if container == null:
 		container = get_parent()
 	t.position = global_position - container.global_position
 	# add_child(_, true): readable names are what lets the MultiplayerSpawner
 	# mirror this node onto every peer.
+	NetSession.of(self).scope(t)
 	container.add_child(t, true)
 	queue_free()

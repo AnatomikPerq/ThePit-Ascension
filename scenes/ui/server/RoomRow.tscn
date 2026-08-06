@@ -1,0 +1,29 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/room_row.gd" id="1_script"]
+
+[node name="RoomRow" type="HBoxContainer"]
+theme_override_constants/separation = 16
+script = ExtResource("1_script")
+
+[node name="NameLabel" type="Label" parent="."]
+custom_minimum_size = Vector2(320, 44)
+layout_mode = 2
+size_flags_vertical = 1
+theme_override_font_sizes/font_size = 24
+text = "ROOM"
+vertical_alignment = 1
+
+[node name="DetailLabel" type="Label" parent="."]
+custom_minimum_size = Vector2(340, 44)
+modulate = Color(1, 1, 1, 0.7)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+vertical_alignment = 1
+
+[node name="JoinBtn" type="Button" parent="."]
+custom_minimum_size = Vector2(130, 44)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "JOIN"

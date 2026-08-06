@@ -52,6 +52,48 @@ Everything about a climber is a `CharacterDef` resource. Nothing in the game may
 branch on *which* character it is steering — if a difference cannot be expressed
 as a field there, the missing field is the bug.
 
+Added on the owner's instruction (6 August 2026): a **dedicated server**. He
+asked for console server software with moderation and administration, rooms with
+different modes, player control, a domain, accounts and a protection scheme,
+explicitly delegating the design ("планирование за тобой") and explicitly asking
+for the game to be fixed where it got in the way. It brought two things that are
+not in the inventory above and are therefore worth naming:
+
+- **Chat**, in a room's lobby and over the whole server, with a rate limit, a
+  word filter and mute. It is here because moderation without it is a set of
+  verbs with nothing to apply them to — you cannot mute somebody who cannot
+  speak. `moderation/chat` turns all of it off.
+- **An administration panel** in the game (`F8`), for whoever the server has
+  given the right to. Its buttons build the same command lines the console takes.
+
+Neither is a game mechanic: no new enemy, ability, character, world or structure
+went in with the server, and the inventory above is unchanged. See
+[docs/SERVER.md](docs/SERVER.md).
+
+Added on the owner's instruction the same day, and again with the design
+delegated ("как находить их точно не скажу, подумай сам"): **one MULTIPLAYER
+entry on the main menu instead of two**, holding a LAN game, connect-by-address,
+and a **server browser**. Nothing in it is game content either — it is how a
+player finds somewhere to play. What it brought that is worth naming:
+
+- **A server directory**: a third program in this same binary
+  (`--directory`, `src/directory/`), which servers announce themselves to over
+  HTTP and clients read a list from.
+- **Verification.** He asked for it in these terms: he hands a host a key, the
+  host registers it, the server runs with it, and the key IS the badge — with a
+  description on hover. So the badge is decided by the DIRECTORY and never by the
+  server: an announce is signed with the key's secret, the signature covers the
+  name and address, and a server's own claim to a badge is discarded before it is
+  stored. `check_conventions.sh` gates the two places allowed to write one.
+- **A LAN beacon**, because a browser that is empty without infrastructure is not
+  a browser. One UDP packet each way, answered on request, never broadcast.
+
+He also said a **large interface rewrite is coming**, for looks and for more
+function. Everything above was built to be restyled: the badges are three
+authored pills in `ServerRow.tscn`, not a colour computed in a script; the
+browser is one scene with one shared `Theme`; `ServerFinder` knows nothing about
+drawing and `multiplayer_menu.gd` knows nothing about where servers come from.
+
 Changed on the owner's instruction the same day, and not to be "restored":
 
 - **A plain jump on the head kills the pursuer and the bat.** Only the spitter
@@ -102,17 +144,19 @@ widget, that widget belongs in a `.tscn`.
 ## 3. Layout
 
 ```
-src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/)
+src/       code by system (audio/, core/, entities/, world/, ui/, net/, fx/, defs/,
+           server/ — the dedicated server, and server/commands/;
+           directory/ — the server list, its client and the LAN beacon)
 scripts/   entity controllers and the older autoloads (Fx, Game, world, player, enemies)
 data/      .tres resources — the tuning surface
            (audio/, animations/, characters/, enemies/, fx/, upgrades/, worlds/)
-scenes/    .tscn by category (fx/, ui/, entities at the top level)
+scenes/    .tscn by category (fx/, ui/, ui/server/, server/, entities at the top level)
 assets/    sprites/ (cyn/, tessa/, src/), audio/ (+ CREDITS.md), ui/
 test/      GdUnit4 suites
 tools/     headless probes, one-shot generators, the test harness
            hooks/ what Claude Code runs after an edit · lib/ shared shell helpers
            setup_claude.sh brings the toolchain up on a fresh clone
-docs/      ARCHITECTURE, CONTENT, NETWORKING, TESTING
+docs/      ARCHITECTURE, CONTENT, NETWORKING, SERVER, TESTING
 addons/    AsepriteWizard, gdUnit4, godot_mcp — committed, they are part of the project
 .claude/   settings.json, the PostToolUse hook wiring
 .mcp.json  the godot-mcp server entry, paths via ${VAR:-default}
@@ -154,6 +198,28 @@ origin of the numbers is traceable. They are not part of the build.
   leaves a body on the floor that a teammate can spend a heart on;
   `_any_avatar_alive()`, every milestone and every ending ask `is_downed`, not
   `is_instance_valid`. Solo death is unchanged and must stay that way.
+- **`Net` is this MACHINE; a `NetSession` is one ROOM.** Net answers "am I
+  connected, am I the server, who am I talking to". A `NetSession` answers "who
+  is in this run, in what mode". A player's machine has one of each and they used
+  to be the same object; a dedicated server has one socket and several runs and
+  cannot conflate them. Nothing under `src/server/` may read `Net.mode`,
+  `Net.session_peers` or `Net.is_versus()` — it would be describing whichever
+  room wrote last. `check_conventions.sh` enforces it.
+- **A gameplay message is addressed to a room, never broadcast.** `node.rpc(...)`
+  reaches every peer the socket knows about; on a server that is three other
+  rooms as well, on a node path they do not have. Use
+  `NetSession.of(node).broadcast(...)`. Gated.
+- **Never ask the tree for "the nearest player" or "the destructibles".** Every
+  room's pit is built in the SAME coordinate space, so a tree-wide group query
+  answers with a climber in a pit this room cannot see, or a platform in it.
+  `NetSession.avatars_of(node)` and `NetSession.in_world(node, group)` are the
+  scoped answers, and they fall back to the group when there is no world above —
+  which is every unit suite.
+- **Anything that is simulation goes in the world, not under `Fx.effects_root`.**
+  A dedicated server registers no effects root, so a hitbox parented there simply
+  does not exist. `Blast` learned this the hard way: its explosion hitbox is what
+  kills the enemies in the wave, and hanging it off the cosmetics root would have
+  meant bombs quietly killing nothing on every server.
 - **Committed text is LF, and it is not a style preference.** A `.tscn` string
   spans real file lines, so one CRLF file puts a stray carriage return *inside*
   every multi-line label — and Godot treats it as a line break of its own, which
@@ -189,11 +255,14 @@ godot --headless --path . -s tools/smoke_test.gd        # autoloads, buses, bank
 godot --headless --path . tools/state_probe.tscn        # pause, input, restart, shake, exit to menu
 godot --headless --path . tools/world_fingerprint.tscn  # same seed => same geometry hash
 bash tools/run_net_probe.sh                             # real host+client over a localhost socket
+bash tools/run_server_probe.sh                          # real dedicated server + 2 clients, 2 rooms
+bash tools/run_directory_probe.sh                       # real directory + announcing server + browser
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
 godot --path . tools/ui_check.tscn -- out_dir           # every UI surface, for eyeballing (advisory)
 bash tools/check_conventions.sh                         # grep gates for the rules above
 
 godot --headless --path . -s tools/world_balance.gd     # the pit level by level (advisory)
+godot --headless --path . -s tools/build_protocol_stamp.gd  # regenerate the build fingerprint
 ```
 
 `world_balance` is a measuring stick, not a gate. Every ramp in `WorldProfile`
@@ -400,13 +469,141 @@ Fixed on the owner's instruction (do not "restore" them):
 - The trampoline wrote velocity, `jump_count` and `dashing_down` onto *puppet* avatars. It
   never did anything — the owner's next sync packet overwrote all three — but it was
   somebody else's machine deciding about your movement, and the noise it made was real.
+Found and fixed while building the dedicated server (6 August 2026) — every one
+of these was already wrong, and only became visible once a second room existed:
+
+- **A blast's own hitbox was parented to `Fx.effects_root`.** That hitbox is what
+  kills the enemies caught in the wave — simulation, not decoration — and a
+  dedicated server registers no effects root. Bombs would have killed nothing on
+  every server in existence. It goes in the world now, which is the same node on
+  a player's machine and so changes nothing there.
+- **Tree-wide group queries.** "The nearest player", "the destructibles in
+  range", "the trampoline container": every one of them answered across the whole
+  tree. With one room that is the same as answering within it. With four, every
+  pit stands in the SAME coordinate space, so an enemy would chase a climber in a
+  room it cannot reach and a bomb would break platforms in a pit nobody present
+  can see.
+- **Run state was a global singleton.** `Game.runs` was one table and
+  `new_run()` cleared it, so a fourth room starting a climb wiped the scores of
+  the three already going — and the score and kill events were `@rpc`s on the
+  autoload's node path, one path shared by every room, so room 3's kill was
+  deliverable to room 1's players. It is a `RunLedger` node inside each World now.
+- **`DirAccess.rename` and `.copy` do not resolve a path against the directory
+  the object was opened at**, whatever it looks like. The atomic account write
+  silently left an `accounts.json.tmp` and no `accounts.json`. The `*_absolute`
+  statics take a path and mean it.
+- **The frame-time warning measured the frame interval, not the work.** With
+  `max_fps` at 60 every idle server on earth would have reported itself
+  overloaded. It reads `TIME_PROCESS` and `TIME_PHYSICS_PROCESS` now.
+- **`OS.read_string_from_stdin(n)` reads up to n BYTES, not one line.** From a
+  terminal it usually looks like a line; from a pipe or a file it returns as much
+  as it can, and the console treated a whole script of commands as one command.
+- **ENet compression has to match on both ends or no connection ever forms** — no
+  error, no log line, just a client stuck on "contacting…". It was briefly a
+  server setting, which is a way to break every client with one word. It lives in
+  `NetProtocol` now, where neither side can disagree about it.
+
+Found and fixed while building the server browser (6 August 2026), reading the
+server code back with fresh eyes. Every one of these was already wrong:
+
+- **`bans.json` was written straight over the live file.** The account file had
+  been written carefully — temporary, backup, rename — and the ban file, twenty
+  lines of the same idea, had not. A server killed mid-write left a truncated
+  JSON, and a truncated ban list is every ban on the server. Worse, a ban file
+  that would not parse loaded as an *empty* one, which is the same thing as
+  quietly unbanning everybody, and said nothing. There is one `JsonFile` now and
+  both use it; `test/server_storage_test.gd` pins it.
+- **Two of `RateLimiter`'s four users never pruned their tables**, and they were
+  the two keyed on a stranger's address: failed logins and rcon attempts. The
+  class's own comment says why that matters — "one entry per address that ever
+  touched the port, which is exactly the thing an attacker would be feeding".
+- **`auth/logins_per_minute` says FAILED logins and counted every attempt**, so
+  the player reconnecting eleven times on a bad line was locked out by a setting
+  that was never about them. The allowance is read at the start of a login and
+  spent only when one turns out to be wrong.
+- **The audit line for a command was written after the command ran** — so `stop`,
+  which closes the log, was the one command that never reached the log file.
+- **A finished room that everybody walked out of kept a fully simulated pit** for
+  the rest of the server's life when `rooms/empty_close_seconds` was 0, which is
+  exactly the setting a persistent room uses. The end-screen timer only advances
+  while somebody is there to watch it.
+- **The handshake read bytes off the wire straight into a typed variable.** A
+  peer that has not authenticated yet sending a string where the salt should be
+  is a runtime error in the middle of the auth callback. `NetProtocol.bytes_of`
+  is the only way it reads bytes now — the same fix `decode()` already had.
+- **`scenes/MainMenu.tscn` was inside the content fingerprint**, only because it
+  sits at the top of `scenes/` rather than under `scenes/ui/`. Moving a button on
+  the main menu obliged every server on earth to redeploy.
+
 - Knockback was in the code and not on the screen. A rival's hit set `velocity.x`
   directly, and `_handle_input()` assigns `velocity.x` outright on the very next frame,
   so the shove lasted one tick and moved the player by about a pixel. Impulses go through
   `Player.shove()` now: added on top of movement and decayed, so being blown across a gap
   is something you can see and have to recover from.
 
-## 8. Talking to the owner
+## 8. The server moves with the game
+
+**From now on, every change to the game is a change to the dedicated server.**
+Not because the server has a copy of anything — it is a build of this same
+repository, and that is exactly why. It *runs* the simulation: the same
+`WorldGenerator`, the same enemies, the same `Blast`. A server left up across a
+game update does not report an error. It hands its clients a seed, they build a
+*different* pit from it, and they fall through geometry the server does not have.
+
+Two numbers travel in the first packet either side sends, and a mismatch is
+refused with a sentence naming which side is stale:
+
+- **`NetProtocol.VERSION`** — the shape of the conversation. Hand-maintained,
+  because it describes code and code cannot be hashed out of an exported build.
+  Bump it when a message gains, loses or repurposes a field, when an `@rpc`
+  signature changes, or when authority moves between machines.
+- **the content fingerprint** — generated by `tools/build_protocol_stamp.gd`
+  over every file the simulation is a function of. Never hand-edited.
+
+`tools/run_tests.sh` regenerates the fingerprint on every run and says out loud
+when it moved. When it does: **commit the regenerated
+`data/net/protocol_stamp.tres` with the change, and rebuild and restart every
+server.**
+
+### The checklist, when you add something to the game
+
+Most of it costs nothing, because most of it already works — the server runs the
+same code. It is written down so that the parts which do not are not discovered
+by a player.
+
+1. **Does it spawn a replicated node?** Scope it before `add_child`:
+   `session.scope(node)`. Not after — the packet has already gone.
+2. **Does it broadcast?** `NetSession.of(node).broadcast(...)`, never `.rpc()`.
+3. **Does it ask the tree for a group?** Use `NetSession.avatars_of()` or
+   `NetSession.in_world()`. Every room is at the same coordinates.
+4. **Does it hang anything off `Fx.effects_root`?** Only if it is a cosmetic. A
+   server has no effects root; simulation goes in the world.
+5. **Does it add a tuning number an operator might want?** Consider one line in
+   `ServerSettings._declare()` — it appears in `server.cfg`, in `set`/`get`, and
+   in the admin panel, with no further work.
+6. **Does it add a moderation verb?** It goes in `Moderation` and gets a command;
+   the console, rcon and the panel then all have it.
+7. **Run `bash tools/run_tests.sh`.** The server probe boots a real server and
+   two clients in two rooms; the fingerprint step tells you to redeploy.
+8. **Does it change what a server tells the world about itself?** The browser
+   row, the LAN beacon and the announce are one shape — `DirectoryEntry` — and a
+   field added to `PitServer._beacon_payload` belongs in `DirectoryClient.
+   build_message` too, or a server will describe itself differently depending on
+   how it was found.
+9. **Update [docs/SERVER.md](docs/SERVER.md)** if an operator would need to know.
+
+### What is deliberately NOT in the fingerprint
+
+`scenes/ui`, `scenes/fx`, `src/ui`, `data/fx`, `data/audio`, the sprites,
+`scenes/MainMenu.tscn` and `scenes/Lobby.tscn` with their scripts, `scenes/server`,
+`src/server` itself — and `src/directory`, which is metadata ABOUT servers rather
+than part of one. The first group is presentation: a new particle preset must
+not oblige every player to download a new client. The last is the other side of
+the same coin — a client never runs a line of the server's own code, so it cannot
+be out of step with it, and fixing a typo in a log message must not invalidate
+every client in existence.
+
+## 9. Talking to the owner
 
 Russian. He is the sole developer and treats this repo as his. Ask before adding
 anything; report what actually happened, including what failed.

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="DirectoryDef" format=3]
+
+[ext_resource type="Script" path="res://src/directory/directory_def.gd" id="1_dirdef"]
+
+[resource]
+script = ExtResource("1_dirdef")
+url = ""
+enabled = true
+about = "No server list is configured in this build. The browser still finds servers on your own network, and remembers the ones you have played on. To read a list, set the URL in data/net/directory.tres before exporting — or point one copy of the game at your own with --directory-url."
