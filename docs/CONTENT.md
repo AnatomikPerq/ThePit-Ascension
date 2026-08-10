@@ -30,10 +30,11 @@ Sprite sources live in `assets/sprites/src/*.aseprite`; exported PNGs in
 
 | Kind | Entries |
 | :--- | :--- |
-| Characters | Cyn, Tessa |
+| Characters | Cyn, Tessa, Uzi |
 | Enemies | Golem, Slime, Pursuer, Bat, Spitter |
 | Cyn's upgrades | Double Jump, Sideways Strike, Shockwave, +1 Max HP |
 | Tessa's upgrades | Sword Slash, Pistol, Triple Jump |
+| Uzi's upgrades | Railgun, Double Jump, +1 Max HP |
 | Built-in ability | Dash down |
 | Objects | Trampoline (left by a killed slime), Bomb (falls past you) |
 | Platforms | Static, Moving (horizontal / vertical) — both breakable |
@@ -66,14 +67,14 @@ back half of a twice-as-long climb at the maximum rate:
 
 ### The climbers
 
-| | Cyn | Tessa |
-| :--- | :--- | :--- |
-| Hearts | 5 | **1** |
-| Jump | 100% | 92% of Cyn's |
-| Jumps to start | 1 | 2 |
-| Attack | fist, 0.35 s, 96×96 | blade, 0.23 s, 80×96, top to bottom |
-| Second button | — | **pistol**: a bullet straight out to the side, 2 s cooldown |
-| Unlocks | Double Jump · Sideways Strike · Shockwave · +1 Max HP | Sword Slash · Pistol · Triple Jump |
+| | Cyn | Tessa | Uzi |
+| :--- | :--- | :--- | :--- |
+| Hearts | 5 | **1** | 3 |
+| Jump | 100% | 92% of Cyn's | 100% |
+| Jumps to start | 1 | 2 | 1 |
+| Attack | fist, 0.35 s, 96×96 | blade, 0.23 s, 80×96, top to bottom | **none** — reserved |
+| Second button | — | **pistol**: a bullet straight out to the side, 2 s cooldown | **railgun**: taken out and put away, aimed by mouse |
+| Unlocks | Double Jump · Sideways Strike · Shockwave · +1 Max HP | Sword Slash · Pistol · Triple Jump | Railgun · Double Jump · +1 Max HP |
 
 Everything in that table is a field on a `CharacterDef` in `data/characters/`.
 Nothing in the game branches on *which* character it is steering, which is the
@@ -97,10 +98,71 @@ from a muzzle position every machine agrees on — so it is in the same place
 everywhere without a packet of its own. It joins the `"strike"` group like
 everything else that can hurt an enemy, so no enemy scene knows guns exist.
 
+**Uzi** starts with nothing on either button and an ordinary jump — the owner's
+answer, on 10 August 2026, to what makes her different: three hearts, standard
+jump height, no abilities at all until a milestone. Her left button is
+deliberately empty rather than merely unwired, and `attack_scene` on her
+`CharacterDef` is reserved for whatever is given to it later.
+
+#### Uzi's railgun
+
+The third climber's one unlock that is a mechanic rather than a number, and the
+first weapon in the game that is a **thing she carries** rather than a shot she
+throws. `CharacterDef` gained one field for it — `weapon_scene` — and the avatar
+asks whatever is in it four questions and never what kind it is:
+`wants_attack()`, `locks_facing()`, `pose()` and `setup()`.
+
+- **Out and away.** Right mouse takes it off her back and puts it back, instantly
+  and as often as you like. Nothing gates the toggle. While it is out it turns
+  about its grip like a pin, following the cursor, and she faces where she is
+  aiming rather than where she is running.
+- **The shot** is on the left button, once every 3.3 s, and it costs one charge.
+  The `enabled` art — the one with the energy visibly loose in the gun — is shown
+  for a fifth of a second when it fires and at no other time.
+- **The beam bounces five times.** It reflects off walls, platforms and golems in
+  either state; it passes through slimes in any state, through every other enemy,
+  through bombs and through climbers. Enemies it passes through die, and bombs it
+  passes through go off where they stand.
+- **It hits Uzi herself, in every mode**, which the owner asked for on purpose:
+  firing down a corridor you are standing in is meant to be a decision. In a race
+  it hits every other climber too.
+- **It kicks.** The recoil goes through `Player.shove()`, the same one entry point
+  a blast and a rival's hit use, so firing downwards carries a jump further than
+  it would go on its own.
+
+Almost none of that is written down as rules. The rule is decided by LAYER:
+**anything on `WORLD` is a mirror, anything else is transparent.** Walls, floors
+and both platform kinds are on it; slimes, bats, pursuers, spitters and bombs are
+on none of it, so they are passed through for free. The killing is done
+separately, by a hitbox laid along the beam in the `"strike"` group — which is
+why it kills a bat the ray cannot even see.
+
+The **golem** is the one exception, and it needed two fixes that are worth
+naming because both were invisible in the code. Its solid `CrushBody` is 54×38
+and sits low while the drawing is 64×64, so the top third of a golem had no
+collider and a beam aimed at its head went through one that was plainly in the
+way — `golem.gd` now claims its own hurt boxes as mirrors with `beam_response()`,
+the single override in the game. And a hitbox that stopped exactly at the surface
+it bounced off touched none of the areas that set the golem off, so it reflected
+and nothing happened; every segment now carries `hit_overshoot` px past its
+corner. `src/entities/rail_beam.gd`
+is the whole solver and it is a pure function: a held beam whose reflections move
+with the cursor is that function called again, which is what it was built for.
+
+**The charge meter is the gun, drawn once.** Six charges, 600 score each — score
+*earned*, never spent, so carrying a railgun never costs a place on the board,
+and a full gun banks nothing. The widget is one drawing plus a greyscale **order
+mask** in which every energy cell's brightness is its place in the fill order,
+and one shader uniform from 0 to 1. Six frames would have been the obvious build
+and it was rejected for a specific reason: the ult that is planned drains the
+meter continuously, and no number of frames is a continuous value. Repainting
+`assets/ui/rail_indicator_mask.png` changes the fill order with no code change;
+`tools/aseprite/build_rail_mask.lua` generates the first draft.
+
 **Upgrades are a single-use pool.** The menu offers only what that climber has
 not taken yet; when one thing is left it is granted without asking, and once
 there is nothing left the milestone pays score instead. Cyn has four offers and
-four upgrades, so a clean run ends with all of them; Tessa has three.
+four upgrades, so a clean run ends with all of them; Tessa and Uzi have three.
 
 Milestones sit at the top of levels 1, 3, 5 and 7 —
 `upgrade_fractions` on the profile.
@@ -325,13 +387,19 @@ two ways of reserving: an animation that nothing plays is left empty, and one
 that something *does* play falls back to a frame that exists, because an empty
 clip draws nothing at all.
 
-Two sounds are stand-ins rather than slots: the pistol borrows the punch's
-`strike` sample, because a gunshot is an audio file to source rather than
-something to invent.
+Several sounds are stand-ins rather than slots: the pistol borrows the punch's
+`strike` sample, and the railgun borrows `shockwave` to fire, `upgrade` and
+`ui_click` to come out and go away, and `bomb_hit` where the beam lands — because
+a gunshot is an audio file to source rather than something to invent. All four
+are `StringName`s on `data/weapons/railgun.tres`, so replacing them is four words
+in a `.tres` and no code at all.
 
 | Slot | Files | What it is |
 | :--- | :--- | :--- |
 | `bomb_frames.tres` → `explode` | `bomb_explode_1..3.png` | a drawn explosion. Until it exists the blast is carried by particles and by shards of the bomb's own shell, and `Explosion.tscn` keeps the sprite hidden; once it exists the sprite is scaled to the blast radius automatically |
+| `uzi_frames.tres` → everything but `standing` | `uzi_running_1..3`, `uzi_jumping_1`, `uzi_falling_1`, `uzi_attacking_1`, `uzi_aiming_1`, `uzi_shooting_1..2`, `uzi_died`, `uzi_standing_2` | Uzi has one drawing so far. Every other clip stands in with it, so she is fully playable now and each file that arrives replaces its stand-in on the next generator run |
+| `rail_indicator_mask.png` → hand-painted | — | the fill ORDER is generated left-to-right by `tools/aseprite/build_rail_mask.lua`. Repainting it in Aseprite is how the order changes — light the receiver before the barrel, or group the cells into six blocks that each light as one |
+| `rail_indicator` → a drawn empty state | — | an unlit cell is currently its own pixel pushed down to a dead green. Drawing what an empty slot actually looks like and putting it in the shader's `drained_tex` needs no code change; the switch is `use_drained_tex` |
 
 The bomb's `falling` animation is complete: three frames at half a second each,
 the core lighting up as it comes down.

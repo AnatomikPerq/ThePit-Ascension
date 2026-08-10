@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CharacterDef" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/defs/character_def.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/defs/upgrade_def.gd" id="2_upgrade"]
+[ext_resource type="SpriteFrames" path="res://data/animations/uzi_frames.tres" id="3_frames"]
+[ext_resource type="PackedScene" path="res://scenes/Railgun.tscn" id="4_weapon"]
+[ext_resource type="Resource" path="res://data/weapons/railgun.tres" id="5_stats"]
+[ext_resource type="Resource" path="res://data/upgrades/uzi_railgun.tres" id="6_rail"]
+[ext_resource type="Resource" path="res://data/upgrades/uzi_double_jump.tres" id="7_jump"]
+[ext_resource type="Resource" path="res://data/upgrades/uzi_max_hp.tres" id="8_hp"]
+
+[resource]
+resource_name = "uzi"
+script = ExtResource("1_script")
+id = &"uzi"
+display_name = "UZI"
+blurb = "Three hearts and nothing on her fists —
+until the railgun comes off her back."
+accent = Color(0.87, 0.6, 0.99, 1)
+frames = ExtResource("3_frames")
+max_health = 3
+jump_scale = 1.0
+base_jumps = 1
+attack_cooldown = 0.45
+attack_sound = &"strike"
+ranged_cooldown = 3.3
+ranged_sound = &"shockwave"
+ranged_pose = 0.18
+muzzle_offset = Vector2(28, -10)
+weapon_scene = ExtResource("4_weapon")
+weapon_stats = ExtResource("5_stats")
+upgrades = Array[ExtResource("2_upgrade")]([ExtResource("6_rail"), ExtResource("7_jump"), ExtResource("8_hp")])

@@ -69,12 +69,29 @@ func test_coop_players_pass_through_each_other() -> void:
 		.override_failure_message("co-op players must not block each other").is_false()
 
 
+## Solo play is untouched by any of this: rivals are not solid, and nothing that
+## belongs to somebody else can hurt you.
+##
+## The hurt box DOES watch now, which it did not before the railgun — a beam
+## that has bounced back into its own owner is the one hitbox in the game that
+## is allowed to land on the player who fired it, and it lands in every mode.
+## What is unchanged is every OUTCOME: `Player._on_hostile_area` turns away an
+## ordinary hitbox that is ours, and any hitbox that is not, unless this is a
+## race. `test_the_same_strike_is_harmless_in_coop` below is the other half.
 func test_solo_player_is_unchanged() -> void:
 	var avatar := _avatar(1, Vector2.ZERO)
 	assert_bool(avatar.get_collision_mask_value(Layers.BIT_PLAYER)).is_false()
-	assert_bool(avatar.hurt_box.monitoring) \
-		.override_failure_message("solo play should not even watch for hostile hitboxes") \
-		.is_false()
+
+	var strike: Area2D = load("res://scenes/Strike.tscn").instantiate()
+	strike.setup(avatar, true)
+	_root.add_child(strike)
+	strike.global_position = Vector2.ZERO
+	for i in 6:
+		await get_tree().physics_frame
+
+	assert_int(avatar.health) \
+		.override_failure_message("a solo player was hurt by their own swing") \
+		.is_equal(avatar.max_health)
 
 
 # ── Attacks ─────────────────────────────────────────────────────────────────

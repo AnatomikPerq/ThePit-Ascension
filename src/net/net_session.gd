@@ -145,11 +145,36 @@ func broadcast_remote(node: Node, method: StringName, args: Array = []) -> void:
 	_send(node, method, args, node.multiplayer.get_unique_id())
 
 
+## A room's audience is its MEMBERS, plus the machine that simulates it.
+##
+## Those are the same list on a player's machine — `Net._begin_run` builds the
+## roster starting with `[1]`, so the host is in it. On a dedicated server they
+## are not, and the difference was silent and total: `Room.lock_roster` sets
+## `session.peers = members.duplicate()` and the server is a member of no room —
+## it has no avatar and no climb — so a CLIENT's broadcast went to the other
+## clients and stopped there.
+##
+## Peer 1 is where every kill is resolved (`EnemyCombat._resolve_kills` runs
+## under `Net.is_sim_authority()` and nowhere else), so an attack hitbox that
+## never reached it never killed anything. On a dedicated server, no client could
+## kill an enemy by punching, swinging, shooting or firing a railgun — only by
+## stomping, because a stomp travels by `rpc_id` to a named peer instead. The
+## same hole swallowed `_go_down`, `stand_up` and `pay_revive`: the server was
+## never told a client had gone down or been picked back up.
+##
+## The server is added here rather than to `peers` on purpose. `peers` is the
+## ROSTER: `World._playing_peers()` builds one avatar per entry and
+## `prune_disconnected` deletes anyone missing from it, so putting 1 in it would
+## give the server a climber in every room on every client's screen.
 func _send(node: Node, method: StringName, args: Array, skip: int) -> void:
 	for peer_id in peers:
 		if peer_id == skip:
 			continue
 		node.callv(&"rpc_id", [peer_id, method] + args)
+	# `skip != 1` is this machine BEING the server; `not peers.has(1)` is a
+	# peer-to-peer host, already covered by the loop above.
+	if skip != 1 and not peers.has(1):
+		node.callv(&"rpc_id", [1, method] + args)
 
 
 # ── Replication scope ───────────────────────────────────────────────────────
@@ -190,9 +215,18 @@ func rescope(world: Node) -> void:
 		scope_sync(found as MultiplayerSynchronizer, peers)
 
 
+## Visible to the room's members — and to peer 1, for the same reason `_send`
+## addresses it: on a dedicated server the machine simulating this room is not a
+## member of it. Without this a client's avatar never sends its position to the
+## server, so the server resolves stomps, blasts and hitbox overlaps against a
+## climber it believes is still standing on the spawn pad.
+##
+## On a peer-to-peer host peer 1 is already in `members`, and Godot's visibility
+## set is a set: naming it twice costs nothing.
 static func scope_sync(sync: MultiplayerSynchronizer, members: Array[int]) -> void:
 	if sync == null:
 		return
 	sync.public_visibility = false
+	sync.set_visibility_for(1, true)
 	for peer_id in members:
 		sync.set_visibility_for(peer_id, true)

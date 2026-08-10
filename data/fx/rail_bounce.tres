@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BurstPreset" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/fx/burst_preset.gd" id="1_script"]
+
+[resource]
+resource_name = "rail_bounce"
+script = ExtResource("1_script")
+count = 11
+speed = 330.0
+life = 0.34
+gravity = 520.0
+color = Color(1, 1, 1, 1)
+scale_min = 1.0
+scale_max = 3.0

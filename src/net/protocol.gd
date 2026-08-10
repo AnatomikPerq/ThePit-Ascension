@@ -28,7 +28,10 @@ extends Object
 ##
 ## History:
 ##   1 — first dedicated-server protocol (hello / ident / challenge / proof).
-const VERSION: int = 1
+##   2 — Uzi's railgun. An avatar's sync stream gained `aiming` and `aim_angle`,
+##       and Player gained the `_spawn_weapon_shot(from, angle)` RPC — a message
+##       gaining a field and a new @rpc signature, both of which this covers.
+const VERSION: int = 2
 
 ## Refuses a connection from a different game entirely — someone pointing a tool
 ## at the port, or a fork that kept the port number.

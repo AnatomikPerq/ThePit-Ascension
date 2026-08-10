@@ -18,6 +18,23 @@ func _ready() -> void:
 	combat.killed.connect(_on_killed)
 
 
+## A golem is a mirror to a railgun beam in BOTH states, across the whole of
+## itself — the owner asked for a falling one to reflect like a platform rather
+## than be passed through, and for it to be set off by the same shot.
+##
+## It has to be said out loud because the shape a beam would otherwise find is
+## the wrong one. `CrushBody` is 54×38 and sits low, while the drawing is 64×64:
+## the top third of a golem is solid to nothing, so a beam aimed at its head
+## went through a golem that was plainly in the way. Claiming this node makes its
+## damage and stomp areas mirrors too, and between them they cover the drawing.
+##
+## Reflecting is all this does. Setting the golem off is the beam's HITBOX, in
+## the `"strike"` group like every other thing that can hurt an enemy — which is
+## why there is nothing here about being activated.
+func beam_response() -> int:
+	return RailBeam.Response.REFLECT
+
+
 func set_player_ref(player: CharacterBody2D) -> void:
 	# $Combat, not the @onready reference: the spawner calls this before
 	# the enemy is added to the tree, when @onready values are still null.

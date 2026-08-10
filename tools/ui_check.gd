@@ -126,8 +126,9 @@ func _run() -> void:
 	world.free()
 
 	await _shoot_tessa()
+	await _shoot_uzi()
 
-	print("ui_check: wrote 16 captures to ", _out_dir)
+	print("ui_check: wrote 21 captures to ", _out_dir)
 	get_tree().quit(0)
 
 
@@ -159,6 +160,43 @@ func _shoot_tessa() -> void:
 	await _shot("tessa_shot_1.png")
 	await _frames(8)
 	await _shot("tessa_shot_2.png")
+	world.free()
+
+
+## A third run as Uzi, for the charge indicator — which is the one widget in the
+## game whose whole appearance is a shader uniform, and therefore the one that
+## cannot be checked by loading a scene and asserting a property.
+##
+## Five captures across the fill, because what has to be looked at is not any
+## single state but the WALK: the lit area should advance along the gun at a
+## steady rate with a bright edge at the front, rather than jumping between
+## clumps. If it stalls anywhere, the order mask needs repainting — see
+## tools/aseprite/build_rail_mask.lua.
+func _shoot_uzi() -> void:
+	Game.selected_character = &"uzi"
+	var world: Node = load("res://scenes/World.tscn").instantiate()
+	world.world_seed = 20260728
+	get_tree().root.add_child(world)
+	get_tree().current_scene = world
+	await _frames(20)
+
+	var uzi: CharacterBody2D = world.player
+	uzi.has_ranged = true
+	var gun: Node2D = uzi.weapon
+	var stats: RailgunStats = uzi.character.weapon_stats
+
+	for shown in [0, 1, 3, 5, 6]:
+		gun.charges = shown
+		gun._progress = 0
+		await _frames(2)
+		await _shot("uzi_rail_%d.png" % shown)
+
+	# And the gun in her hands rather than on her back.
+	gun.charges = stats.charges
+	gun.alt_pressed()
+	uzi.aim_angle = deg_to_rad(-30.0)
+	await _frames(4)
+	await _shot("uzi_aiming.png")
 	world.free()
 
 

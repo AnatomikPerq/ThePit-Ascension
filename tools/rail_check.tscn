@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://crailcheck01"]
+
+[ext_resource type="Script" path="res://tools/rail_check.gd" id="1_script"]
+
+[node name="RailCheck" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(960, 540)

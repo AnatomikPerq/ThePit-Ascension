@@ -61,6 +61,12 @@ properties/7/replication_mode = 1
 properties/8/path = NodePath(".:is_downed")
 properties/8/spawn = true
 properties/8/replication_mode = 2
+properties/9/path = NodePath(".:aiming")
+properties/9/spawn = true
+properties/9/replication_mode = 2
+properties/10/path = NodePath(".:aim_angle")
+properties/10/spawn = false
+properties/10/replication_mode = 2
 
 [node name="Player" type="CharacterBody2D" unique_id=390227050 groups=["player"]]
 collision_layer = 2

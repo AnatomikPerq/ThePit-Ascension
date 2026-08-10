@@ -12,6 +12,9 @@ extends Node
 ##   alpha  registers first, so the server makes it the owner. Opens a co-op
 ##          room, starts it, and later uses the ADMIN path — the same command
 ##          set the console has — to look at the player list and close a room.
+##          Then it hunts an enemy down and kills it with a SWING, which is the
+##          only way to check that a client's attack reaches the machine that
+##          resolves kills.
 ##   beta   registers second as an ordinary player. Opens a RACE room, starts
 ##          it, and must be refused when it asks the server to stop.
 ##
@@ -80,6 +83,11 @@ func _run() -> void:
 	await _wait(RUN_SECONDS)
 	_check_world()
 	await _check_role_specific()
+	# LAST, and only alpha does it: hunting an enemy down takes as long as it
+	# takes, and alpha's admin checks above need beta still connected. Putting
+	# this first cost beta its place in the player list.
+	if role == "alpha":
+		await _check_client_attack()
 	_finish()
 
 
@@ -197,6 +205,115 @@ func _hash(world: Node) -> String:
 	ctx.start(HashingContext.HASH_SHA256)
 	ctx.update("|".join(rects).to_utf8_buffer())
 	return ctx.finish().hex_encode().substr(0, 16)
+
+
+# ── A client's attack must land on the server ───────────────────────────────
+## Walk to an enemy and swing until the SERVER reports a kill.
+##
+## This closes the one loop no single-process suite can: kills are resolved only
+## where the sim authority lives, which here is the server — so the strike this
+## client spawns locally proves nothing until the hitbox ALSO exists on the
+## server, at a position the server agrees with, and the kill it resolves comes
+## back as this run's score. A kill count that never moves means one of two
+## breaks: the broadcast never reached peer 1 (it is not in `session.peers`), or
+## the avatar's synchronizer never granted peer 1 visibility and the server is
+## swinging a strike beside an avatar it believes never moved. Both were real.
+##
+## The approach is honest movement: hops capped under FASTEST_LEGAL, because the
+## movement guard is watching and a probe that teleports is a probe that tests
+## the anticheat instead.
+##
+## It stands OFF rather than walking onto the enemy, and it asserts `by_strike`
+## rather than the kill count. Both are load-bearing. The first version of this
+## check did neither and passed against the broken build: it drove the avatar
+## into the enemy, the server saw a climber arrive on its head, and a plain
+## landing kills a pursuer and a bat — so the probe measured position
+## replication and reported it as an attack landing.
+## Beside the enemy, facing right. Cyn's fist sits 52 px out with a 96 px box,
+## so it covers +4 to +100 from her centre — 72 is comfortably inside that and
+## comfortably outside the 4 px strip on top that a stomp needs.
+const STANDOFF: float = 72.0
+## How often the hunt re-aims. Enemies move: a pursuer chases, a bat flies, a
+## golem falls past. Sampling slower than they move is how the first version of
+## this spent twenty seconds walking to where something used to be.
+const HUNT_STEP: float = 0.15
+## Distance allowed per step. 450 px per 0.15 s is 3000 px/s, under the movement
+## guard's 3600 ceiling — a probe that trips the anticheat is testing the
+## anticheat.
+const HUNT_SPEED: float = 450.0
+
+func _check_client_attack() -> void:
+	var world := _world()
+	if world == null:
+		return
+	var mine: CharacterBody2D = world.players.get(Game.local_peer_id)
+	if mine == null:
+		return
+	mine.has_attack = true
+	mine.flying = true # our machine steers; keeps gravity out of the walk
+
+	# Every enemy in the room reports how it died. `killed(by_strike)` is emitted
+	# by `_kill_everywhere`, which the authority broadcasts — so this fires here
+	# only because the SERVER resolved it.
+	var by_strike := [false]
+	var stomped := [false]
+	for child in world.get_node(^"Enemies").get_children():
+		var combat: EnemyCombat = child.get_node_or_null(^"Combat")
+		if combat == null:
+			continue
+		combat.killed.connect(func(was_strike: bool) -> void:
+			if was_strike:
+				by_strike[0] = true
+			else:
+				stomped[0] = true)
+
+	# Enemies keep spawning, so this is a hunt with a budget rather than one
+	# attempt. It swings on EVERY step the cooldown allows instead of only once
+	# in position: a swing costs nothing, and waiting to be perfectly placed
+	# against a target that is moving is how this became flaky.
+	var swings := 0
+	var closest := INF
+	var deadline := Time.get_ticks_msec() + 30000
+	while Time.get_ticks_msec() < deadline and not by_strike[0]:
+		var enemy := _nearest_enemy(world, mine.global_position)
+		if enemy != null:
+			var want := enemy.global_position + Vector2(-STANDOFF, 0.0)
+			var step := want - mine.global_position
+			if step.length() > 4.0:
+				mine.global_position += step.limit_length(HUNT_SPEED)
+			# After the move, or the number reports where we started from.
+			closest = minf(closest, mine.global_position.distance_to(enemy.global_position))
+		mine.facing_right = true
+		if mine.strike_cd_timer.is_stopped():
+			mine._try_strike()
+			swings += 1
+		mine.velocity = Vector2.ZERO
+		await _wait(HUNT_STEP)
+	mine.flying = false
+
+	# Printed whether it passed or not: a failure with zero swings is a broken
+	# probe, and a failure with fifty swings and a closest approach of 40 px is a
+	# broken game.
+	_say("hunt", "%d swings, closest %.0f px" % [swings, closest])
+	_expect("client_strike_kills_on_server", by_strike[0], true)
+	_expect("and_it_was_not_a_stomp", stomped[0], false)
+
+
+func _nearest_enemy(world: Node, to: Vector2) -> Node2D:
+	var best: Node2D = null
+	var best_distance := INF
+	for child in world.get_node(^"Enemies").get_children():
+		var enemy := child as Node2D
+		if enemy == null or not enemy.is_in_group(&"enemy"):
+			continue
+		var combat: EnemyCombat = enemy.get_node_or_null(^"Combat")
+		if combat == null or combat.is_dead:
+			continue
+		var distance := to.distance_to(enemy.global_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = enemy
+	return best
 
 
 # ── The parts only one of them does ─────────────────────────────────────────

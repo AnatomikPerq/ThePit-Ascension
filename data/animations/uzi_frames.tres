@@ -1,0 +1,70 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/sprites/uzi/uzi_standing_1.png" id="1_nmm6e"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"aiming",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 0,
+"name": &"attacking",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"died",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"falling",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"jumping",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"running",
+"speed": 6.666666666666667
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 0,
+"name": &"shooting",
+"speed": 14.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_nmm6e")
+}],
+"loop": 1,
+"name": &"standing",
+"speed": 3.3333333333333335
+}]

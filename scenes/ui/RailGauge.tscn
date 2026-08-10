@@ -1,0 +1,60 @@
+[gd_scene load_steps=8 format=3 uid="uid://crailgauge001"]
+
+[ext_resource type="Script" path="res://src/ui/rail_gauge.gd" id="1_script"]
+[ext_resource type="Shader" path="res://assets/ui/rail_fill.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/ui/rail_indicator.png" id="3_gun"]
+[ext_resource type="Texture2D" path="res://assets/ui/rail_indicator_mask.png" id="4_mask"]
+
+[sub_resource type="ShaderMaterial" id="Mat_fill"]
+resource_local_to_scene = true
+shader = ExtResource("2_shader")
+shader_parameter/fill = 0.0
+shader_parameter/drained = Color(0.14, 0.22, 0.16, 1)
+shader_parameter/front_width = 0.07
+shader_parameter/front_glow = 0.9
+shader_parameter/pulse = 0.0
+shader_parameter/glow = 1.1
+shader_parameter/glow_radius = 3.5
+shader_parameter/energy = Color(0.76, 1, 0.24, 1)
+shader_parameter/use_drained_tex = false
+shader_parameter/order_mask = ExtResource("4_mask")
+
+[sub_resource type="Animation" id="Animation_charged"]
+resource_name = "charged"
+length = 0.35
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:material:shader_parameter/pulse")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.06, 0.35),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [0.0, 1.0, 0.0]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
+_data = {
+&"charged": SubResource("Animation_charged")
+}
+
+[node name="RailGauge" type="TextureRect"]
+texture_filter = 1
+material = SubResource("Mat_fill")
+custom_minimum_size = Vector2(474, 126)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 474.0
+offset_bottom = 126.0
+mouse_filter = 2
+texture = ExtResource("3_gun")
+expand_mode = 1
+stretch_mode = 5
+script = ExtResource("1_script")
+
+[node name="Flash" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_1")
+}

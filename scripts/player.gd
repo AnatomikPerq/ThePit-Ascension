@@ -92,7 +92,28 @@ var jump_count: int = 0
 var max_jumps: int = 1
 var has_attack: bool = false
 var has_shockwave: bool = false
-var has_ranged: bool = false
+
+## The RANGED unlock. A character whose weapon is a MOUNTED one rather than a
+## projectile is told here rather than polled, because the weapon has a drawing
+## that has to appear the moment it is earned.
+var has_ranged: bool = false:
+	set(value):
+		has_ranged = value
+		if value and weapon != null:
+			weapon.call(&"arm")
+
+## The mounted weapon, if this climber has one — `CharacterDef.weapon_scene`,
+## which is where the four-method interface it answers is written down.
+var weapon: Node2D = null
+
+## Aiming a mounted weapon. Replicated, so a rival's gun is visibly out.
+var aiming: bool = false
+
+## Where that weapon is pointed, in radians — the only thing about the mouse
+## that ever leaves this machine. It is in the sync stream because it is
+## continuous state: the gun turns whether or not it is firing. A shot still
+## carries its own angle as an argument, the way a bullet carries its facing.
+var aim_angle: float = 0.0
 
 ## True while diving. The dash-down hitbox lives and dies with it — see the
 ## DashBox node, which is a couple of art pixels bigger than the body on every
@@ -178,7 +199,12 @@ func _ready() -> void:
 	# Only the machine steering this avatar watches for incoming hits. Damage
 	# belongs to the victim; a puppet's overlap test here would be somebody
 	# else's opinion about our health.
-	hurt_box.monitoring = session.is_versus() and is_multiplayer_authority()
+	#
+	# It used to also require a race, because a rival's fist was the only thing
+	# on PLAYER_ATTACK that could reach you. A railgun beam bounced back into its
+	# own owner is the second, and it lands in every mode — so the mode question
+	# moved into _on_hostile_area, which still reaches every old outcome.
+	hurt_box.monitoring = is_multiplayer_authority()
 	hurt_box.area_entered.connect(_on_hostile_area)
 	_arm_dash_box(dashing_down)
 
@@ -218,6 +244,23 @@ func _apply_character() -> void:
 	strike_cd_timer.wait_time = character.attack_cooldown
 	ranged_cd_timer.wait_time = character.ranged_cooldown
 	shot_pose_timer.wait_time = character.ranged_pose
+	_mount_weapon()
+
+
+## A climber who carries something builds it once and keeps it for the life of
+## the avatar, hidden and inert until the RANGED upgrade arms it. Set up BEFORE
+## add_child: the weapon's own _ready() reads the numbers it was handed.
+func _mount_weapon() -> void:
+	if character.weapon_scene == null:
+		return
+	var built := character.weapon_scene.instantiate() as Node2D
+	if built == null:
+		return
+	built.call(&"setup", self, character.weapon_stats)
+	add_child(built)
+	weapon = built
+	if has_ranged:
+		weapon.call(&"arm")
 
 
 func _physics_process(delta: float) -> void:
@@ -350,38 +393,53 @@ func _handle_input() -> void:
 		flying = not flying
 		if flying:
 			velocity.y = 0.0
+			# Debug mode hands you a loaded weapon — it exists to try things with.
+			if weapon != null and weapon.has_method(&"debug_refill"):
+				weapon.call(&"debug_refill")
 
+	# Flight replaces the walking, the dash and the jump — and nothing else. It
+	# used to `return` here, which made the one mode that exists for trying
+	# things out the one mode where no ability could be tried at all.
 	if flying:
 		_handle_flight_input()
-		return
+	else:
+		var dir := Input.get_axis("move_left", "move_right")
+		velocity.x = dir * SPEED
 
-	# Horizontal
-	var dir := Input.get_axis("move_left", "move_right")
-	velocity.x = dir * SPEED
+		# Which way she is looking is which way she is running — unless a weapon
+		# is being aimed, in which case the weapon has already answered and this
+		# would be overwriting it every single physics frame.
+		if not _facing_locked():
+			if dir > 0.0:
+				facing_right = true
+			elif dir < 0.0:
+				facing_right = false
 
-	if dir > 0.0:
-		facing_right = true
-	elif dir < 0.0:
-		facing_right = false
+		if Input.is_action_just_pressed("dash_down") and not is_on_floor():
+			dashing_down = true
+			velocity.y = DASH_SPEED
+			_squash(Vector2(1.5, 2.5))
 
-	# Dash down
-	if Input.is_action_just_pressed("dash_down") and not is_on_floor():
-		dashing_down = true
-		velocity.y = DASH_SPEED
-		_squash(Vector2(1.5, 2.5))
+		if Input.is_action_just_pressed("jump"):
+			_try_jump()
 
-	# Jump (just_pressed events)
-	if Input.is_action_just_pressed("jump"):
-		_try_jump()
+	# Attack. A mounted weapon that is out takes this button ahead of the melee
+	# swing — Uzi has no swing at all, so hers is the only one that answers, but
+	# the order is what a character with both would want.
+	if Input.is_action_just_pressed("attack"):
+		if weapon != null and bool(weapon.call(&"wants_attack")):
+			weapon.call(&"fire_pressed")
+		elif has_attack:
+			_try_strike()
 
-	# Attack
-	if Input.is_action_just_pressed("attack") and has_attack:
-		_try_strike()
-
-	# The second attack button. Tessa's pistol; nobody else has one, and a
-	# character with no ranged scene simply never unlocks it.
+	# The second attack button. Tessa's pistol fires from here; Uzi's railgun
+	# comes off her back here instead and fires from the button above. A
+	# character with neither never unlocks anything to put on it.
 	if Input.is_action_just_pressed("attack_alt") and has_ranged:
-		_try_shoot()
+		if weapon != null:
+			weapon.call(&"alt_pressed")
+		else:
+			_try_shoot()
 
 	# Shockwave (radial blast) — unlocked upgrade, longer cooldown.
 	if Input.is_action_just_pressed("shockwave") and has_shockwave:
@@ -394,10 +452,16 @@ func _handle_flight_input() -> void:
 	velocity.x = dir_x * FLIGHT_SPEED
 	velocity.y = dir_y * FLIGHT_SPEED
 
-	if dir_x > 0.0:
-		facing_right = true
-	elif dir_x < 0.0:
-		facing_right = false
+	if not _facing_locked():
+		if dir_x > 0.0:
+			facing_right = true
+		elif dir_x < 0.0:
+			facing_right = false
+
+
+## True while a weapon is being aimed: she faces the cursor, not her running.
+func _facing_locked() -> bool:
+	return weapon != null and bool(weapon.call(&"locks_facing"))
 
 
 # ── Jump ────────────────────────────────────────────────────────────────────
@@ -488,6 +552,25 @@ func _spawn_bullet(facing: bool, from: Vector2) -> void:
 	get_parent().add_child(b)
 
 
+# ── Mounted weapon ──────────────────────────────────────────────────────────
+## A carried weapon has gone off. The muzzle and the angle travel as arguments
+## for the same reason a bullet's do — the shot leaves the barrel it was fired
+## from even if the avatar has swung round by the time the packet lands.
+##
+## The RPC is here rather than on the weapon because authority is: World sets it
+## on the avatar, and a child added afterwards does not inherit it.
+func fire_weapon(from: Vector2, angle: float) -> void:
+	session.broadcast(self, &"_spawn_weapon_shot", [from, angle])
+
+
+## Every machine in the room, so the authority has the hitbox and everybody else
+## has the picture. What the shot actually IS, this does not know.
+@rpc("authority", "call_local", "reliable")
+func _spawn_weapon_shot(from: Vector2, angle: float) -> void:
+	if weapon != null and weapon.has_method(&"spawn_shot"):
+		weapon.call(&"spawn_shot", from, angle)
+
+
 # ── Shockwave ────────────────────────────────────────────────────────────────
 func _try_shockwave() -> void:
 	if not shockwave_cd_timer.is_stopped():
@@ -514,8 +597,18 @@ func _spawn_shockwave() -> void:
 ## ever gets here — the hurt box does not monitor on a puppet — so the rule
 ## "the victim owns its damage" holds without a single extra check.
 func _on_hostile_area(area: Area2D) -> void:
-	if int(area.get_meta(&"owner_peer", 0)) == peer_id:
-		return # our own punch, passing through our own body
+	var ours := int(area.get_meta(&"owner_peer", 0)) == peer_id
+	# Our own punch passes through our own body, as it always has — unless the
+	# hitbox asks not to. A railgun beam bounces five times and hits Uzi herself
+	# in every mode, on purpose: firing down a corridor you are standing in is
+	# meant to be a decision. Nothing else stamps `self_harm`.
+	if ours and not bool(area.get_meta(&"self_harm", false)):
+		return
+	# Somebody else's hit only lands in a race — in co-op a teammate's swing has
+	# never reached you and a teammate's beam must not either. This check used to
+	# be `hurt_box.monitoring` in _ready().
+	if not ours and not session.is_versus():
+		return
 	if not take_damage():
 		return
 	# Shoved away from whoever hit us, on top of take_damage()'s knockback. This
@@ -820,6 +913,8 @@ func pay_revive() -> void:
 ## climber lying down is half as tall as one standing up and would otherwise
 ## float above the floor its collider is resting on.
 func _lay_down(on: bool) -> void:
+	if on and weapon != null:
+		weapon.call(&"holster") # and the aiming cursor with it
 	sprite.rotation_degrees = -90.0 if on else 0.0
 	sprite.position.y = DOWNED_SPRITE_Y if on else _sprite_y
 
@@ -884,8 +979,14 @@ func _squash(target: Vector2) -> void:
 ## resource (data/animations/<character>_frames.tres), not here.
 func _update_animation() -> void:
 	var wanted := &"standing"
+	# A carried weapon says which pose it wants, or says nothing. It outranks
+	# running and falling because a drawn railgun is the loudest thing about how
+	# the avatar is standing; it does not outrank a swing in progress.
+	var carried: StringName = weapon.call(&"pose") if weapon != null else &""
 	if current_strike:
 		wanted = &"attacking"
+	elif carried != &"":
+		wanted = carried
 	elif not shot_pose_timer.is_stopped():
 		wanted = &"shooting"
 	elif not is_on_floor() and not flying:

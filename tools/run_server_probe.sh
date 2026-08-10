@@ -17,6 +17,11 @@
 #   * chat addressed to a room and not overheard from the next one
 #   * the admin path: the owner reads the player list and the whole settings
 #     schema over the game socket; an ordinary player is refused `stop` and `kick`
+#   * that a CLIENT'S ATTACK REACHES THE SERVER. Kills are resolved only where
+#     the sim authority lives, so a hitbox the server never receives never kills
+#     anything — and for a while none of them did. The check asserts the enemy
+#     died `by_strike`, from a standoff, because walking onto an enemy kills it
+#     by stomp and the first version of this measured that instead.
 #   * and, in both client logs, none of the replication errors that a packet
 #     arriving for the wrong room would produce
 set -uo pipefail
@@ -95,4 +100,4 @@ if [ "$fail" -ne 0 ]; then
   echo "--- beta log ---";   tail -25 "$B_LOG"
   exit 1
 fi
-echo "server probe ok: two accounts, two rooms, two pits, no cross-room packets, admin path, refusals"
+echo "server probe ok: two accounts, two rooms, two pits, no cross-room packets, a client's strike killing on the server, admin path, refusals"

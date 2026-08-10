@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="RailgunStats" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://src/defs/railgun_stats.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/ui/rail_crosshair.png" id="2_crosshair"]
+[ext_resource type="Resource" path="res://data/fx/rail_muzzle.tres" id="3_muzzle"]
+[ext_resource type="Resource" path="res://data/fx/rail_bounce.tres" id="4_bounce"]
+[ext_resource type="Resource" path="res://data/fx/rail_impact.tres" id="5_impact"]
+
+[resource]
+resource_name = "railgun"
+script = ExtResource("1_script")
+bounces = 5
+segment_length = 4200.0
+beam_width = 16.0
+hit_overshoot = 28.0
+stops_on_players = false
+charges = 6
+score_per_charge = 600
+initial_charges = 2
+grip_offset = Vector2(6, -4)
+hold_offset = Vector2(23, 0)
+stow_offset = Vector2(-22, -14)
+stow_degrees = -66.0
+muzzle_offset = Vector2(66, -3)
+sprite_scale = 1.55
+crosshair = ExtResource("2_crosshair")
+crosshair_hotspot = Vector2(15, 15)
+recoil = 1150.0
+shake = 0.5
+flash = 0.16
+feedback_range = 2600.0
+energy = Color(0.76, 1, 0.24, 1)
+muzzle_burst = ExtResource("3_muzzle")
+bounce_burst = ExtResource("4_bounce")
+impact_burst = ExtResource("5_impact")
+draw_sound = &"upgrade"
+stow_sound = &"ui_click"
+fire_sound = &"shockwave"
+impact_sound = &"bomb_hit"

@@ -9,12 +9,20 @@
 #                            test spawns". Sharing one would leak between cases.
 #   max-public-methods       a GdUnit4 suite is a flat list of test_* functions;
 #                            20 is a class-design limit, not a suite limit.
+#   max-file-lines           the owner's call, 10 August 2026: a script file has
+#                            no business having a line limit. It was costing real
+#                            explanations — player.gd sat two lines over and the
+#                            only way to "fix" it was deleting comments that said
+#                            something, which is the opposite of what a linter is
+#                            for. A file that wants splitting says so by being
+#                            hard to read, not by crossing a round number.
 #
 # Everything else is stock. max-line-length stays at 100.
 disable:
 - class-definitions-order
 - duplicated-load
 - max-public-methods
+- max-file-lines
 
 class-definitions-order:
 - tools

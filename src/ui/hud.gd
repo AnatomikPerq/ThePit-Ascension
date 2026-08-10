@@ -17,6 +17,9 @@ const HEART_EMPTY_TEX: Texture2D = preload("res://assets/sprites/heart_empty.png
 @onready var ascent_bar: ProgressBar = $AscentBar
 @onready var strike_icon: Panel = $AbilityIcons/StrikeIcon
 @onready var shockwave_icon: Panel = $AbilityIcons/ShockwaveIcon
+## The railgun's charge meter. Shown only for an avatar carrying something that
+## HAS charges — the HUD asks the weapon, never the character.
+@onready var rail_gauge: RailGauge = $AbilityIcons/RailGauge
 @onready var spectator_bar: Label = $SpectatorBar
 
 var _notification_timer: float = 0.0
@@ -78,6 +81,7 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 	strike_icon.modulate.a = 0.35 if not player.strike_cd_timer.is_stopped() else 1.0
 	shockwave_icon.visible = player.has_shockwave
 	shockwave_icon.modulate.a = 0.35 if not player.shockwave_cd_timer.is_stopped() else 1.0
+	_update_weapon(player.weapon)
 
 	if _notification_timer > 0.0:
 		_notification_timer -= delta
@@ -85,6 +89,24 @@ func update(player: CharacterBody2D, max_depth: float, delta: float) -> void:
 			notif_label.text = ""
 
 	fps_label.text = "FPS: %d" % Engine.get_frames_per_second()
+
+
+## A carried weapon, if it is the kind that holds charges.
+##
+## The question asked is "does this thing have a fill and is it armed", never
+## "is this Uzi" — a second charged weapon later lights the same meter up with no
+## change here. `carried.armed()` is what keeps the gun off the bar until the
+## upgrade that grants it has actually been taken.
+func _update_weapon(carried: Node) -> void:
+	var charged := carried != null and carried.has_method(&"fill") \
+		and bool(carried.call(&"armed"))
+	rail_gauge.visible = charged
+	if not charged:
+		rail_gauge.forget()
+		return
+	# `meter()`, not `fill()`: what can be fired right now plus what is being
+	# earned, rather than what the gun holds. See Railgun.meter().
+	rail_gauge.show_charge(float(carried.call(&"meter")), int(carried.get(&"charges")))
 
 
 # ── Spectating ──────────────────────────────────────────────────────────────

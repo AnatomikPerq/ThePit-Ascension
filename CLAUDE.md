@@ -13,10 +13,11 @@ Read this before changing anything.
 
 **Do not add game content.** The inventory is frozen unless the owner asks:
 
-> 2 characters (Cyn, Tessa) · 5 enemies (Golem, Slime, Pursuer, Bat, Spitter) ·
-> Cyn's 4 upgrades (double jump, sideways strike, shockwave, +1 HP) · Tessa's 3
-> (sword slash, pistol, triple jump) · 1 built-in dash-down · 1 trampoline ·
-> 1 bomb · 2 platform kinds, both breakable · 8 levels · 1 world · no bosses.
+> 3 characters (Cyn, Tessa, Uzi) · 5 enemies (Golem, Slime, Pursuer, Bat,
+> Spitter) · Cyn's 4 upgrades (double jump, sideways strike, shockwave, +1 HP) ·
+> Tessa's 3 (sword slash, pistol, triple jump) · Uzi's 3 (railgun, double jump,
+> +1 HP) · 1 built-in dash-down · 1 trampoline · 1 bomb · 2 platform kinds, both
+> breakable · 8 levels · 1 world · no bosses.
 
 The **bomb** and the destruction mechanic were added on the owner's instruction
 (30 July 2026), with the design decided by him in advance: it falls through the
@@ -48,9 +49,53 @@ design questions on the record — see docs/CONTENT.md for what each one is:
   not taken, one left is granted automatically, and once there is nothing left
   it pays experience instead.
 
+Added on the owner's instruction (10 August 2026), with his answers to four
+design questions on the record — see docs/CONTENT.md:
+
+- **Uzi**, the third climber. Three hearts, an ordinary jump, and *nothing* on
+  either button to start with; her left button is deliberately empty and
+  `attack_scene` is reserved rather than merely unset. Her three unlocks are the
+  railgun, the double jump and a heart.
+- **The railgun**, and it is the reason she exists. Right mouse takes it off her
+  back and puts it back — instantly, spammably, nothing gates it. It turns about
+  its grip following the cursor, and she faces where she aims. Left mouse fires,
+  once every 3.3 s, and the beam **reflects five times**. Walls, platforms and
+  golems in either state are mirrors; slimes in any state, every other enemy,
+  bombs and climbers are passed through — enemies passed through die and bombs
+  passed through go off where they stand. It hits Uzi herself in every mode, and
+  every other climber in a race, both on purpose. It kicks her backwards through
+  `Player.shove()`, so firing downwards carries a jump.
+- **Six charges, 600 score each, earned and never spent.** The run's own number is
+  untouched: the railgun feeds on what you earn rather than taking it off the
+  board, and a full gun banks nothing.
+
+Two decisions inside that are worth naming because the obvious build was
+rejected:
+
+- **The beam has no rules in it.** The table of interactions above reads like a
+  list of exceptions and is implemented as none: everything solid is on the
+  `WORLD` layer — including a *falling* golem — and slimes, bats, pursuers,
+  spitters and bombs are on no solid layer at all, so a `WORLD`-masked ray with
+  `collide_with_areas` off produces the whole table for free. The killing is a
+  separate hitbox in the `"strike"` group laid along the beam, which is why it
+  kills a bat the ray cannot see. `RailBeam.trace` is a pure function of
+  (origin, direction, geometry) because the owner asked for it to scale up to a
+  HELD beam whose reflections move with the cursor: that is this function called
+  again, with nothing to fall out of step.
+- **The charge indicator is one drawing and one float, not six frames.** A
+  greyscale order mask says which energy cell lights when; a shader compares it
+  against `fill`. Six frames was rejected because the planned ult drains the
+  meter continuously and no number of frames is a continuous value. The fill
+  order is a picture — repaint `rail_indicator_mask.png` and it changes.
+
+This brought the first `.gdshader`, the first `Line2D` and the first custom mouse
+cursor in the repo. All three are engine features rather than hand-rolled
+equivalents, which is the distinction §2 is about.
+
 Everything about a climber is a `CharacterDef` resource. Nothing in the game may
 branch on *which* character it is steering — if a difference cannot be expressed
-as a field there, the missing field is the bug.
+as a field there, the missing field is the bug. A weapon she *carries* is one
+more field (`weapon_scene`) and a four-method interface, not a branch.
 
 Added on the owner's instruction (6 August 2026): a **dedicated server**. He
 asked for console server software with moderation and administration, rooms with
@@ -534,6 +579,29 @@ server code back with fresh eyes. Every one of these was already wrong:
 - **`scenes/MainMenu.tscn` was inside the content fingerprint**, only because it
   sits at the top of `scenes/` rather than under `scenes/ui/`. Moving a button on
   the main menu obliged every server on earth to redeploy.
+
+Found and fixed while adding Uzi (10 August 2026). It was already wrong, it was
+total, and nothing in the game looked wrong because of it:
+
+- **On a dedicated server, a client's attack never reached the server, and the
+  server is where every kill is resolved.** `Room.lock_roster` sets
+  `session.peers = members.duplicate()`, and the server is a member of no room —
+  it has no avatar and no climb — so `NetSession._send`, which only walks
+  `peers`, addressed every other client and stopped. `EnemyCombat._resolve_kills`
+  runs under `Net.is_sim_authority()` and nowhere else, so no client could kill
+  an enemy by punching, swinging, shooting or firing a railgun. Only stomps
+  worked, because a stomp travels by `rpc_id` to a named peer instead. The same
+  hole swallowed `_go_down`, `stand_up` and `pay_revive`.
+  The other half was `scope_sync`, which handed the avatar's synchronizer the
+  same member list — so the server never received a client's position either, and
+  resolved everything against a climber it believed was still on the spawn pad.
+  Both now name peer 1 explicitly. It is NOT added to `session.peers`: that list
+  is the roster, and `World._playing_peers()` builds one avatar per entry.
+  `tools/run_server_probe.sh` now hunts an enemy down with a client's swing and
+  asserts the kill came back `by_strike`. The first version of that check walked
+  the avatar *onto* the enemy, which kills a pursuer by landing on it — so it
+  passed against the broken build, measuring position replication and reporting
+  it as an attack. A probe that can pass for the wrong reason is worse than none.
 
 - Knockback was in the code and not on the screen. A rival's hit set `velocity.x`
   directly, and `_handle_input()` assigns `velocity.x` outright on the very next frame,

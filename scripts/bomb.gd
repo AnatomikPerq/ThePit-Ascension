@@ -98,6 +98,15 @@ func _on_body(body: Node2D) -> void:
 func _on_area(area: Area2D) -> void:
 	if not Net.is_sim_authority() or state == State.SPENT:
 		return
+	if area.is_in_group(&"detonator"):
+		# A railgun beam. It is in the `strike` group as well, because it kills
+		# enemies like everything else does, so this has to come FIRST or the
+		# branch below would bat the bomb away instead — which is the opposite of
+		# what was asked for. Nothing else in the game is a detonator, and the
+		# meaning of the group is exactly "this sets a bomb off where it stands,
+		# in either state".
+		_detonate_soon(int(area.get_meta(&"owner_peer", -1)))
+		return
 	if area.is_in_group(&"strike"):
 		# A punch never sets it off in either state; it throws it. Note that a
 		# blast's own hitbox is in this group too, so an explosion punts any

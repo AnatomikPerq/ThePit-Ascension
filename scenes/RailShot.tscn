@@ -1,0 +1,204 @@
+[gd_scene load_steps=14 format=3 uid="uid://crailshot0001"]
+
+[ext_resource type="Script" path="res://scripts/rail_shot.gd" id="1_script"]
+
+[sub_resource type="CanvasItemMaterial" id="Material_add"]
+blend_mode = 1
+
+[sub_resource type="Curve" id="Curve_taper"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(1, 0.32), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg0"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg1"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg2"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg3"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg4"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg5"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg6"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="RectangleShape2D" id="Shape_Seg7"]
+resource_local_to_scene = true
+size = Vector2(1, 1)
+
+[sub_resource type="Animation" id="Animation_fire"]
+resource_name = "fire"
+length = 0.62
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Core:width")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.035, 0.16, 0.58),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, 6.0, 4.5, 0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Glow:width")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.035, 0.16, 0.58),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, 22.0, 15.0, 0.0]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Haze:width")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.035, 0.16, 0.58),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 0,
+"values": [0.0, 52.0, 34.0, 0.0]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath(".:modulate")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.16, 0.58),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)]
+}
+tracks/4/type = "method"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath(".")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0.14),
+"transitions": PackedFloat32Array(1),
+"values": [{
+"args": [],
+"method": &"_close"
+}]
+}
+tracks/5/type = "method"
+tracks/5/imported = false
+tracks/5/enabled = true
+tracks/5/path = NodePath(".")
+tracks/5/interp = 1
+tracks/5/loop_wrap = true
+tracks/5/keys = {
+"times": PackedFloat32Array(0.62),
+"transitions": PackedFloat32Array(1),
+"values": [{
+"args": [],
+"method": &"_done"
+}]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
+_data = {
+&"fire": SubResource("Animation_fire")
+}
+
+[node name="RailShot" type="Node2D"]
+z_index = 55
+script = ExtResource("1_script")
+
+[node name="Haze" type="Line2D" parent="."]
+material = SubResource("Material_add")
+width = 0.0
+width_curve = SubResource("Curve_taper")
+default_color = Color(0.76, 1, 0.24, 0.09)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+round_precision = 4
+
+[node name="Glow" type="Line2D" parent="."]
+material = SubResource("Material_add")
+width = 0.0
+width_curve = SubResource("Curve_taper")
+default_color = Color(0.76, 1, 0.24, 0.5)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+round_precision = 6
+
+[node name="Core" type="Line2D" parent="."]
+material = SubResource("Material_add")
+width = 0.0
+width_curve = SubResource("Curve_taper")
+default_color = Color(0.97, 1, 0.9, 1)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+round_precision = 6
+
+[node name="BeamHit" type="Area2D" parent="." groups=["detonator", "strike"]]
+monitoring = false
+monitorable = false
+collision_layer = 8
+collision_mask = 16
+
+[node name="Seg0" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg0")
+disabled = true
+
+[node name="Seg1" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg1")
+disabled = true
+
+[node name="Seg2" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg2")
+disabled = true
+
+[node name="Seg3" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg3")
+disabled = true
+
+[node name="Seg4" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg4")
+disabled = true
+
+[node name="Seg5" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg5")
+disabled = true
+
+[node name="Seg6" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg6")
+disabled = true
+
+[node name="Seg7" type="CollisionShape2D" parent="BeamHit"]
+shape = SubResource("Shape_Seg7")
+disabled = true
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_1")
+}

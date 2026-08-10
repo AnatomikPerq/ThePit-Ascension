@@ -5,8 +5,12 @@ extends Button
 ## sentence under it, and four sentences side by side are four things to read
 ## while the pit is still moving.
 
-@onready var title_label: Label = $Title
-@onready var key_label: Label = $Key
+## Both are laid out by a VBoxContainer rather than anchored by hand. The card
+## used to stretch to the panel's full height while holding 150 px of content,
+## with the title centred in the space ABOVE the key rather than in the card —
+## so it sat off centre in a mostly empty box.
+@onready var title_label: Label = $Layout/Title
+@onready var key_label: Label = $Layout/Key
 
 
 func fill(def: UpgradeDef, hotkey: String) -> void:

@@ -1,0 +1,60 @@
+[gd_scene load_steps=6 format=3 uid="uid://crailgun00001"]
+
+[ext_resource type="Script" path="res://scripts/railgun.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/sprites/railgun_disabled.png" id="2_off"]
+[ext_resource type="Texture2D" path="res://assets/sprites/railgun_enabled.png" id="3_on"]
+
+[sub_resource type="Animation" id="Animation_fire"]
+resource_name = "fire"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Pivot/Sprite:texture")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.18),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [ExtResource("3_on"), ExtResource("2_off")]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Pivot/Sprite:offset")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.025, 0.16),
+"transitions": PackedFloat32Array(1, 1, 1),
+"update": 0,
+"values": [Vector2(0, 0), Vector2(-7, 0), Vector2(0, 0)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_1"]
+_data = {
+&"fire": SubResource("Animation_fire")
+}
+
+[node name="Railgun" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Pivot" type="Node2D" parent="."]
+
+[node name="Sprite" type="Sprite2D" parent="Pivot"]
+scale = Vector2(1.55, 1.55)
+texture = ExtResource("2_off")
+
+[node name="CooldownTimer" type="Timer" parent="."]
+wait_time = 3.3
+one_shot = true
+
+[node name="StreamTimer" type="Timer" parent="."]
+wait_time = 0.06
+one_shot = true
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_1")
+}

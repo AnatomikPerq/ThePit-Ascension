@@ -35,9 +35,10 @@ func _avatar(id: StringName) -> CharacterBody2D:
 
 
 # ── The roster ──────────────────────────────────────────────────────────────
-func test_the_roster_has_both_climbers_and_resolves_junk() -> void:
+func test_the_roster_has_every_climber_and_resolves_junk() -> void:
 	assert_object(ROSTER.by_id(&"cyn")).is_not_null()
 	assert_object(ROSTER.by_id(&"tessa")).is_not_null()
+	assert_object(ROSTER.by_id(&"uzi")).is_not_null()
 	assert_object(ROSTER.by_id(&"nobody")).is_null()
 	assert_object(ROSTER.resolve(&"nobody")) \
 		.override_failure_message("an unknown id must fall back, never come back null") \
@@ -57,12 +58,31 @@ func test_every_character_carries_every_animation() -> void:
 				.is_greater(0)
 
 
-func test_every_character_has_an_attack_scene_and_upgrades() -> void:
+## Every climber has SOMETHING on one of the two attack buttons, and something
+## to unlock. Not necessarily a melee swing: Uzi's left button is deliberately
+## empty and her railgun is a mounted weapon rather than a projectile, so the
+## question is "can this character be given anything at all", not "does she
+## punch".
+func test_every_character_can_attack_somehow_and_has_upgrades() -> void:
 	for character in ROSTER.characters:
-		assert_object(character.attack_scene) \
-			.override_failure_message("%s has no attack scene" % character.id).is_not_null()
+		var armed: bool = character.attack_scene != null \
+			or character.ranged_scene != null or character.weapon_scene != null
+		assert_bool(armed) \
+			.override_failure_message("%s has nothing on either button" % character.id) \
+			.is_true()
 		assert_array(character.upgrades) \
 			.override_failure_message("%s has nothing to unlock" % character.id).is_not_empty()
+
+
+## A weapon scene is useless without the numbers it is handed on setup, and the
+## pairing is easy to half-write in a .tres.
+func test_a_mounted_weapon_comes_with_its_stats() -> void:
+	for character in ROSTER.characters:
+		if character.weapon_scene == null:
+			continue
+		assert_object(character.weapon_stats) \
+			.override_failure_message("%s carries a weapon with no stats resource" % character.id) \
+			.is_not_null()
 
 
 # ── What the two climbers actually are ──────────────────────────────────────
@@ -79,6 +99,27 @@ func test_tessa_is_one_heart_and_a_double_jump_from_the_start() -> void:
 	var tessa := _avatar(&"tessa")
 	assert_int(tessa.max_health).is_equal(1)
 	assert_int(tessa.max_jumps).is_equal(2)
+
+
+## Three hearts, a standard jump and nothing unlocked — the owner's answer, and
+## the whole of what makes her the third climber before the railgun is earned.
+func test_uzi_is_three_hearts_and_an_ordinary_jump() -> void:
+	var cyn := _avatar(&"cyn")
+	var uzi := _avatar(&"uzi")
+	assert_int(uzi.max_health).is_equal(3)
+	assert_int(uzi.max_jumps) \
+		.override_failure_message("Uzi's double jump is an upgrade, not a starting kit") \
+		.is_equal(1)
+	assert_float(absf(uzi.jump_force())) \
+		.override_failure_message("Uzi jumps exactly as high as Cyn") \
+		.is_equal_approx(absf(cyn.jump_force()), 0.01)
+
+
+func test_uzi_has_nothing_on_the_attack_button() -> void:
+	assert_object(ROSTER.by_id(&"uzi").attack_scene) \
+		.override_failure_message(
+			"Uzi's left button is deliberately empty — reserved, not wired") \
+		.is_null()
 
 
 func test_tessa_jumps_a_little_shorter_than_cyn() -> void:
@@ -239,13 +280,22 @@ func test_each_climber_spawns_its_own_attack() -> void:
 
 
 # ── The shot ────────────────────────────────────────────────────────────────
-## Only Tessa carries a gun, and the whole of "Cyn cannot shoot" is that her
-## CharacterDef has no ranged scene — not a branch anywhere.
-func test_only_tessa_has_something_to_shoot_with() -> void:
+## The whole of "Cyn cannot shoot" is that her CharacterDef has neither a ranged
+## scene nor a weapon — not a branch anywhere. Tessa's pistol is a projectile
+## scene; Uzi's railgun is a mounted weapon, which is the other of the two slots.
+func test_who_can_shoot_is_decided_entirely_by_the_two_slots() -> void:
 	assert_object(ROSTER.by_id(&"tessa").ranged_scene) \
 		.override_failure_message("Tessa's pistol is not wired to a scene").is_not_null()
+	assert_object(ROSTER.by_id(&"uzi").weapon_scene) \
+		.override_failure_message("Uzi's railgun is not wired to a scene").is_not_null()
+	assert_object(ROSTER.by_id(&"uzi").ranged_scene) \
+		.override_failure_message("Uzi's railgun is carried, not fired as a projectile") \
+		.is_null()
 	assert_object(ROSTER.by_id(&"cyn").ranged_scene) \
 		.override_failure_message("Cyn has no gun; her ranged scene must stay empty").is_null()
+	assert_object(ROSTER.by_id(&"cyn").weapon_scene) \
+		.override_failure_message("Cyn carries nothing; her weapon scene must stay empty") \
+		.is_null()
 
 
 func test_the_gun_is_one_of_tessas_upgrades() -> void:

@@ -35,6 +35,9 @@ const ENTITIES: Array = [
 	["res://scenes/SwordStrike.tscn", Vector2(1560, 520)],
 	["res://scenes/Bullet.tscn", Vector2(1760, 520)],
 	["res://scenes/Shockwave.tscn", Vector2(960, 820)],
+	# Stowed and unarmed, which is how it looks at rest — the aimed pose and the
+	# beam both need a live avatar and a mouse, so they are not capturable here.
+	["res://scenes/Railgun.tscn", Vector2(300, 820)],
 ]
 
 ## Every climber, standing on the same baseline as the Player instance above so

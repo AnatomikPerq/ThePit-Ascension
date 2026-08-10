@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://cuihud01"]
+[gd_scene load_steps=6 format=3 uid="uid://cuihud01"]
 
 [ext_resource type="Script" path="res://src/ui/hud.gd" id="1_script"]
 [ext_resource type="Theme" path="res://assets/ui/pit_theme.tres" id="2_theme"]
+[ext_resource type="PackedScene" path="res://scenes/ui/RailGauge.tscn" id="3_gauge"]
 
 [sub_resource type="Gradient" id="Gradient_vignette"]
 offsets = PackedFloat32Array(0, 0.6, 1)
@@ -178,8 +179,8 @@ layout_mode = 1
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 20.0
-offset_top = -92.0
-offset_right = 320.0
+offset_top = -150.0
+offset_right = 760.0
 offset_bottom = -20.0
 theme_override_constants/separation = 12
 
@@ -218,3 +219,8 @@ theme_override_font_sizes/font_size = 34
 text = "C"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="RailGauge" parent="AbilityIcons" instance=ExtResource("3_gauge")]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0

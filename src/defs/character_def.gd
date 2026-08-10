@@ -37,6 +37,10 @@ extends Resource
 ## The hitbox scene the ATTACK upgrade unlocks — Strike.tscn for Cyn's fist,
 ## SwordStrike.tscn for Tessa's blade. Both run scripts/strike.gd; they differ
 ## in reach, dwell and art, all of which are exports on that scene.
+##
+## Empty for a climber with nothing on the attack button. Uzi's is empty and
+## deliberately so — her three unlocks are the double jump, the extra heart and
+## the railgun, and the left button is hers to be given something later.
 @export var attack_scene: PackedScene
 @export_range(0.05, 2.0, 0.01) var attack_cooldown: float = 0.45
 @export var attack_sound: StringName = &"strike"
@@ -54,6 +58,24 @@ extends Resource
 ## is mirrored for the other side. This is a fact about the art, which is why it
 ## lives here and not as a number in player.gd.
 @export var muzzle_offset: Vector2 = Vector2(28, -10)
+
+@export_group("Weapon")
+## A weapon the RANGED upgrade unlocks that is a THING RATHER THAN A SHOT.
+##
+## `ranged_scene` above spawns one projectile per press and is gone; this one is
+## mounted on the avatar and stays — Uzi's railgun, which lives on her back, is
+## taken out and put away with the same button, aims by mouse, and holds charges
+## between shots. The two are alternatives: a character sets one or the other,
+## and RANGED unlocks whichever it has.
+##
+## Anything here answers four questions and Player asks nothing else of it:
+## `wants_attack()`, `locks_facing()`, `pose()` and `setup(player, stats)`. That
+## is the whole interface, and it is what keeps the avatar from ever knowing
+## which climber is holding what.
+@export var weapon_scene: PackedScene
+## The weapon's own numbers, handed to it on setup. Null for a character with no
+## weapon scene.
+@export var weapon_stats: Resource
 
 @export_group("Progression")
 ## The pool the upgrade menu draws from, in the order the buttons appear. Each

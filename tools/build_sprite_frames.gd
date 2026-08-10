@@ -57,6 +57,36 @@ const TESSA := {
 	"died": {"fps": 1.0, "loop": true, "frames": ["tessa_died.png"]},
 }
 
+# Uzi. One drawing so far — everything else is a reserved slot standing in with
+# it, which is what `optional` + `fallback` is for. Drop `uzi_running_1.png` in
+# beside it, re-run this, and she runs; nothing else has to change.
+#
+# `aiming` and `shooting` are the two poses the railgun asks for by name (see
+# Railgun.pose()). They stand in with `standing` too, so the weapon works before
+# either is drawn — the gun itself is a separate sprite that rotates on top.
+const UZI := {
+	"dir": "uzi/",
+	"standing": {"fps": 1000.0 / 300.0, "loop": true, "optional": true,
+		"frames": ["uzi_standing_1.png", "uzi_standing_2.png"],
+		"fallback": ["uzi_standing_1.png"]},
+	"running": {"fps": 1000.0 / 150.0, "loop": true, "optional": true,
+		"frames": ["uzi_running_1.png", "uzi_running_2.png", "uzi_running_3.png"],
+		"fallback": ["uzi_standing_1.png"]},
+	"jumping": {"fps": 10.0, "loop": true, "optional": true,
+		"frames": ["uzi_jumping_1.png"], "fallback": ["uzi_standing_1.png"]},
+	"falling": {"fps": 10.0, "loop": true, "optional": true,
+		"frames": ["uzi_falling_1.png"], "fallback": ["uzi_standing_1.png"]},
+	"attacking": {"fps": 10.0, "loop": false, "optional": true,
+		"frames": ["uzi_attacking_1.png"], "fallback": ["uzi_standing_1.png"]},
+	"aiming": {"fps": 10.0, "loop": true, "optional": true,
+		"frames": ["uzi_aiming_1.png"], "fallback": ["uzi_standing_1.png"]},
+	"shooting": {"fps": 14.0, "loop": false, "optional": true,
+		"frames": ["uzi_shooting_1.png", "uzi_shooting_2.png"],
+		"fallback": ["uzi_standing_1.png"]},
+	"died": {"fps": 1.0, "loop": true, "optional": true,
+		"frames": ["uzi_died.png"], "fallback": ["uzi_standing_1.png"]},
+}
+
 const PURSUER := {
 	"walk": {"fps": 1000.0 / 200.0, "loop": true,
 		"frames": ["pursuer_1.png", "pursuer_2.png"]},
@@ -107,6 +137,7 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute("res://data/animations")
 	_build(CYN, "res://data/animations/cyn_frames.tres", "standing")
 	_build(TESSA, "res://data/animations/tessa_frames.tres", "standing")
+	_build(UZI, "res://data/animations/uzi_frames.tres", "standing")
 	_build(PURSUER, "res://data/animations/pursuer_frames.tres", "walk")
 	_build(STRIKE, "res://data/animations/strike_frames.tres", "punch")
 	_build(SWORD, "res://data/animations/sword_frames.tres", "punch")
