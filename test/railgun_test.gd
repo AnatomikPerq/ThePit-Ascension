@@ -412,6 +412,37 @@ func test_earned_progress_shows_even_while_reloading() -> void:
 		.is_greater(empty)
 
 
+## The scale above the meter: one mark per boundary BETWEEN charges, so a gun
+## that holds six shows five of them.
+##
+## Where each one SITS is a question about a rendered frame and belongs to
+## tools/gauge_probe.tscn, which measures the marks against the lit pixels. What
+## belongs here is the arithmetic that has no picture in it — how many there are,
+## and that the scene still has enough of them for the biggest gun RailgunStats
+## will accept.
+func test_the_meter_is_divided_into_one_mark_fewer_than_it_holds() -> void:
+	var gauge: RailGauge = load("res://scenes/ui/RailGauge.tscn").instantiate()
+	_root.add_child(gauge)
+	await get_tree().process_frame
+
+	var marks := gauge.get_node(^"Ticks").get_children()
+	assert_int(marks.size()) \
+		.override_failure_message("the scene has to author a mark for every charge " \
+			+ "RailgunStats can be set to, and hide the spare ones") \
+		.is_greater_equal(11)
+
+	for capacity in [2, 6, 11]:
+		gauge.show_charge(0.5, 0, capacity)
+		var shown := 0
+		for mark: Control in marks:
+			if mark.visible:
+				shown += 1
+		assert_int(shown) \
+			.override_failure_message("a gun of %d charges wants %d marks" % [
+				capacity, capacity - 1]) \
+			.is_equal(capacity - 1)
+
+
 ## Another player's kills are another player's charges.
 func test_somebody_elses_score_does_not_charge_this_gun() -> void:
 	var gun := _armed_uzi()
@@ -472,6 +503,106 @@ func test_your_own_beam_comes_back_and_hurts_you_in_solo() -> void:
 	assert_int(uzi.health) \
 		.override_failure_message("Uzi walked through her own beam unharmed") \
 		.is_equal(full - 1)
+
+
+## Half the size and centred, which is the whole of the owner's instruction. It
+## is asserted against the box everything ELSE aims at rather than against a
+## literal, so widening the hurt box later cannot silently leave this one behind.
+func test_your_own_beam_aims_at_a_smaller_target_than_anybody_elses() -> void:
+	var uzi := PLAYER_SCENE.instantiate()
+	uzi.character = ROSTER.by_id(&"uzi")
+	_root.add_child(uzi)
+	var theirs: RectangleShape2D = uzi.hurt_box.get_child(0).shape
+	var ours: RectangleShape2D = uzi.self_hurt_box.get_child(0).shape
+
+	assert_vector(ours.size).is_equal_approx(theirs.size * 0.5, Vector2(0.01, 0.01))
+	assert_vector(uzi.self_hurt_box.get_child(0).position) \
+		.override_failure_message("the smaller box has to sit in the middle of the body") \
+		.is_equal(uzi.hurt_box.get_child(0).position)
+
+
+## The point of the smaller box, as an outcome rather than as a measurement: a
+## beam that clips the shoulder is a miss when it is your own, and the very same
+## line is a hit when it belongs to somebody else.
+##
+## The height is derived from the two shapes rather than typed in, and the beam
+## is thinned so that it fits strictly inside the gap between them — with the
+## shipped width it spans exactly from one edge to the other, and an overlap
+## resting on an exact touch is not a thing to assert on.
+func test_a_beam_past_your_shoulder_is_a_miss_and_a_rivals_is_not() -> void:
+	Net.active = true
+	Net.mode = Net.Mode.RACE
+	var uzi := PLAYER_SCENE.instantiate()
+	uzi.character = ROSTER.by_id(&"uzi")
+	uzi.peer_id = 1
+	_root.add_child(uzi)
+	uzi.global_position = Vector2.ZERO
+	# She stands still for this one. The gap being measured is 8 px on each side
+	# and gravity moves her about 6 of them in the frames an overlap takes to be
+	# reported — the first version of this case failed for exactly that, and it
+	# failed by REPORTING A HIT, which is the direction that looks like a bug in
+	# the code rather than in the test.
+	uzi.set_physics_process(false)
+	var full: int = uzi.max_health
+
+	var inner: float = uzi.self_hurt_box.get_child(0).shape.size.y * 0.5
+	var outer: float = uzi.hurt_box.get_child(0).shape.size.y * 0.5
+	var graze := (inner + outer) * 0.5
+	var thin := STATS.duplicate() as RailgunStats
+	thin.beam_width = (outer - inner) * 0.5
+	await get_tree().physics_frame
+
+	var path := RailBeam.Path.new()
+	path.points = PackedVector2Array([Vector2(-300.0, graze), Vector2(300.0, graze)])
+	var mine := SHOT_SCENE.instantiate()
+	_root.add_child(mine)
+	mine.fire(uzi, thin, path)
+	for i in 8:
+		await get_tree().physics_frame
+	assert_int(uzi.health) \
+		.override_failure_message("her own beam hurt her without going through her") \
+		.is_equal(full)
+
+	# The same line, fired by somebody else, in a race.
+	var rival := PLAYER_SCENE.instantiate()
+	rival.peer_id = 2
+	_root.add_child(rival)
+	rival.global_position = Vector2(0.0, -400.0)
+	var theirs := SHOT_SCENE.instantiate()
+	_root.add_child(theirs)
+	theirs.fire(rival, thin, path)
+	for i in 8:
+		await get_tree().physics_frame
+	assert_int(uzi.health) \
+		.override_failure_message("a rival's beam has to use the full body, as every attack does") \
+		.is_equal(full - 1)
+
+
+## The window is a fact about the hitbox, so it is asserted on the hitbox. What
+## it is worth in play is written down in RailgunStats: a single shot's box shuts
+## at 0.14 s anyway, and this is here for the held beam that is coming.
+func test_the_shooters_own_window_shuts_before_the_hitbox_does() -> void:
+	var uzi := PLAYER_SCENE.instantiate()
+	uzi.character = ROSTER.by_id(&"uzi")
+	uzi.peer_id = 1
+	_root.add_child(uzi)
+	var path := RailBeam.Path.new()
+	path.points = PackedVector2Array([Vector2(-300.0, 0.0), Vector2(300.0, 0.0)])
+
+	var brief := STATS.duplicate() as RailgunStats
+	brief.self_harm_seconds = 0.05
+	var shot := SHOT_SCENE.instantiate()
+	_root.add_child(shot)
+	shot.fire(uzi, brief, path)
+	assert_bool(bool(shot.hit_area.get_meta(&"self_harm"))) \
+		.override_failure_message("the shot has to be able to hurt its own owner at all") \
+		.is_true()
+
+	for i in 12: # 0.1 s of physics at 120 Hz, twice the window
+		await get_tree().physics_frame
+	assert_bool(bool(shot.hit_area.get_meta(&"self_harm"))) \
+		.override_failure_message("the shooter stayed in danger past their own window") \
+		.is_false()
 
 
 func test_a_stowed_gun_cannot_fire_and_a_spent_one_cannot_either() -> void:

@@ -27,6 +27,12 @@ shader_type canvas_item;
 // to group the cells into six blocks that each light as one, and nothing in code
 // changes.
 //
+// The generator's own comment is worth reading before repainting: the ramp is
+// even along the LENGTH of the gun, not over the count of energy pixels, so
+// every sixth of the scale lights the same length of drawing. Weighting it by
+// pixels is what left the thin bar on the stock lit from the first charge and
+// motionless thereafter — the whole drawing is one strip, end to end.
+//
 // ## The drained look
 //
 // By default a cell that is not lit is the same pixel pushed down to `drained`,
@@ -78,20 +84,17 @@ const vec2 RING[8] = {
 };
 
 
-// The mask is DATA, and Godot hands it back as COLOUR.
+// One read of the mask, in the units it was painted in: a cell painted 128 is
+// 0.5 here. The mask is imported lossless and uncompressed (see its .import) and
+// nothing decodes it on the way in, so a plain linear ramp in the file is a
+// plain linear ramp in the shader — which is the only reason the generator can
+// be trusted and the file can be edited by hand and mean what it looks like.
 //
-// A 2D texture is sampled through an sRGB decode, so a cell painted 128 comes
-// back as ~0.216 rather than 0.5 — every order value is pulled down, so far more
-// of them fall under `fill` than should. Measured, before this was here: at
-// fill = 1/6 a third of the gun was lit instead of a sixth, and by fill = 5/6 it
-// was already saturated, so the top of the scale did nothing at all.
-//
-// Undoing the decode puts the mask back in the units it was painted in, which is
-// what lets `tools/aseprite/build_rail_mask.lua` write a plain linear ramp and
-// lets the file be edited by hand and mean what it looks like.
+// It is a function rather than a texture() at each site because the glow samples
+// it sixteen more times per pixel, in a ring that deliberately reaches outside
+// the widget — so the clamp has to be in one place rather than at seventeen.
 float order_at(vec2 uv) {
-	float m = texture(order_mask, clamp(uv, vec2(0.0), vec2(1.0))).r;
-	return m;
+	return texture(order_mask, clamp(uv, vec2(0.0), vec2(1.0))).r;
 }
 
 

@@ -14,6 +14,7 @@ segment_length = 4200.0
 beam_width = 16.0
 hit_overshoot = 28.0
 stops_on_players = false
+self_harm_seconds = 0.5
 charges = 6
 score_per_charge = 600
 initial_charges = 2

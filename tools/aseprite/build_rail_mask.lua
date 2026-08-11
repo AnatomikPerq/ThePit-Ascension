@@ -18,11 +18,28 @@
 -- about the art has to know which of those is happening.
 --
 -- This script only guesses. It finds the green by hue and orders it left to
--- right by CUMULATIVE COUNT rather than by raw x — so the lit area grows at a
--- steady rate instead of stalling across the stretches of the gun that have no
--- green on them. Open the .aseprite it writes and repaint it to say something
--- else: light the receiver before the barrel, group the cells into six blocks,
+-- right — one strip along the whole gun, from the butt of the stock to the
+-- muzzle. Open the .aseprite it writes and repaint it to say something else:
+-- light the receiver before the barrel, group the cells into six blocks,
 -- whatever reads best. Nothing in code needs to change when you do.
+--
+-- WHAT A COLUMN'S PLACE IN THE ORDER IS, because there are three defensible
+-- answers and the first two are wrong:
+--
+--   by pixel count   a column's share of the scale is its share of the energy
+--                    PIXELS. This is what the first version did, and it made
+--                    the sparse end of the gun vanish from the gauge: the bar
+--                    on the stock is 26 of 539 energy pixels, so it lit inside
+--                    the first 5% of the scale and then sat there, lit, for the
+--                    whole rest of the climb. The owner's word for it was that
+--                    it "stays unused".
+--   by raw x         even in screen space, but then the fill stalls: 16% of the
+--                    scale falls in the two stretches of gun that carry no
+--                    green at all, and during those the widget does not move.
+--   by energy column what this does. A column's place is how many columns that
+--                    HAVE energy on them stand to its left, so the lit fraction
+--                    of the strip equals `fill` exactly, every sixth of the
+--                    scale lights the same length of gun, and nothing stalls.
 
 local p = app.params
 local spr = app.open(p.src)
@@ -50,9 +67,11 @@ local function is_energy(r, g, b, a)
 	return g > 60 and g > r * 1.25 and g > b * 1.5
 end
 
--- Pass one: how many energy pixels stand in each column.
+-- Pass one: how many energy pixels stand in each column, and how many columns
+-- carry any at all.
 local per_column = {}
 local total = 0
+local lit_columns = 0
 for x = 0, w - 1 do
 	per_column[x] = 0
 end
@@ -66,18 +85,23 @@ for y = 0, h - 1 do
 		end
 	end
 end
+for x = 0, w - 1 do
+	if per_column[x] > 0 then lit_columns = lit_columns + 1 end
+end
 
 if total == 0 then
 	print("no energy pixels found — check is_energy() against the palette")
 	return
 end
 
--- Pass two: a column's place in the order is how much energy stands to its left.
+-- Pass two: a column's place in the order is how many energy-carrying columns
+-- stand to its LEFT. Strictly to the left, so the leftmost is 1 and the whole
+-- strip is lit before the scale runs out.
 local rank = {}
 local seen = 0
 for x = 0, w - 1 do
-	rank[x] = 1 + math.floor(254.0 * seen / total + 0.5)
-	seen = seen + per_column[x]
+	rank[x] = 1 + math.floor(254.0 * seen / lit_columns + 0.5)
+	if per_column[x] > 0 then seen = seen + 1 end
 end
 
 local out = Sprite(w, h, ColorMode.RGB)
@@ -98,7 +122,10 @@ for y = 0, h - 1 do
 	end
 end
 
-print(string.format("%d energy pixels of %d, ordered across %d columns", cells, w * h, w))
+-- The line to read: `strip` is how much of the drawing the gauge actually uses.
+-- One sixth of the scale is one sixth of that, wherever on the gun it falls.
+print(string.format("%d energy pixels of %d, strip %d columns of %d wide",
+	cells, w * h, lit_columns, w))
 
 if p.ase ~= nil then
 	out:saveAs(p.ase)

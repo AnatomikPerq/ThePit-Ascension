@@ -105,8 +105,10 @@ func _update_weapon(carried: Node) -> void:
 		rail_gauge.forget()
 		return
 	# `meter()`, not `fill()`: what can be fired right now plus what is being
-	# earned, rather than what the gun holds. See Railgun.meter().
-	rail_gauge.show_charge(float(carried.call(&"meter")), int(carried.get(&"charges")))
+	# earned, rather than what the gun holds. See Railgun.meter(). `capacity()` is
+	# what a full gun holds — the scale the marks along the top divide up.
+	rail_gauge.show_charge(float(carried.call(&"meter")), int(carried.get(&"charges")),
+		int(carried.call(&"capacity")))
 
 
 # ── Spectating ──────────────────────────────────────────────────────────────

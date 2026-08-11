@@ -164,9 +164,18 @@ var _shove_x: float = 0.0
 ## How long the firing pose is held. Only the pose — the bullet has left.
 @onready var shot_pose_timer: Timer = $ShotPoseTimer
 ## Watches for hostile PLAYER_ATTACK hitboxes. It is on no layer at all, so
-## nothing can see it back, and it only monitors in a race — the mode is a
-## physical fact about the scene rather than an `if` in a hot path.
+## nothing can see it back, and it only monitors on the machine steering this
+## avatar — see _ready.
 @onready var hurt_box: Area2D = $HurtBox
+## The same watch, for hits that belong to US — which today means one thing, a
+## railgun beam that has come back off a wall into the person who fired it.
+##
+## It is a SEPARATE box because it is half the size and centred: your own beam
+## has to actually go through you rather than graze the shoulder of a hitbox
+## drawn generously so that other people's attacks feel fair. Two boxes rather
+## than one box and a rule, because the size IS the rule — nothing reads a flag
+## to decide how big your own beam's target is.
+@onready var self_hurt_box: Area2D = $SelfHurtBox
 ## The dash-down hitbox. On its own layer so that a race rival's HurtBox, which
 ## watches PLAYER_ATTACK, does not read a dive going past as a punch.
 @onready var dash_box: Area2D = $DashBox
@@ -204,9 +213,21 @@ func _ready() -> void:
 	# on PLAYER_ATTACK that could reach you. A railgun beam bounced back into its
 	# own owner is the second, and it lands in every mode — so the mode question
 	# moved into _on_hostile_area, which still reaches every old outcome.
-	hurt_box.monitoring = is_multiplayer_authority()
 	hurt_box.area_entered.connect(_on_hostile_area)
+	self_hurt_box.area_entered.connect(_on_own_area)
+	_arm_hurt_boxes(true)
 	_arm_dash_box(dashing_down)
+
+
+## Both watches, together. They go off when the body stops being a body — while
+## it is dying, and for as long as it lies downed — and come back when somebody
+## pays a heart for it. One call rather than four scattered assignments, because
+## they were already out of step: stand_up() used to re-arm the hurt box only in
+## a race, so a revived climber walked through her own beam untouched.
+func _arm_hurt_boxes(on: bool) -> void:
+	var mine := on and is_multiplayer_authority()
+	hurt_box.monitoring = mine
+	self_hurt_box.monitoring = mine
 
 
 ## The dash-down hitbox exists only while the dive does.
@@ -593,22 +614,40 @@ func _spawn_shockwave() -> void:
 
 
 # ── Player versus player (race only) ────────────────────────────────────────
-## A rival's Strike or Shockwave hitbox has reached us. Only our own machine
-## ever gets here — the hurt box does not monitor on a puppet — so the rule
-## "the victim owns its damage" holds without a single extra check.
+## A rival's Strike, Shockwave or beam has reached us. Only our own machine ever
+## gets here — the hurt box does not monitor on a puppet — so the rule "the
+## victim owns its damage" holds without a single extra check.
 func _on_hostile_area(area: Area2D) -> void:
-	var ours := int(area.get_meta(&"owner_peer", 0)) == peer_id
-	# Our own punch passes through our own body, as it always has — unless the
-	# hitbox asks not to. A railgun beam bounces five times and hits Uzi herself
-	# in every mode, on purpose: firing down a corridor you are standing in is
-	# meant to be a decision. Nothing else stamps `self_harm`.
-	if ours and not bool(area.get_meta(&"self_harm", false)):
+	# Our own attacks pass through our own body, as they always have. What comes
+	# back at us goes to the smaller box instead: see _on_own_area.
+	if int(area.get_meta(&"owner_peer", 0)) == peer_id:
 		return
 	# Somebody else's hit only lands in a race — in co-op a teammate's swing has
 	# never reached you and a teammate's beam must not either. This check used to
 	# be `hurt_box.monitoring` in _ready().
-	if not ours and not session.is_versus():
+	if not session.is_versus():
 		return
+	_take_hit_from(area)
+
+
+## Something WE fired has reached us. Today that is one thing: a railgun beam,
+## which the owner asked to hit Uzi herself in every mode — firing down a
+## corridor you are standing in is meant to be a decision.
+##
+## Two things make it survivable rather than a tax on aiming down. The box is
+## half the size of the one a rival aims at, so it takes a beam through the
+## middle of her and not a beam past her elbow; and the hitbox only carries
+## `self_harm` for the first moment of the shot, so being shoved into your own
+## reflection a beat later is a near miss. Both are in RailgunStats.
+func _on_own_area(area: Area2D) -> void:
+	if int(area.get_meta(&"owner_peer", 0)) != peer_id:
+		return
+	if not bool(area.get_meta(&"self_harm", false)):
+		return
+	_take_hit_from(area)
+
+
+func _take_hit_from(area: Area2D) -> void:
 	if not take_damage():
 		return
 	# Shoved away from whoever hit us, on top of take_damage()'s knockback. This
@@ -804,7 +843,7 @@ func _die_everywhere() -> void:
 	dashing_down = false
 	_lay_down(true)
 	collision_mask = Layers.NONE
-	hurt_box.monitoring = false
+	_arm_hurt_boxes(false)
 	var mine := not session.active or is_multiplayer_authority()
 	# Announced everywhere, so it is a world sound with a long range rather than
 	# a private one: ours plays at zero distance and full volume, and somebody
@@ -841,7 +880,7 @@ func _go_down() -> void:
 	velocity = Vector2(0.0, DOWNED_POP_FORCE)
 	collision_layer = Layers.NONE
 	collision_mask = Layers.WORLD
-	hurt_box.monitoring = false
+	_arm_hurt_boxes(false)
 	sprite.play(&"died")
 	_puppet_anim = &"died"
 	_lay_down(true)
@@ -885,7 +924,7 @@ func stand_up() -> void:
 	_lay_down(false)
 	_squash(Vector2(1.5, 2.6))
 	_restore_collision()
-	hurt_box.monitoring = session.is_versus() and is_multiplayer_authority()
+	_arm_hurt_boxes(true)
 	revive_prompt.show_sign(false)
 	sprite.play(&"standing")
 	_puppet_anim = &"standing"

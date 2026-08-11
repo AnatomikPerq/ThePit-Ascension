@@ -4,7 +4,7 @@
 
 [resource]
 script = ExtResource("1_74sdr")
-content_hash = "0a5af0b3ac1547200ce09014efb3d42ddef41c4c0f92b71a6f10ba8a458e158c"
+content_hash = "518998a8b585acb42fb03d66d603531c433410dceb1f8b0b191e077c85f11526"
 file_count = 102
-generated_at = "2026-08-10T08:31:57"
+generated_at = "2026-08-11T08:47:36"
 sources = PackedStringArray("res://src/core", "res://src/defs", "res://src/entities", "res://src/net", "res://src/world", "res://scripts", "res://scenes", "res://data/characters", "res://data/enemies", "res://data/upgrades", "res://data/worlds", "res://data/animations")

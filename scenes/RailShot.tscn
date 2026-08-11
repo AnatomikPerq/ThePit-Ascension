@@ -198,6 +198,12 @@ disabled = true
 shape = SubResource("Shape_Seg7")
 disabled = true
 
+[node name="SelfHarmWindow" type="Timer" parent="."]
+process_callback = 0
+one_shot = true
+
+[connection signal="timeout" from="SelfHarmWindow" to="." method="_close_self_harm"]
+
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
 libraries = {
 &"": SubResource("AnimationLibrary_1")

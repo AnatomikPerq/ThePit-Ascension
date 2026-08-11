@@ -54,6 +54,80 @@ expand_mode = 1
 stretch_mode = 5
 script = ExtResource("1_script")
 
+[node name="Ticks" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 0
+offset_top = -24.0
+offset_right = 474.0
+offset_bottom = -6.0
+mouse_filter = 2
+
+[node name="Tick0" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick1" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick2" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick3" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick4" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick5" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick6" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick7" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick8" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick9" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
+[node name="Tick10" type="ColorRect" parent="Ticks"]
+layout_mode = 0
+offset_right = 3.0
+offset_bottom = 18.0
+color = Color(0.86, 0.95, 0.72, 0.75)
+
 [node name="Flash" type="AnimationPlayer" parent="."]
 libraries = {
 &"": SubResource("AnimationLibrary_1")

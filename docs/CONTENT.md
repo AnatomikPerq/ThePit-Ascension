@@ -126,6 +126,14 @@ asks whatever is in it four questions and never what kind it is:
 - **It hits Uzi herself, in every mode**, which the owner asked for on purpose:
   firing down a corridor you are standing in is meant to be a decision. In a race
   it hits every other climber too.
+- **Her own beam aims at a smaller Uzi.** She carries a second hurt box, half the
+  size of the one every other attack in the game aims at and centred on her body,
+  and only her own beam is resolved against it — so a shot that goes past her
+  shoulder is a miss and a shot through the middle of her is not. It is live for
+  `self_harm_seconds` from the trigger and no longer; everything else the beam
+  can reach stays in danger for as long as the hitbox is up. Both halves are one
+  idea: your own beam costs you a heart at the moment you decide to fire, not for
+  as long as it is on the screen.
 - **It kicks.** The recoil goes through `Player.shove()`, the same one entry point
   a blast and a rival's hit use, so firing downwards carries a jump further than
   it would go on its own.
@@ -158,6 +166,27 @@ and it was rejected for a specific reason: the ult that is planned drains the
 meter continuously, and no number of frames is a continuous value. Repainting
 `assets/ui/rail_indicator_mask.png` changes the fill order with no code change;
 `tools/aseprite/build_rail_mask.lua` generates the first draft.
+
+The order runs **evenly along the length of the gun**, and that is the owner's
+call rather than an implementation detail: the whole drawing is one strip, from
+the butt of the stock to the muzzle, so a sixth of the scale is a sixth of the
+gun wherever it falls. The generator's first draft weighted it by how many energy
+pixels each stretch of drawing carried, which is defensible and was wrong in
+play — the thin bar on the stock is 26 pixels of 539, so it filled inside the
+first five per cent of the scale and then never moved again, and the gauge was
+in effect the barrel with an ornament on the end of it.
+Above the gun there are **five marks**, one for each boundary between the six
+charges, so that how much of the bar one shot is worth can be read off instead of
+estimated. They went in as a debugging aid and stayed; `show_ticks` on
+`RailGauge` turns them off without touching code, and the scene authors eleven of
+them so that a gun of any capacity `RailgunStats` allows is divided correctly.
+Their positions are *measured* from the order mask rather than authored, because
+repainting that mask is the supported way to change the fill order and a scale
+drawn anywhere else would immediately disagree with it.
+
+`tools/gauge_probe.tscn` renders the widget alone at each of the six steps,
+counts how much of the strip lit, checks each mark against the lit pixels, and
+fails when any of it stops being true.
 
 **Upgrades are a single-use pool.** The menu offers only what that climber has
 not taken yet; when one thing is left it is granted without asking, and once

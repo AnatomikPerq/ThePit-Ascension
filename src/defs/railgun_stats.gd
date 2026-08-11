@@ -42,6 +42,26 @@ extends Resource
 ## into cover and a rival into a shield. It is here because the owner asked for
 ## the possibility to exist, not because anything switches it today.
 @export var stops_on_players: bool = false
+## How long the beam can hurt THE PERSON WHO FIRED IT, counted from the shot.
+##
+## Everyone else it can reach stays in danger for as long as the hitbox is up,
+## which is most of the time the beam is on screen. Its owner does not: firing
+## into a corridor you are standing in is meant to cost you a heart at the
+## moment you pull the trigger, not to leave you pinned in your own shot while
+## it fades. 0 turns self harm off entirely.
+##
+## The smaller target is the other half of the same idea — see Player's
+## SelfHurtBox, which is half the size of the one everything else aims at.
+##
+## MEASURE BEFORE TUNING THIS. A single shot's hitbox closes at 0.14 s — the
+## `_close` track in RailShot.tscn, a fifth of the time the drawing is on screen
+## — so at anything above that this is a ceiling that never binds, and lowering
+## it is the only way to see it do anything. It is set where it is because the
+## number the owner asked for is half a second, and because the beam this has to
+## survive is the HELD one: a hitbox that lives as long as the trigger is exactly
+## where "your own beam hurts you" turns into "your own beam kills you", and it
+## is this that stops it.
+@export_range(0.0, 2.0, 0.05) var self_harm_seconds: float = 0.5
 
 # ── Charges ─────────────────────────────────────────────────────────────────
 @export_group("Charges")

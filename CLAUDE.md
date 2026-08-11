@@ -65,6 +65,12 @@ design questions on the record — see docs/CONTENT.md:
   passed through go off where they stand. It hits Uzi herself in every mode, and
   every other climber in a race, both on purpose. It kicks her backwards through
   `Player.shove()`, so firing downwards carries a jump.
+  It hits *her* through a target of its own, added on his instruction of
+  11 August 2026: a hitbox half the size of the one everything else aims at,
+  centred on her body, live only for the first moment of the shot. Both halves
+  are the same idea — her own beam has to go through the middle of her, and it
+  has to do it at the moment she pulls the trigger. Everyone else the beam can
+  reach stays in danger for as long as the hitbox is up.
 - **Six charges, 600 score each, earned and never spent.** The run's own number is
   untouched: the railgun feeds on what you earn rather than taking it off the
   board, and a full gun banks nothing.
@@ -87,6 +93,18 @@ rejected:
   against `fill`. Six frames was rejected because the planned ult drains the
   meter continuously and no number of frames is a continuous value. The fill
   order is a picture — repaint `rail_indicator_mask.png` and it changes.
+  The order runs evenly along the LENGTH of the gun, on the owner's instruction
+  of 11 August 2026: "весь индикатор одна полоса". Weighting it by how many
+  energy pixels a stretch of gun has — which is what the generator did first —
+  gave the thin bar on the stock 5% of the scale, so it lit on the first charge
+  and then sat there for the rest of the climb looking like decoration.
+  A row of marks sits above it, one per boundary between charges, so that "how
+  much of this bar is one shot" can be read rather than estimated — added the
+  same day, as a debugging aid, and kept behind `show_ticks` in the scene. They
+  are MEASURED from the mask, never authored at pixel positions, for the same
+  reason: repainting the mask is the supported way to change the fill order, and
+  a scale drawn anywhere else would start lying the moment somebody did.
+  `tools/gauge_probe.tscn` measures all of it and fails when it stops being true.
 
 This brought the first `.gdshader`, the first `Line2D` and the first custom mouse
 cursor in the repo. All three are engine features rather than hand-rolled
@@ -304,6 +322,7 @@ bash tools/run_server_probe.sh                          # real dedicated server 
 bash tools/run_directory_probe.sh                       # real directory + announcing server + browser
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
 godot --path . tools/ui_check.tscn -- out_dir           # every UI surface, for eyeballing (advisory)
+godot --path . --fixed-fps 60 tools/gauge_probe.tscn    # the charge gauge's scale, measured (gate)
 bash tools/check_conventions.sh                         # grep gates for the rules above
 
 godot --headless --path . -s tools/world_balance.gd     # the pit level by level (advisory)
@@ -345,6 +364,20 @@ regression.
 Pixel identity is a **detector, not a gate**. The owner explicitly relaxed it: bugs get
 fixed even when the fix is visible. When a capture changes, say what changed and why, and
 re-baseline deliberately.
+
+`gauge_probe` is the exception among the visual harnesses: it *measures* rather than
+draws. The railgun's charge indicator is one drawing lit through a painted order mask, so
+"is the scale even" is a question about a frame that has been rendered and about nothing
+that exists before then — no unit test can reach it. It sets `fill` by hand, reads the
+pixels back, counts how much of the energy strip lit, and exits non-zero when a sixth of
+the scale is not a sixth of the gun. It is not in `run_tests.sh` because it needs a GPU.
+
+**Re-import after regenerating an asset, before believing any probe.** Godot only rebuilds
+`.godot/imported/` in *editor* mode, so a PNG rewritten by a generator is invisible to
+`--fixed-fps` runs until `--import` has been run: the probe renders the previous file and
+agrees with itself perfectly. That cost most of a session twice — once producing a
+"gamma bug" that did not exist, and once reporting a mask fix as having changed nothing.
+`gauge_probe` says so in its own error message for that reason.
 
 ## 6. The toolchain around the editor
 
@@ -608,6 +641,14 @@ total, and nothing in the game looked wrong because of it:
   so the shove lasted one tick and moved the player by about a pixel. Impulses go through
   `Player.shove()` now: added on top of movement and decayed, so being blown across a gap
   is something you can see and have to recover from.
+
+- **A revived climber could walk through her own railgun beam untouched.** The
+  hurt box is armed in three places and one of them still said what it said
+  before the railgun existed: `stand_up()` re-armed it only in a race, because a
+  rival's fist used to be the only thing on `PLAYER_ATTACK` that could reach you.
+  Three assignments of the same flag with two different rules in them is the
+  shape of the bug, so there is one `_arm_hurt_boxes()` now and every caller uses
+  it. Found while adding the second hurt box, not by anything failing.
 
 ## 8. The server moves with the game
 

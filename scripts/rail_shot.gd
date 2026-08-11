@@ -33,6 +33,11 @@ const HIT_GROUP: StringName = &"strike"
 @onready var haze: Line2D = $Haze
 @onready var hit_area: Area2D = $BeamHit
 @onready var anim: AnimationPlayer = $AnimationPlayer
+## How long the beam may still hurt the person who fired it. A Timer node and
+## not an accumulator, and not a track on the clip either: the clip is the
+## drawing and this is a number in RailgunStats. It counts on the PHYSICS clock,
+## because what it gates is an overlap and overlaps happen there.
+@onready var self_window: Timer = $SelfHarmWindow
 
 var _stats: RailgunStats
 
@@ -109,8 +114,15 @@ func _lay_hitbox(shooter: Node2D, stats: RailgunStats, path: RailBeam.Path) -> v
 	hit_area.set_meta(&"hit_reach", stats.beam_width)
 	# Your own beam, come back off a wall into your own body, hurts. Every other
 	# hitbox in the game is skipped by the player who owns it; this one asks not
-	# to be. See Player._on_hostile_area.
-	hit_area.set_meta(&"self_harm", true)
+	# to be, and asks it of a smaller box — see Player._on_own_area.
+	#
+	# It asks for a shorter time, too. Everything else the beam can reach stays
+	# in danger for as long as the hitbox is up; its owner is only in danger at
+	# the moment of the shot, so recoiling into your own reflection is a near
+	# miss rather than a heart.
+	hit_area.set_meta(&"self_harm", stats.self_harm_seconds > 0.0)
+	if stats.self_harm_seconds > 0.0:
+		self_window.start(stats.self_harm_seconds)
 	hit_area.monitorable = true
 	hit_area.monitoring = true
 
@@ -149,6 +161,11 @@ func _kick(shooter: Node2D, stats: RailgunStats, path: RailBeam.Path) -> void:
 	# so this is safe to call on all of them.
 	var heading := (path.points[1] - muzzle).normalized()
 	shooter.call(&"shove", muzzle + heading * 64.0, stats.recoil)
+
+
+## The shooter's own window has run out; the beam still bites everybody else.
+func _close_self_harm() -> void:
+	hit_area.set_meta(&"self_harm", false)
 
 
 ## The hitbox closes long before the drawing fades. Called from the clip.

@@ -344,6 +344,14 @@ func meter() -> float:
 	return clampf((held + earned) / float(stats.charges), 0.0, 1.0)
 
 
+## What a full gun holds, which is the scale everything about the meter divides
+## up. The HUD needs it to put its marks between the charges, and asks the weapon
+## rather than the character — a second charged weapon later would answer for
+## itself with no change anywhere.
+func capacity() -> int:
+	return stats.charges if stats != null else 0
+
+
 func ready_to_fire() -> bool:
 	return _armed and charges > 0 and cooldown.is_stopped()
 
