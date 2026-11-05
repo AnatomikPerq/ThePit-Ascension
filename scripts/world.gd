@@ -764,6 +764,10 @@ func _spawn_avatar(peer_id: int, slot_offset: float = 0.0) -> CharacterBody2D:
 	if def != null:
 		avatar.character = def
 	avatar.set_multiplayer_authority(peer_id)
+	# Except the echo, which belongs to the machine simulating the room: on a
+	# dedicated server it hands the owner's state on to everyone else, who have
+	# no connection to the owner. Silent anywhere else — see NetSession.scope_sync.
+	avatar.get_node(^"Echo").set_multiplayer_authority(1)
 	# Only for the avatar this machine steers. A puppet keeps -1 until its owner
 	# says which run it is reporting from — see Player.run_seed.
 	if peer_id == Game.local_peer_id:

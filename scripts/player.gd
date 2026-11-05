@@ -527,8 +527,10 @@ func _try_strike() -> void:
 	session.broadcast(self, &"_spawn_strike")
 
 
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _spawn_strike() -> void:
+	if not session.from_owner(self, &"_spawn_strike"):
+		return
 	if character == null or character.attack_scene == null:
 		return
 	var s := character.attack_scene.instantiate()
@@ -563,8 +565,10 @@ func _try_shoot() -> void:
 ## it. `facing` and `from` travel because the shot has to leave the muzzle it
 ## was fired from even if the avatar has already turned round by the time the
 ## packet lands.
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _spawn_bullet(facing: bool, from: Vector2) -> void:
+	if not session.from_owner(self, &"_spawn_bullet", [facing, from]):
+		return
 	if character == null or character.ranged_scene == null:
 		return
 	shot_pose_timer.start()
@@ -586,8 +590,10 @@ func fire_weapon(from: Vector2, angle: float) -> void:
 
 ## Every machine in the room, so the authority has the hitbox and everybody else
 ## has the picture. What the shot actually IS, this does not know.
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _spawn_weapon_shot(from: Vector2, angle: float) -> void:
+	if not session.from_owner(self, &"_spawn_weapon_shot", [from, angle]):
+		return
 	if weapon != null and weapon.has_method(&"spawn_shot"):
 		weapon.call(&"spawn_shot", from, angle)
 
@@ -601,8 +607,10 @@ func _try_shockwave() -> void:
 	session.broadcast(self, &"_spawn_shockwave")
 
 
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _spawn_shockwave() -> void:
+	if not session.from_owner(self, &"_spawn_shockwave"):
+		return
 	# Fired on every machine, so the kick has to be measured from where it went
 	# off: a rival letting one off across the pit used to shake a camera nowhere
 	# near it. At zero distance — your own blast — this is the same 0.45.
@@ -866,8 +874,10 @@ func _die_everywhere() -> void:
 ## It is off every collision layer, so no enemy, trampoline or rival can see it,
 ## and it keeps WORLD in its mask so it falls to the nearest floor instead of
 ## hanging in the air where the last heart went.
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func _go_down() -> void:
+	if not session.from_owner(self, &"_go_down"):
+		return
 	if is_downed:
 		return
 	is_downed = true
@@ -912,8 +922,10 @@ func remote_pay_revive() -> void:
 ## Somebody paid a heart for this body. It stands up where it fell with one
 ## heart and a moment of invincibility, so being revived under an enemy is not
 ## instantly being downed again.
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func stand_up() -> void:
+	if not session.from_owner(self, &"stand_up"):
+		return
 	if not is_downed:
 		return
 	is_downed = false
@@ -940,8 +952,10 @@ func stand_up() -> void:
 
 ## The cost, on the machine of whoever paid it. A plain heart off the bar: no
 ## knockback, no invincibility, no flash — you were not hit, you gave it away.
-@rpc("authority", "call_local", "reliable")
+@rpc("any_peer", "call_local", "reliable")
 func pay_revive() -> void:
+	if not session.from_owner(self, &"pay_revive"):
+		return
 	health = maxi(health - 1, 1)
 	if is_multiplayer_authority():
 		player_damaged.emit(health)

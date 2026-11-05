@@ -149,3 +149,7 @@ shape = SubResource("RectangleShape2D_dash")
 
 [node name="Sync" type="MultiplayerSynchronizer" parent="." unique_id=34129306]
 replication_config = SubResource("SRC_player")
+
+[node name="Echo" type="MultiplayerSynchronizer" parent="." unique_id=1771402513]
+public_visibility = false
+replication_config = SubResource("SRC_player")

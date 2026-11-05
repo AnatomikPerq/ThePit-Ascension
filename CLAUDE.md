@@ -319,6 +319,7 @@ godot --headless --path . tools/state_probe.tscn        # pause, input, restart,
 godot --headless --path . tools/world_fingerprint.tscn  # same seed => same geometry hash
 bash tools/run_net_probe.sh                             # real host+client over a localhost socket
 bash tools/run_server_probe.sh                          # real dedicated server + 2 clients, 2 rooms
+bash tools/run_roommate_probe.sh                        # real dedicated server + 2 clients, 1 room
 bash tools/run_directory_probe.sh                       # real directory + announcing server + browser
 godot --path . --fixed-fps 60 tools/visual_check.tscn -- out.png   # sprite gallery
 godot --path . tools/ui_check.tscn -- out_dir           # every UI surface, for eyeballing (advisory)
@@ -635,6 +636,20 @@ total, and nothing in the game looked wrong because of it:
   the avatar *onto* the enemy, which kills a pursuer by landing on it — so it
   passed against the broken build, measuring position replication and reporting
   it as an attack. A probe that can pass for the wrong reason is worse than none.
+
+- **On a dedicated server, players in the same room never saw each other move
+  or swing** (found 6 November 2026, on the first real server). Clients there
+  have no connection to one another and `network/relay_between_clients` is off,
+  so an avatar's sync stream and every broadcast its owner made — strike, shot,
+  shockwave, going down, standing up, paying for a revive — reached the server
+  and stopped. Each player saw the others frozen on the spawn pad while the
+  server resolved the climb correctly. The relay stays off; the server passes
+  things on itself instead. An avatar has a second synchronizer, `Echo`, owned
+  by peer 1, that sends what the owner sent to every member but the owner, and
+  the owner-only RPCs are `any_peer` behind `NetSession.from_owner`, which
+  forwards them. `tools/run_roommate_probe.sh` puts two clients in ONE room and
+  fails without it; the server probe could not see this because it puts its
+  two clients in different rooms on purpose.
 
 - Knockback was in the code and not on the screen. A rival's hit set `velocity.x`
   directly, and `_handle_input()` assigns `velocity.x` outright on the very next frame,

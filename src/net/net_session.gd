@@ -166,7 +166,15 @@ func broadcast_remote(node: Node, method: StringName, args: Array = []) -> void:
 ## ROSTER: `World._playing_peers()` builds one avatar per entry and
 ## `prune_disconnected` deletes anyone missing from it, so putting 1 in it would
 ## give the server a climber in every room on every client's screen.
+##
+## And a CLIENT in a dedicated-server room sends to the server only. It has no
+## connection to the other members and the server relays nothing on its own, so
+## anything addressed to them was dropped on arrival; the server passes it on
+## instead, through `from_owner`.
 func _send(node: Node, method: StringName, args: Array, skip: int) -> void:
+	if room_id != 0 and skip != 1:
+		node.callv(&"rpc_id", [1, method] + args)
+		return
 	for peer_id in peers:
 		if peer_id == skip:
 			continue
@@ -175,6 +183,34 @@ func _send(node: Node, method: StringName, args: Array, skip: int) -> void:
 	# peer-to-peer host, already covered by the loop above.
 	if skip != 1 and not peers.has(1):
 		node.callv(&"rpc_id", [1, method] + args)
+
+
+## The guard on an RPC that only the OWNER of `node` may start — a swing, a shot,
+## going down, standing up. It replaces `@rpc("authority")` on those methods,
+## which are `any_peer` and call this first thing:
+##
+##     if not session.from_owner(self, &"_spawn_strike"):
+##         return
+##
+## `authority` alone cannot express a dedicated server. Clients there cannot
+## reach each other, so the owner's broadcast arrives at the server and only
+## there — and when the server passes it on, the other members see it come from
+## peer 1, which `authority` refuses for an avatar somebody else owns. So: the
+## owner may send it, the machine simulating the room may pass it on, and
+## nobody else may do either. When this machine IS that server, accepting the
+## owner's call also forwards it to the rest of the room.
+func from_owner(node: Node, method: StringName, args: Array = []) -> bool:
+	var api := node.multiplayer
+	var sender := api.get_remote_sender_id()
+	if sender == 0 or sender == api.get_unique_id():
+		return true # run here directly, by broadcast()
+	if sender == node.get_multiplayer_authority():
+		if active and room_id != 0 and api.get_unique_id() == 1 and not peers.has(1):
+			for peer_id in peers:
+				if peer_id != sender:
+					node.callv(&"rpc_id", [peer_id, method] + args)
+		return true
+	return sender == 1
 
 
 # ── Replication scope ───────────────────────────────────────────────────────
@@ -223,10 +259,28 @@ func rescope(world: Node) -> void:
 ##
 ## On a peer-to-peer host peer 1 is already in `members`, and Godot's visibility
 ## set is a set: naming it twice costs nothing.
+##
+## A synchronizer a CLIENT owns reaches the server and nobody else. Clients on a
+## dedicated server have no connection to each other, and the server does not
+## relay between them (`network/relay_between_clients`), so naming the other
+## members here only ever addressed packets the server dropped — which is how
+## everybody in a room came to see everybody else frozen on the spawn pad. What
+## the others see instead is the avatar's ECHO: a second synchronizer over the
+## same properties that peer 1 owns, sending on what the owner sent it, to every
+## member but the owner, who must never be told where they are.
+##
+## Only applied in a dedicated-server room (`scope` skips room 0), so on a
+## peer-to-peer host the echo keeps its scene default — visible to nobody — and
+## never says a word.
 static func scope_sync(sync: MultiplayerSynchronizer, members: Array[int]) -> void:
 	if sync == null:
 		return
 	sync.public_visibility = false
 	sync.set_visibility_for(1, true)
+	if sync.get_multiplayer_authority() != 1:
+		return
+	var subject := sync.get_node_or_null(sync.root_path)
+	var subject_owner := subject.get_multiplayer_authority() if subject != null else 1
 	for peer_id in members:
-		sync.set_visibility_for(peer_id, true)
+		if peer_id != subject_owner:
+			sync.set_visibility_for(peer_id, true)

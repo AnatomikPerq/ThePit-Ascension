@@ -31,7 +31,11 @@ extends Object
 ##   2 — Uzi's railgun. An avatar's sync stream gained `aiming` and `aim_angle`,
 ##       and Player gained the `_spawn_weapon_shot(from, angle)` RPC — a message
 ##       gaining a field and a new @rpc signature, both of which this covers.
-const VERSION: int = 2
+##   3 — Room mates on a dedicated server see each other. The avatar gained an
+##       `Echo` synchronizer owned by peer 1, and its seven owner-only RPCs went
+##       from `authority` to `any_peer` behind NetSession.from_owner, so that the
+##       server can pass them on.
+const VERSION: int = 3
 
 ## Refuses a connection from a different game entirely — someone pointing a tool
 ## at the port, or a fork that kept the port number.

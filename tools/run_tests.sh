@@ -53,6 +53,9 @@ bash tools/run_net_probe.sh "$GODOT" | tail -1 || fail=1
 step "server probe (a dedicated server + two clients in two rooms)"
 bash tools/run_server_probe.sh "$GODOT" | tail -1 || fail=1
 
+step "roommate probe (a dedicated server + two clients in ONE room)"
+bash tools/run_roommate_probe.sh "$GODOT" | tail -1 || fail=1
+
 step "directory probe (a directory + an announcing server + a real browser)"
 bash tools/run_directory_probe.sh "$GODOT" | tail -1 || fail=1
 
