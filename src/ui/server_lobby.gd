@@ -59,6 +59,23 @@ func _ready() -> void:
 	admin_btn.pressed.connect(admin_panel.open)
 	$UI/Header/LeaveServerBtn.pressed.connect(_on_disconnect)
 
+	# The link reports CONNECTED the moment authentication passes, and that is
+	# what opens this screen — but the server's welcome, which says who we are
+	# and what we may do, is the NEXT packet. Reading Hub once here left the
+	# room-creation panel hidden and the header blank for everyone whose welcome
+	# lost that race, which on a real network is everyone.
+	Hub.welcomed.connect(_on_welcomed)
+	_apply_welcome()
+	if Hub.motd != "":
+		_write("[color=#f5c542]%s[/color]" % Hub.motd)
+	_on_rooms(Hub.room_listing)
+	_on_room(Hub.current_room)
+	Hub.ask(&"request_rooms")
+
+
+## Everything this screen shows that comes from the server's welcome. Called
+## once on entry and again whenever a welcome arrives.
+func _apply_welcome() -> void:
 	# Joined rather than formatted: this screen is also built cold by the UI
 	# screenshot harness, with no server and no account, and a fixed "%s · %s"
 	# leaves a separator with nothing on one side of it.
@@ -67,17 +84,19 @@ func _ready() -> void:
 	admin_btn.visible = Hub.may(Permissions.SERVER_ADMIN_PANEL)
 	create_panel.visible = Hub.may_create_rooms
 	chat_input.editable = Hub.chat_enabled
+
+
+func _on_welcomed(_payload: Dictionary) -> void:
+	_apply_welcome()
 	if Hub.motd != "":
 		_write("[color=#f5c542]%s[/color]" % Hub.motd)
-	_on_rooms(Hub.room_listing)
-	_on_room(Hub.current_room)
-	Hub.ask(&"request_rooms")
 
 
 func _exit_tree() -> void:
 	for pair in [[Hub.rooms_changed, _on_rooms], [Hub.room_changed, _on_room],
 			[Hub.chat_received, _on_chat], [Hub.notice, _on_notice],
-			[Hub.kicked, _on_kicked], [Net.session_closed, _on_closed]]:
+			[Hub.kicked, _on_kicked], [Hub.welcomed, _on_welcomed],
+			[Net.session_closed, _on_closed]]:
 		if (pair[0] as Signal).is_connected(pair[1]):
 			(pair[0] as Signal).disconnect(pair[1])
 

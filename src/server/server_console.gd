@@ -96,6 +96,15 @@ func poll() -> void:
 ## line you typed, but from a pipe or a file it returns as much as it can and the
 ## naive version treats a whole script of commands as one command. So the lines
 ## are cut here, and a partial one is carried to the next read.
+##
+## And on Linux it is the other way round: the engine reads with `fgets`, which
+## stops AT a newline and then strips it. Every chunk is exactly one line with no
+## newline in it, so waiting for one glued every command typed or piped into a
+## single line that never ended — `set a 1` then `save` set `a` to "1save". A
+## chunk with no newline in it at all is therefore a line of its own. What that
+## costs is a raw read splitting a line mid-way with no newline anywhere in it,
+## which a console does not do. It also means an EMPTY line reads as end of
+## input there, since both come back as "" — so a piped script has no blank lines.
 func _read_loop() -> void:
 	var buffer := ""
 	while _running:
@@ -107,6 +116,10 @@ func _read_loop() -> void:
 			# out. Anything typed without a closing newline still counts.
 			_push(buffer)
 			break
+		if not chunk.contains("\n"):
+			_push(buffer + chunk)
+			buffer = ""
+			continue
 		buffer += chunk
 		var split := buffer.find("\n")
 		while split >= 0:
